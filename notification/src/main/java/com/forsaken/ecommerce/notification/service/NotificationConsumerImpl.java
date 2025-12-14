@@ -39,7 +39,9 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
-    public void consumePaymentSuccessNotifications(final ConsumerRecord<String, PaymentConfirmation> record) throws MessagingException {
+    public void consumePaymentSuccessNotifications(
+            final ConsumerRecord<String, PaymentConfirmation> record
+    ) throws MessagingException {
         log.info("Consuming the message from payment-topic Topic:: {}", record.timestamp());
 
         try {
@@ -55,7 +57,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             .paymentConfirmation(mapToPaymentConfirmation(paymentConfirmation))
                             .build()
             );
-            final var customerName = paymentConfirmation.getCustomerFirstname() + " " + paymentConfirmation.getCustomerLastname();
+            final var customerName = paymentConfirmation.getCustomerFirstname() + " " +
+                    paymentConfirmation.getCustomerLastname();
             final BigDecimal amount = fromBytes(paymentConfirmation.getAmount());
             emailService.sendPaymentSuccessEmail(
                     paymentConfirmation.getCustomerEmail(),
@@ -67,7 +70,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             );
             log.info("PaymentConfirmation has been sent successfully");
         } catch (Exception ex) {
-            log.error("Failed to send email for {}. Triggering retry...", record.value().getCustomerEmail(), ex);
+            log.error("Failed to send email for {}. Triggering retry...",
+                    record.value().getCustomerEmail(), ex);
             throw new RuntimeException(ex);
         }
     }
@@ -78,7 +82,9 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
-    public void consumeOrderConfirmationNotifications(ConsumerRecord<String, OrderConfirmation> record) throws MessagingException {
+    public void consumeOrderConfirmationNotifications(
+            final ConsumerRecord<String, OrderConfirmation> record
+    ) throws MessagingException {
         log.info("Consuming the message from order-topic Topic:: %s", record.timestamp());
 
         try {
@@ -94,7 +100,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             .orderConfirmation(mapToOrderConfirmation(orderConfirmation))
                             .build()
             );
-            final var customerName = orderConfirmation.getCustomer().getFirstname() + " " + orderConfirmation.getCustomer().getLastname();
+            final var customerName = orderConfirmation.getCustomer().getFirstname() + " " +
+                    orderConfirmation.getCustomer().getLastname();
             emailService.sendOrderConfirmationEmail(
                     orderConfirmation.getCustomer().getEmail(),
                     customerName,
@@ -104,7 +111,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             );
             log.info("OrderConfirmation has been sent successfully");
         } catch (Exception ex) {
-            log.error("Failed to send email for {}. Triggering retry...", record.value().getCustomer().getEmail(), ex);
+            log.error("Failed to send email for {}. Triggering retry...",
+                    record.value().getCustomer().getEmail(), ex);
             throw new RuntimeException(ex);
         }
     }
