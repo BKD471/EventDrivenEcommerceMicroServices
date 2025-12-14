@@ -11,4 +11,3 @@ public record SecretsManagerProperties(
         String secretName
 ) {
 }
-
