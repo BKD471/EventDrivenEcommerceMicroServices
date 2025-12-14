@@ -34,4 +34,4 @@ aws:
   secretsmanager:
     secretName: EcommerceCredentials
   dynamodb:
-    tableName: notification
+    tableName: Notification

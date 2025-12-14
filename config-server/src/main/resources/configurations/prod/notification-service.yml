@@ -1,4 +1,37 @@
 server:
   port: 8040
 
+spring:
+  kafka:
+    properties:
+      otel:
+        propagation: b3
+    consumer:
+      paymentTopicName: payment-topic
+      paymentGroupId: paymentGroup
+      orderTopicName: order-topic
+      orderGroupId: orderGroup
+      bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+      offSetReset: earliest
+      keyDeSerializer: org.apache.kafka.common.serialization.StringDeserializer
+      valueDeSerializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      schemaRegistryUrl: "http://127.0.0.1:8081"
+    dlq:
+      paymentDlqtopicName: payment-notifications-dlq
+      orderDlqtopicName: order-notifications-dlq
+      groupId: notification-dlq
+      partitions: 10
+      replicas: 3
+      maxAttempts: 3
+      backOffInterval: 2000
+      multiplier: 2.0
+      maxInterval: 15000
+      concurrency: 3
+      ack: MANUAL
+      missingTopicsFatal: false
 
+aws:
+  secretsmanager:
+    secretName: EcommerceCredentials
+  dynamodb:
+    tableName: Notification
