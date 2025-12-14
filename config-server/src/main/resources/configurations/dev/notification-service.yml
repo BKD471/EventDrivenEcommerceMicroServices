@@ -29,3 +29,9 @@ spring:
       concurrency: 3
       ack: MANUAL
       missingTopicsFatal: false
+
+aws:
+  secretsmanager:
+    secretName: EcommerceCredentials
+  dynamodb:
+    tableName: Notification
