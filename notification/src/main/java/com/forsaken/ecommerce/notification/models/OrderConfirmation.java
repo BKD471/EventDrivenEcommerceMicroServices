@@ -13,11 +13,11 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class OrderConfirmation {
-    String orderReference;
-    BigDecimal totalAmount;
-    PaymentMethod paymentMethod;
-    Customer customer;
-    List<Product> products;
+    private String orderReference;
+    private BigDecimal totalAmount;
+    private PaymentMethod paymentMethod;
+    private Customer customer;
+    private List<Product> products;
 
     public String getOrderReference() {
         return orderReference;

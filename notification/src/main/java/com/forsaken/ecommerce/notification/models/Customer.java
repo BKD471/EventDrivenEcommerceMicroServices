@@ -10,10 +10,10 @@ import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
 @AllArgsConstructor
 @Builder
 public class Customer {
-    String id;
-    String firstname;
-    String lastname;
-    String email;
+    private String id;
+    private String firstname;
+    private String lastname;
+    private String email;
 
     public String getId() {
         return id;

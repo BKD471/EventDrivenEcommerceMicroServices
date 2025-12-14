@@ -12,12 +12,12 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class PaymentConfirmation {
-    String orderReference;
-    BigDecimal amount;
-    PaymentMethod paymentMethod;
-    String customerFirstname;
-    String customerLastname;
-    String customerEmail;
+    private String orderReference;
+    private BigDecimal amount;
+    private PaymentMethod paymentMethod;
+    private String customerFirstname;
+    private String customerLastname;
+    private String customerEmail;
 
     public String getOrderReference() {
         return orderReference;

@@ -12,11 +12,11 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class Product {
-    Integer productId;
-    String name;
-    String description;
-    BigDecimal price;
-    double quantity;
+    private Integer productId;
+    private String name;
+    private String description;
+    private BigDecimal price;
+    private double quantity;
 
     public Integer getProductId() {
         return productId;
