@@ -46,14 +46,15 @@ public class NotificationConsumerImpl implements INotificationConsumer {
         log.info("#Consuming the message from Payment Topic:: {}", getTimeStampForLogs(record));
 
         try {
+            MDC.put("traceId", record.value() != null ? record.value().getTraceId() : "null record");
+            MDC.put("spanId", "-");
+
             final PaymentConfirmation paymentConfirmation = record.value();
             if (null == paymentConfirmation) {
                 log.warn("Received null PaymentConfirmation in Kafka record, skipping processing.");
                 return;
             }
-            final String traceId = paymentConfirmation.getTraceId();
-            MDC.put("traceId", traceId);
-            MDC.put("spanId", "-");
+
             log.info("Received PaymentConfirmation: {}", paymentConfirmation.getOrderReference());
             notificationRepository.save(
                     Notification.builder()
@@ -106,14 +107,15 @@ public class NotificationConsumerImpl implements INotificationConsumer {
         log.info("#Consuming the message from Order Topic:: {}", getTimeStampForLogs(record));
 
         try {
+            MDC.put("traceId", record.value() != null ? record.value().getTraceId() : "null record");
+            MDC.put("spanId", "-");
+
             final OrderConfirmation orderConfirmation = record.value();
             if (null == orderConfirmation) {
                 log.warn("Received null OrderConfirmation in Kafka record, skipping processing.");
                 return;
             }
-            final String traceId = orderConfirmation.getTraceId();
-            MDC.put("traceId", traceId);
-            MDC.put("spanId", "-");
+
             log.info("Received OrderConfirmation: {}", orderConfirmation.getOrderReference());
             notificationRepository.save(
                     Notification.builder()
