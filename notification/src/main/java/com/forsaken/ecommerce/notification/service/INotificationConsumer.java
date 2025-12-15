@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
+import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.messaging.MessagingException;
 
@@ -56,12 +57,10 @@ public interface INotificationConsumer {
      *
      * @param record the Kafka {@link ConsumerRecord} containing the payment
      *               confirmation event as its value
-     * @throws MessagingException if message processing fails and the event
-     *                            should be retried or routed to a DLQ
      */
     void consumePaymentSuccessNotifications(
-            final ConsumerRecord<String, com.forsaken.ecommerce.avro.PaymentConfirmation> record
-    ) throws MessagingException;
+            final ConsumerRecord<String, PaymentConfirmation> record
+    );
 
 
     /**
@@ -78,10 +77,8 @@ public interface INotificationConsumer {
      *
      * @param record the Kafka {@link ConsumerRecord} containing the order
      *               confirmation event as its value
-     * @throws MessagingException if message processing fails and the event
-     *                            should be retried or routed to a DLQ
      */
     void consumeOrderConfirmationNotifications(
             final ConsumerRecord<String, OrderConfirmation> record
-    ) throws MessagingException;
+    );
 }

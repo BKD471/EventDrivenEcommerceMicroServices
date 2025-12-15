@@ -16,6 +16,7 @@ spring:
       keyDeSerializer: org.apache.kafka.common.serialization.StringDeserializer
       valueDeSerializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
       schemaRegistryUrl: "http://127.0.0.1:8081"
+      timeZone: UTC
     dlq:
       paymentDlqtopicName: payment-notifications-dlq
       orderDlqtopicName: order-notifications-dlq

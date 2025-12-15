@@ -24,6 +24,9 @@ public record KafkaProperties(
         @NotBlank
         String schemaRegistryUrl,
 
+        @NotBlank
+        String timeZone,
+
         @NotEmpty
         List<String> bootstrapServers,
 
