@@ -54,7 +54,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             notificationRepository.save(
                     Notification.builder()
                             .type(PAYMENT_CONFIRMATION)
-                            .notificationDate(LocalDateTime.now())
+                            .notificationDate(LocalDateTime.now(ZoneId.of(kafkaProperties.timeZone())))
                             .paymentConfirmation(mapToPaymentConfirmation(paymentConfirmation))
                             .build()
             );
@@ -98,7 +98,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             notificationRepository.save(
                     Notification.builder()
                             .type(ORDER_CONFIRMATION)
-                            .notificationDate(LocalDateTime.now())
+                            .notificationDate(LocalDateTime.now(ZoneId.of(kafkaProperties.timeZone())))
                             .orderConfirmation(mapToOrderConfirmation(orderConfirmation))
                             .build()
             );
