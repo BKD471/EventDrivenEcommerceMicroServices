@@ -77,7 +77,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             );
             log.info("PaymentConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
-            log.error("Failed to send email for {}. Triggering retry...", record.value().getCustomerEmail(), ex);
+            log.error("Failed to send email for {}. Triggering retry...",
+                    record.value() != null ? record.value().getCustomerEmail() : record.value(), ex);
         } finally {
             MDC.clear();
         }
@@ -122,13 +123,14 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             );
             log.info("OrderConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
-            log.error("Failed to send email for {}. Triggering retry...", record.value().getCustomer().getEmail(), ex);
+            log.error("Failed to send email for {}. Triggering retry...",
+                    record.value() != null ? record.value().getCustomer().getEmail() : record.value(), ex);
         } finally {
             MDC.clear();
         }
     }
 
-    private LocalDateTime getTimeStampForLogs(final ConsumerRecord record) {
+    private LocalDateTime getTimeStampForLogs(final ConsumerRecord<String, ?> record) {
         return LocalDateTime.ofInstant(
                 java.time.Instant.ofEpochMilli(record.timestamp()),
                 ZoneId.of(kafkaProperties.timeZone())

@@ -28,8 +28,12 @@ import static com.forsaken.ecommerce.notification.mapper.AvroMapper.fromBytes;
 import static com.forsaken.ecommerce.notification.models.NotificationType.ORDER_CONFIRMATION;
 import static com.forsaken.ecommerce.notification.models.NotificationType.PAYMENT_CONFIRMATION;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -196,6 +200,151 @@ class NotificationConsumerImplTest {
                 expectedAmount,
                 "ORD-200",
                 List.of()
+        );
+    }
+
+    /**
+     * Verifies that the payment notification consumer remains stable when
+     * email delivery fails unexpectedly.
+     *
+     * <p>
+     * This test simulates a runtime failure (for example, SMTP outage or
+     * downstream email service error) during invocation of
+     * {@link IEmailService#sendPaymentSuccessEmail}.
+     * </p>
+     *
+     * <p>
+     * <b>Expected behavior:</b>
+     * </p>
+     * <ul>
+     *     <li>The exception is caught internally by the consumer</li>
+     *     <li>The Kafka listener method does NOT propagate the exception</li>
+     *     <li>The notification record is still persisted</li>
+     *     <li>The email sending attempt is made exactly once</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Why this matters:</b>
+     * </p>
+     * <ul>
+     *     <li>Kafka listeners must never throw unchecked exceptions</li>
+     *     <li>Throwing would cause partition revocation and repeated reprocessing</li>
+     *     <li>Failures must be handled gracefully and logged for observability</li>
+     * </ul>
+     *
+     * <p>
+     * The test uses {@code assertDoesNotThrow} to explicitly guarantee
+     * consumer stability under failure conditions.
+     * </p>
+     */
+    @Test
+    void shouldNotFailConsumerWhenPaymentEmailSendingThrowsException() {
+        // given
+        when(kafkaProperties.timeZone()).thenReturn("UTC");
+        final PaymentConfirmation paymentAvro = constructPaymentConfirmation();
+        final ConsumerRecord<String, PaymentConfirmation> record =
+                new ConsumerRecord<>("payment-topic", 0, 0L, "key", paymentAvro);
+        doNothing().when(notificationRepository)
+                .save(argThat(n ->
+                        n.getType() == PAYMENT_CONFIRMATION &&
+                                n.getPaymentConfirmation() != null
+                ));
+        doThrow(new RuntimeException("SMTP server down"))
+                .when(emailService)
+                .sendPaymentSuccessEmail(
+                        eq("john@doe.com"),
+                        eq("John Doe"),
+                        eq(fromBytes(paymentAvro.getAmount())),
+                        eq("ORD-100"),
+                        eq(PaymentMethod.PAYPAL),
+                        any(LocalDateTime.class) // date conversion is not the focus here
+                );
+
+        // when + then
+        assertDoesNotThrow(() ->
+                consumer.consumePaymentSuccessNotifications(record)
+        );
+        // then
+        verify(notificationRepository).save(argThat(n ->
+                n.getType() == PAYMENT_CONFIRMATION
+        ));
+        verify(emailService).sendPaymentSuccessEmail(
+                eq("john@doe.com"),
+                eq("John Doe"),
+                eq(fromBytes(paymentAvro.getAmount())),
+                eq("ORD-100"),
+                eq(PaymentMethod.PAYPAL),
+                any(LocalDateTime.class)
+        );
+    }
+
+    /**
+     * Verifies that the order confirmation consumer does not fail when
+     * sending order confirmation emails throws an exception.
+     *
+     * <p>
+     * This test forces a runtime exception from
+     * {@link IEmailService#sendOrderConfirmationEmail} to ensure:
+     * </p>
+     *
+     * <ul>
+     *     <li>The exception is handled inside the Kafka listener</li>
+     *     <li>The consumer continues processing without crashing</li>
+     *     <li>The notification entity is still persisted</li>
+     *     <li>Customer email delivery is attempted exactly once</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Kafka safety guarantee:</b>
+     * </p>
+     * <ul>
+     *     <li>Unchecked exceptions must not escape Kafka listener methods</li>
+     *     <li>Escaping exceptions would cause consumer restart loops</li>
+     *     <li>This test ensures resilience against transient downstream failures</li>
+     * </ul>
+     *
+     * <p>
+     * This test intentionally validates behavior under failure rather than
+     * successful email delivery.
+     * </p>
+     */
+    @Test
+    void shouldNotFailConsumerWhenOrderEmailSendingThrowsException() {
+        // given
+        when(kafkaProperties.timeZone()).thenReturn("UTC");
+        final CustomerResponse customer = constructCustomer();
+        final OrderConfirmation orderAvro = constructOrderConfirmation(customer);
+        final ConsumerRecord<String, OrderConfirmation> record =
+                new ConsumerRecord<>("order-topic", 0, 0L, "key", orderAvro);
+        doNothing().when(notificationRepository)
+                .save(argThat(n ->
+                        n.getType() == ORDER_CONFIRMATION &&
+                                n.getOrderConfirmation() != null
+                ));
+        doThrow(new RuntimeException("SMTP server down"))
+                .when(emailService)
+                .sendOrderConfirmationEmail(
+                        eq("alice@smith.com"),
+                        eq("Alice Smith"),
+                        eq(fromBytes(orderAvro.getTotalAmount())),
+                        eq("ORD-200"),
+                        eq(List.of())
+                );
+
+        // when + then
+        assertDoesNotThrow(() ->
+                consumer.consumeOrderConfirmationNotifications(record)
+        );
+        // then
+        verify(notificationRepository).save(argThat(n ->
+                n.getType() == ORDER_CONFIRMATION
+        ));
+        verify(emailService).sendOrderConfirmationEmail(
+                eq("alice@smith.com"),
+                eq("Alice Smith"),
+                eq(fromBytes(orderAvro.getTotalAmount())),
+                eq("ORD-200"),
+                eq(List.of())
         );
     }
 
