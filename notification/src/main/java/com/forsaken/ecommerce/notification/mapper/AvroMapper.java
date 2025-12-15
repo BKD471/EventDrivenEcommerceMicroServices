@@ -10,6 +10,7 @@ import com.forsaken.ecommerce.notification.models.PaymentMethod;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -172,5 +173,83 @@ public class AvroMapper {
     ) {
         if (null == avroPaymentMethod) return null;
         return com.forsaken.ecommerce.notification.models.PaymentMethod.valueOf(avroPaymentMethod.name());
+    }
+
+    /**
+     * Extracts the customer’s full name from supported Avro event records.
+     *
+     * <p>
+     * This method provides a unified way to resolve customer identity information
+     * from different Avro event types without leaking Avro-specific logic into
+     * higher layers of the application.
+     * </p>
+     *
+     * <p>
+     * <b>Supported record types:</b>
+     * </p>
+     * <ul>
+     *     <li>
+     *         {@link com.forsaken.ecommerce.avro.OrderConfirmation} – resolves the
+     *         customer name from the embedded {@code customer} record.
+     *     </li>
+     *     <li>
+     *         {@link com.forsaken.ecommerce.avro.PaymentConfirmation} – resolves the
+     *         customer name from flattened customer fields.
+     *     </li>
+     * </ul>
+     *
+     * <p>
+     * <b>Error handling:</b>
+     * </p>
+     * <ul>
+     *     <li>
+     *         Throws {@link IllegalStateException} if an {@code OrderConfirmation}
+     *         event contains a {@code null} customer object. This indicates a
+     *         contract violation in the upstream service.
+     *     </li>
+     *     <li>
+     *         Throws {@link IllegalArgumentException} for unsupported Avro record
+     *         types. This branch is defensive and should never be reached under
+     *         normal Kafka deserialization guarantees.
+     *     </li>
+     * </ul>
+     *
+     * <p>
+     * <b>Design rationale:</b>
+     * </p>
+     * <ul>
+     *     <li>
+     *         Uses Java pattern matching for {@code switch} to avoid fragile
+     *         schema-name or index-based access.
+     *     </li>
+     *     <li>
+     *         Keeps Avro-specific branching logic centralized in the mapper layer.
+     *     </li>
+     *     <li>
+     *         Prevents duplication of customer name resolution logic across
+     *         consumers.
+     *     </li>
+     * </ul>
+     *
+     * @param record the Avro {@link SpecificRecordBase} event containing customer data
+     * @return the resolved customer full name in the format {@code "Firstname Lastname"}
+     * @throws IllegalStateException    if the customer object is missing in an
+     *                                  {@code OrderConfirmation} record
+     * @throws IllegalArgumentException if the Avro record type is unsupported
+     */
+    public static String getCustomerName(final SpecificRecordBase record) {
+        return switch (record) {
+            case com.forsaken.ecommerce.avro.OrderConfirmation order -> {
+                final var customer = order.getCustomer();
+                if (null == customer) throw new IllegalStateException("Customer is null in OrderConfirmation");
+                yield customer.getFirstname() + " " + customer.getLastname();
+            }
+            case com.forsaken.ecommerce.avro.PaymentConfirmation payment ->
+                    payment.getCustomerFirstname() + " " + payment.getCustomerLastname();
+            default -> throw new IllegalArgumentException(
+                    "Unsupported Avro record type: " + record.getClass().getName()
+            );
+
+        };
     }
 }

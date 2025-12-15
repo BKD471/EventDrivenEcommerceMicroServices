@@ -2,7 +2,6 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.notification.models.PaymentMethod;
 import com.forsaken.ecommerce.notification.models.Product;
-import org.springframework.messaging.MessagingException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -57,7 +56,6 @@ public interface IEmailService {
      * @param orderReference   unique order reference
      * @param paymentMethod    method used for payment
      * @param paymentDate      date and time of payment
-     * @throws MessagingException if email message creation fails
      */
     void sendPaymentSuccessEmail(
             final String destinationEmail,
@@ -66,7 +64,7 @@ public interface IEmailService {
             final String orderReference,
             final PaymentMethod paymentMethod,
             final LocalDateTime paymentDate
-    ) throws MessagingException;
+    );
 
     /**
      * Sends an order confirmation email to the customer.
@@ -85,7 +83,6 @@ public interface IEmailService {
      * @param amount           total order amount
      * @param orderReference   unique order reference
      * @param productList      list of purchased products
-     * @throws MessagingException if email message creation fails
      */
     void sendOrderConfirmationEmail(
             final String destinationEmail,
@@ -93,5 +90,5 @@ public interface IEmailService {
             final BigDecimal amount,
             final String orderReference,
             final List<Product> productList
-    ) throws MessagingException;
+    );
 }

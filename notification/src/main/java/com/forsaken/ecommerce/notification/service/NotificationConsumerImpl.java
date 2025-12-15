@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
 import com.forsaken.ecommerce.notification.repository.INotificationRepository;
@@ -10,15 +11,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.messaging.MessagingException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.fromBytes;
+import static com.forsaken.ecommerce.notification.mapper.AvroMapper.getCustomerName;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapPaymentMethod;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapToOrderConfirmation;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapToPaymentConfirmation;
@@ -32,6 +32,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
     private final INotificationRepository notificationRepository;
     private final IEmailService emailService;
+    private final KafkaProperties kafkaProperties;
 
     @KafkaListener(
             topics = "${spring.kafka.consumer.paymentTopicName}",
@@ -41,8 +42,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     @Override
     public void consumePaymentSuccessNotifications(
             final ConsumerRecord<String, PaymentConfirmation> record
-    ) throws MessagingException {
-        log.info("Consuming the message from payment-topic Topic:: {}", record.timestamp());
+    ) {
+        log.info("Consuming the message from Payment Topic:: {}", record.timestamp());
 
         try {
             final PaymentConfirmation paymentConfirmation = record.value();
@@ -57,8 +58,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             .paymentConfirmation(mapToPaymentConfirmation(paymentConfirmation))
                             .build()
             );
-            final var customerName = paymentConfirmation.getCustomerFirstname() + " " +
-                    paymentConfirmation.getCustomerLastname();
+            final var customerName = getCustomerName(paymentConfirmation);
             final BigDecimal amount = fromBytes(paymentConfirmation.getAmount());
             emailService.sendPaymentSuccessEmail(
                     paymentConfirmation.getCustomerEmail(),
@@ -66,15 +66,17 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     amount,
                     paymentConfirmation.getOrderReference(),
                     mapPaymentMethod(paymentConfirmation.getPaymentMethod()),
-                    instantToLocalDateTime(paymentConfirmation.getPaymentDate())
+                    LocalDateTime.ofInstant(
+                            paymentConfirmation.getPaymentDate(),
+                            ZoneId.of(kafkaProperties.timeZone())
+                    )
             );
             log.info("PaymentConfirmation has been sent successfully");
-        } catch (Exception ex) {
-            log.error("Failed to send email for {}. Triggering retry...",
-                    record.value().getCustomerEmail(), ex);
-            throw new RuntimeException(ex);
+        } finally {
+            MDC.clear();
         }
     }
+
 
     @KafkaListener(
             topics = "${spring.kafka.consumer.orderTopicName}",
@@ -84,8 +86,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     @Override
     public void consumeOrderConfirmationNotifications(
             final ConsumerRecord<String, OrderConfirmation> record
-    ) throws MessagingException {
-        log.info("Consuming the message from order-topic Topic:: %s", record.timestamp());
+    ) {
+        log.info("Consuming the message from Order Topic:: {}", record.timestamp());
 
         try {
             final OrderConfirmation orderConfirmation = record.value();
@@ -100,8 +102,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             .orderConfirmation(mapToOrderConfirmation(orderConfirmation))
                             .build()
             );
-            final var customerName = orderConfirmation.getCustomer().getFirstname() + " " +
-                    orderConfirmation.getCustomer().getLastname();
+            final var customerName = getCustomerName(orderConfirmation);
             emailService.sendOrderConfirmationEmail(
                     orderConfirmation.getCustomer().getEmail(),
                     customerName,
@@ -110,14 +111,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     orderConfirmation.getProducts().stream().map(AvroMapper::toProduct).toList()
             );
             log.info("OrderConfirmation has been sent successfully");
-        } catch (Exception ex) {
-            log.error("Failed to send email for {}. Triggering retry...",
-                    record.value().getCustomer().getEmail(), ex);
-            throw new RuntimeException(ex);
+        } finally {
+            MDC.clear();
         }
-    }
-
-    private static LocalDateTime instantToLocalDateTime(final Instant instant) {
-        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
     }
 }
