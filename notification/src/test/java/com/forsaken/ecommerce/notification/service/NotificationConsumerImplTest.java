@@ -9,6 +9,7 @@ import com.forsaken.ecommerce.notification.repository.INotificationRepository;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -33,42 +34,33 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link NotificationConsumerImpl}.
+ * Unit test configuration for {@link NotificationConsumerImpl}.
  *
  * <p>
- * This test suite verifies the behavior of the Kafka notification consumer
- * responsible for handling payment and order confirmation events.
+ * This test class uses {@link org.mockito.junit.jupiter.MockitoExtension}
+ * to create an isolated test environment where all external dependencies
+ * of the notification consumer are mocked.
  * </p>
  *
  * <p>
- * <b>Scope of testing:</b>
+ * <b>Mocked dependencies:</b>
  * </p>
  * <ul>
- *     <li>Kafka message consumption logic (without starting Kafka)</li>
- *     <li>Persistence of notification entities</li>
- *     <li>Invocation of downstream email notifications</li>
- *     <li>Correct extraction and transformation of Avro payload data</li>
+ *     <li>{@link INotificationRepository} – prevents real persistence</li>
+ *     <li>{@link IEmailService} – prevents real email delivery</li>
+ *     <li>{@link KafkaProperties} – provides required configuration values</li>
  * </ul>
  *
  * <p>
- * <b>What is intentionally NOT tested:</b>
+ * The {@link NotificationConsumerImpl} under test is instantiated using
+ * {@link InjectMocks}, allowing Mockito to inject all mocked dependencies
+ * automatically.
  * </p>
- * <ul>
- *     <li>Kafka infrastructure, partitions, or offsets</li>
- *     <li>Spring container lifecycle</li>
- *     <li>Email delivery implementation details</li>
- *     <li>Repository persistence mechanics</li>
- * </ul>
  *
  * <p>
- * <b>Testing strategy:</b>
+ * This setup ensures that tests focus exclusively on the consumer’s
+ * business behavior without relying on infrastructure components.
  * </p>
- * <ul>
- *     <li>Uses {@link org.mockito.junit.jupiter.MockitoExtension}</li>
- *     <li>Mocks all external dependencies</li>
- *     <li>Uses real Avro objects built via Avro builders</li>
- *     <li>Avoids {@code any()} in positive test cases to ensure strict assertions</li>
- * </ul>
  */
 @ExtendWith(MockitoExtension.class)
 class NotificationConsumerImplTest {
@@ -84,6 +76,29 @@ class NotificationConsumerImplTest {
 
     @InjectMocks
     private NotificationConsumerImpl consumer;
+
+    /**
+     * Initializes common test configuration before each test execution.
+     *
+     * <p>
+     * The notification consumer relies on a configured time zone when
+     * converting event timestamps. Since {@link KafkaProperties} is mocked,
+     * this value must be explicitly provided to avoid {@link NullPointerException}s.
+     * </p>
+     *
+     * <p>
+     * Using {@code @BeforeEach} ensures:
+     * </p>
+     * <ul>
+     *     <li>The configuration is applied consistently across all tests</li>
+     *     <li>Test methods remain clean and free of duplicated setup code</li>
+     *     <li>Future tests do not accidentally fail due to missing configuration</li>
+     * </ul>
+     */
+    @BeforeEach
+    void setup() {
+        when(kafkaProperties.timeZone()).thenReturn("UTC");
+    }
 
     /**
      * Verifies that a payment confirmation Kafka message is:
@@ -106,8 +121,7 @@ class NotificationConsumerImplTest {
     @Test
     void shouldConsumePaymentConfirmationAndSendEmail() {
         // given
-        when(kafkaProperties.timeZone()).thenReturn("UTC");
-        PaymentConfirmation paymentAvro = constructPaymentConfirmation();
+        final PaymentConfirmation paymentAvro = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
                 new ConsumerRecord<>("payment-topic", 0, 0L, "key", paymentAvro);
         doNothing().when(notificationRepository)
