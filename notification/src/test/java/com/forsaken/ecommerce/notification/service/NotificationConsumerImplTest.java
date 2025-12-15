@@ -240,7 +240,6 @@ class NotificationConsumerImplTest {
     @Test
     void shouldNotFailConsumerWhenPaymentEmailSendingThrowsException() {
         // given
-        when(kafkaProperties.timeZone()).thenReturn("UTC");
         final PaymentConfirmation paymentAvro = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
                 new ConsumerRecord<>("payment-topic", 0, 0L, "key", paymentAvro);
@@ -311,7 +310,6 @@ class NotificationConsumerImplTest {
     @Test
     void shouldNotFailConsumerWhenOrderEmailSendingThrowsException() {
         // given
-        when(kafkaProperties.timeZone()).thenReturn("UTC");
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderAvro = constructOrderConfirmation(customer);
         final ConsumerRecord<String, OrderConfirmation> record =

@@ -102,7 +102,7 @@ public class AvroMapper {
     ) {
         return OrderConfirmation.builder()
                 .orderReference(orderConfirmation.getOrderReference())
-                .paymentMethod(PaymentMethod.valueOf(orderConfirmation.getPaymentMethod().name()))
+                .paymentMethod(mapPaymentMethod(orderConfirmation.getPaymentMethod()))
                 .totalAmount(fromBytes(orderConfirmation.getTotalAmount()))
                 .customer(mapToCustomer(orderConfirmation.getCustomer()))
                 .products(orderConfirmation.getProducts()
@@ -231,14 +231,14 @@ public class AvroMapper {
      *     </li>
      * </ul>
      *
-     * @param record the Avro {@link SpecificRecordBase} event containing customer data
+     * @param avroRecord the Avro {@link SpecificRecordBase} event containing customer data
      * @return the resolved customer full name in the format {@code "Firstname Lastname"}
      * @throws IllegalStateException    if the customer object is missing in an
      *                                  {@code OrderConfirmation} record
      * @throws IllegalArgumentException if the Avro record type is unsupported
      */
-    public static String getCustomerName(final SpecificRecordBase record) {
-        return switch (record) {
+    public static String getCustomerName(final SpecificRecordBase avroRecord) {
+        return switch (avroRecord) {
             case com.forsaken.ecommerce.avro.OrderConfirmation order -> {
                 final var customer = order.getCustomer();
                 if (null == customer) throw new IllegalStateException("Customer is null in OrderConfirmation");
@@ -247,7 +247,7 @@ public class AvroMapper {
             case com.forsaken.ecommerce.avro.PaymentConfirmation payment ->
                     payment.getCustomerFirstname() + " " + payment.getCustomerLastname();
             default -> throw new IllegalArgumentException(
-                    "Unsupported Avro record type: " + record.getClass().getName()
+                    "Unsupported Avro record type: " + avroRecord.getClass().getName()
             );
 
         };

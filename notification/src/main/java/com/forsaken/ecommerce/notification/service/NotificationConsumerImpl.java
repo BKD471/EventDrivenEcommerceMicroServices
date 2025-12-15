@@ -78,10 +78,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             log.info("PaymentConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
             log.error(
-                    "Failed to send payment email. customerEmail={}, topic={}, partition={}, offset={}, timestamp={}",
+                    "Failed to send payment email notification. customerEmail={}, topic={}, partition={}, offset={}, timestamp={}",
                     record.value() != null && record.value().getCustomerEmail() != null
                             ? record.value().getCustomerEmail()
-                            : "unknown",
+                            : "null record",
                     record.topic(),
                     record.partition(),
                     record.offset(),
@@ -133,10 +133,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             log.info("OrderConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
             log.error(
-                    "Failed to send order email. customerEmail={}, topic={}, partition={}, offset={}, timestamp={}",
+                    "Failed to send order email notification. customerEmail={}, topic={}, partition={}, offset={}, timestamp={}",
                     record.value() != null && record.value().getCustomer() != null
                             ? record.value().getCustomer().getEmail()
-                            : "unknown",
+                            : "null record",
                     record.topic(),
                     record.partition(),
                     record.offset(),
