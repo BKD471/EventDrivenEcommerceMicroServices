@@ -43,7 +43,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     public void consumePaymentSuccessNotifications(
             final ConsumerRecord<String, PaymentConfirmation> record
     ) {
-        log.info("Consuming the message from Payment Topic:: {}", record.timestamp());
+        log.info("#Consuming the message from Payment Topic:: {}", getTimeStampForLogs(record));
 
         try {
             final PaymentConfirmation paymentConfirmation = record.value();
@@ -75,7 +75,9 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             ZoneId.of(kafkaProperties.timeZone())
                     )
             );
-            log.info("PaymentConfirmation has been sent successfully");
+            log.info("PaymentConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
+        } catch (Exception ex) {
+            log.error("Failed to send email for {}. Triggering retry...", record.value().getCustomerEmail(), ex);
         } finally {
             MDC.clear();
         }
@@ -91,7 +93,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     public void consumeOrderConfirmationNotifications(
             final ConsumerRecord<String, OrderConfirmation> record
     ) {
-        log.info("Consuming the message from Order Topic:: {}", record.timestamp());
+        log.info("#Consuming the message from Order Topic:: {}", getTimeStampForLogs(record));
 
         try {
             final OrderConfirmation orderConfirmation = record.value();
@@ -118,9 +120,18 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     orderConfirmation.getOrderReference(),
                     orderConfirmation.getProducts().stream().map(AvroMapper::toProduct).toList()
             );
-            log.info("OrderConfirmation has been sent successfully");
+            log.info("OrderConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
+        } catch (Exception ex) {
+            log.error("Failed to send email for {}. Triggering retry...", record.value().getCustomer().getEmail(), ex);
         } finally {
             MDC.clear();
         }
+    }
+
+    private LocalDateTime getTimeStampForLogs(final ConsumerRecord record) {
+        return LocalDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(record.timestamp()),
+                ZoneId.of(kafkaProperties.timeZone())
+        );
     }
 }
