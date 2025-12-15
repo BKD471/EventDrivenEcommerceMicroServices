@@ -47,6 +47,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
         try {
             final PaymentConfirmation paymentConfirmation = record.value();
+            if (null == paymentConfirmation) {
+                log.warn("Received null PaymentConfirmation in Kafka record, skipping processing.");
+                return;
+            }
             final String traceId = paymentConfirmation.getTraceId();
             MDC.put("traceId", traceId);
             MDC.put("spanId", "-");
@@ -91,6 +95,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
         try {
             final OrderConfirmation orderConfirmation = record.value();
+            if (null == orderConfirmation) {
+                log.warn("Received null OrderConfirmation in Kafka record, skipping processing.");
+                return;
+            }
             final String traceId = orderConfirmation.getTraceId();
             MDC.put("traceId", traceId);
             MDC.put("spanId", "-");
