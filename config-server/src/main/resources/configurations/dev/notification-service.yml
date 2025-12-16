@@ -30,6 +30,25 @@ spring:
       concurrency: 3
       ack: MANUAL
       missingTopicsFatal: false
+  mail:
+    host: localhost
+    port: 1025
+    username: admin
+    password: admin
+    properties:
+      mail:
+        smtp:
+          trust: "*"
+        auth: true
+        starttls:
+          enabled: true
+        connectiontimeout: 5000
+        timeout: 3000
+        writetimeout: 5000
+
+invoice:
+  downloadUrl: http://localhost:8222/api/v1
+  senderEmailAddress: bhaskarkumardas9@gmail.com
 
 aws:
   secretsmanager:
