@@ -21,7 +21,6 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -73,7 +72,7 @@ public class EmailServiceImpl implements IEmailService {
             final MimeMessageHelper messageHelper = new MimeMessageHelper(
                     mimeMessage,
                     MimeMessageHelper.MULTIPART_MODE_MIXED,
-                    StandardCharsets.UTF_8.name()
+                    UTF_8.name()
             );
             messageHelper.setFrom(invoiceProperties.senderEmailAddress());
             messageHelper.setSubject(PAYMENT_CONFIRMATION.getSubject());
