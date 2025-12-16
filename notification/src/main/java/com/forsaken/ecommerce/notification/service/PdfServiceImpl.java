@@ -34,18 +34,19 @@ public class PdfServiceImpl implements IPdfService {
         try (
                 final InputStream jasperStream =
                         new ClassPathResource(invoiceProperties.jasperTemplatePath()).getInputStream();
+
                 final InputStream logo =
-                        getClass().getResourceAsStream(invoiceProperties.companyLogoPath());
+                        requiredResource(invoiceProperties.companyLogoPath());
                 final InputStream iconUser =
-                        getClass().getResourceAsStream(invoiceProperties.userLogoPath());
+                        requiredResource(invoiceProperties.userLogoPath());
                 final InputStream iconEmail =
-                        getClass().getResourceAsStream(invoiceProperties.emailLogoPath());
+                        requiredResource(invoiceProperties.emailLogoPath());
                 final InputStream iconAmount =
-                        getClass().getResourceAsStream(invoiceProperties.amountLogoPath());
+                        requiredResource(invoiceProperties.amountLogoPath());
                 final InputStream iconPayment =
-                        getClass().getResourceAsStream(invoiceProperties.paymentLogoPath());
+                        requiredResource(invoiceProperties.paymentLogoPath());
                 final InputStream iconCalendar =
-                        getClass().getResourceAsStream(invoiceProperties.calendarLogoPath())
+                        requiredResource(invoiceProperties.calendarLogoPath())
         ) {
             jasperReport = JasperCompileManager.compileReport(jasperStream);
             log.info("Jasper Report generated");
@@ -72,6 +73,9 @@ public class PdfServiceImpl implements IPdfService {
         }
     }
 
+    /**
+     * Ensures a required invoice field is present in the datasource.
+     */
     private Object required(
             Map<PdfConstants, Object> datasource,
             PdfConstants key
@@ -83,5 +87,18 @@ public class PdfServiceImpl implements IPdfService {
             );
         }
         return value;
+    }
+
+    /**
+     * Loads a required classpath resource and fails fast if missing.
+     */
+    private InputStream requiredResource(final String path) throws IOException {
+        final InputStream stream = getClass().getResourceAsStream(path);
+        if (stream == null) {
+            throw new IOException(
+                    "Required PDF resource not found on classpath: " + path
+            );
+        }
+        return stream;
     }
 }

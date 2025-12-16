@@ -187,6 +187,67 @@ class PdfServiceImplTest {
     }
 
     /**
+     * Verifies that PDF generation fails fast when a required icon resource
+     * is missing from the classpath.
+     *
+     * <p>
+     * This test simulates a misconfiguration scenario where the JasperReports
+     * template is available, but one of the mandatory static resources
+     * (the company logo) cannot be resolved.
+     * </p>
+     *
+     * <p>
+     * Expected behavior:
+     * <ul>
+     *     <li>The service attempts to load the company logo resource.</li>
+     *     <li>Resource resolution fails because the icon is not present
+     *         on the classpath.</li>
+     *     <li>An {@link IOException} is thrown immediately with a clear,
+     *         descriptive error message.</li>
+     * </ul>
+     * </p>
+     *
+     * <p>
+     * This test ensures the service fails deterministically and avoids
+     * obscure {@link NullPointerException}s inside the JasperReports engine
+     * when required resources are missing.
+     * </p>
+     */
+    @Test
+    void generateInvoicePdf_shouldThrowIOException_whenIconMissing() {
+        when(invoiceProperties.jasperTemplatePath())
+                .thenReturn("reports/invoice_template.jrxml");
+        when(invoiceProperties.companyLogoPath())
+                .thenReturn("/reports/does-not-exist.png");
+        final Map<PdfConstants, Object> datasource = validDatasource();
+
+        // When / Then
+        final IOException exception = assertThrows(
+                IOException.class,
+                () -> pdfService.generateInvoicePdf(datasource)
+        );
+
+        assertEquals(
+                "Required PDF resource not found on classpath: /reports/does-not-exist.png",
+                exception.getMessage()
+        );
+    }
+
+    /**
+     * Builds a fully valid datasource map for PDF generation.
+     */
+    private Map<PdfConstants, Object> validDatasource() {
+        Map<PdfConstants, Object> datasource = new EnumMap<>(PdfConstants.class);
+        datasource.put(PdfConstants.INVOICE_NUM, "INV-1001");
+        datasource.put(PdfConstants.CUSTOMER_NAME, "Bhaskar");
+        datasource.put(PdfConstants.EMAIL, "bhaskar@test.com");
+        datasource.put(PdfConstants.AMOUNT, BigDecimal.TEN);
+        datasource.put(PdfConstants.PAYMENT_METHOD, "UPI");
+        datasource.put(PdfConstants.PAYMENT_DATE, LocalDateTime.now().toString());
+        return datasource;
+    }
+
+    /**
      * Stubs all configuration paths required for successful PDF generation.
      *
      * <p>
