@@ -94,6 +94,8 @@ class EmailServiceImplTest {
     @BeforeEach
     void setUp() {
         mimeMessage = new MimeMessage(Session.getDefaultInstance(new Properties()));
+        when(invoiceProperties.senderEmailAddress())
+                .thenReturn("noreply@test.com");
         emailService = new EmailServiceImpl(
                 mailSender,
                 templateEngine,
@@ -309,7 +311,7 @@ class EmailServiceImplTest {
     private Product constructProduct(final Integer productId, final BigDecimal price) {
         return Product.builder()
                 .productId(productId)
-                .name("Product-1")
+                .name("Product-" + productId)
                 .price(price)
                 .description("Description-1")
                 .quantity(1)

@@ -75,7 +75,7 @@ public class EmailServiceImpl implements IEmailService {
                     MimeMessageHelper.MULTIPART_MODE_MIXED,
                     StandardCharsets.UTF_8.name()
             );
-            messageHelper.setFrom("bhaskarkumardas9@gmail.com");
+            messageHelper.setFrom(invoiceProperties.senderEmailAddress());
             messageHelper.setSubject(PAYMENT_CONFIRMATION.getSubject());
             log.info("Sending email to: {}", destinationEmail);
 
@@ -96,17 +96,13 @@ public class EmailServiceImpl implements IEmailService {
             messageHelper.setText(htmlTemplate, true);
             messageHelper.setTo(destinationEmail);
 
-            if (pdfBytes != null && pdfBytes.length > 0) {
-                final ByteArrayDataSource pdfDataSource = new ByteArrayDataSource(pdfBytes, "application/pdf");
-                messageHelper.addAttachment("Invoice_" + invoiceNumber + ".pdf", pdfDataSource);
-            } else {
-                log.error("Empty PDF byte array — no attachment added.");
-            }
+            final ByteArrayDataSource pdfDataSource = new ByteArrayDataSource(pdfBytes, "application/pdf");
+            messageHelper.addAttachment("Invoice_" + invoiceNumber + ".pdf", pdfDataSource);
 
             mailSender.send(mimeMessage);
-            log.info("INFO - Payment Email successfully sent to {} with template {} ", destinationEmail, templateName);
+            log.info("Payment Email successfully sent to {} with template {} ", destinationEmail, templateName);
         } catch (MessagingException | MailException | JRException | IOException e) {
-            log.warn("WARNING - Cannot send Payment Email to {} ", destinationEmail);
+            log.warn("Cannot send Payment Email to {} ", destinationEmail, e);
         }
     }
 
@@ -134,7 +130,7 @@ public class EmailServiceImpl implements IEmailService {
             final MimeMessage mimeMessage = mailSender.createMimeMessage();
             final MimeMessageHelper messageHelper = new MimeMessageHelper(
                     mimeMessage, MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED, UTF_8.name());
-            messageHelper.setFrom("bhaskarkumardas9@gmail.com");
+            messageHelper.setFrom(invoiceProperties.senderEmailAddress());
             messageHelper.setSubject(ORDER_CONFIRMATION.getSubject());
 
             final String templateName = ORDER_CONFIRMATION.getTemplate();
@@ -142,9 +138,9 @@ public class EmailServiceImpl implements IEmailService {
             messageHelper.setText(htmlTemplate, true);
             messageHelper.setTo(destinationEmail);
             mailSender.send(mimeMessage);
-            log.info("INFO - Order Email successfully sent to {} with template {} ", destinationEmail, templateName);
+            log.info("Order Email successfully sent to {} with template {} ", destinationEmail, templateName);
         } catch (MessagingException | MailException e) {
-            log.warn("WARNING - Cannot send Order Email to {} ", destinationEmail);
+            log.warn("Cannot send Order Email to {} ", destinationEmail, e);
         }
     }
 

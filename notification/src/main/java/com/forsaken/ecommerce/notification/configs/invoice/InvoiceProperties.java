@@ -8,6 +8,9 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "invoice")
 public record InvoiceProperties(
         @NotBlank
-        String downLoadUrl
+        String downloadUrl,
+
+        @NotBlank
+        String senderEmailAddress
 ) {
 }
