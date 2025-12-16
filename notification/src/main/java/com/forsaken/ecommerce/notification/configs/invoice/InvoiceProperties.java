@@ -11,6 +11,27 @@ public record InvoiceProperties(
         String downloadUrl,
 
         @NotBlank
-        String senderEmailAddress
+        String senderEmailAddress,
+
+        @NotBlank
+        String jasperTemplatePath,
+
+        @NotBlank
+        String companyLogoPath,
+
+        @NotBlank
+        String userLogoPath,
+
+        @NotBlank
+        String emailLogoPath,
+
+        @NotBlank
+        String amountLogoPath,
+
+        @NotBlank
+        String paymentLogoPath,
+
+        @NotBlank
+        String calendarLogoPath
 ) {
 }

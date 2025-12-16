@@ -50,6 +50,6 @@ public interface IPdfService {
      * @throws IOException if an error occurs while loading templates
      *                     or static resources (e.g. images)
      */
-    byte[] generateAndSendInvoice(final Map<PdfConstants, Object> datasource)
+    byte[] generateInvoicePdf(final Map<PdfConstants, Object> datasource)
             throws JRException, IOException;
 }

@@ -49,7 +49,14 @@ spring:
 
 invoice:
   downloadUrl: http://localhost:8222/api/v1
-  senderEmailAddress: bhaskarkumardas9@gmail.com
+  senderEmailAddress: noreply47@gmail.com
+  jasperTemplatePath: reports/invoice_template.jrxml
+  companyLogoPath: /reports/accenture-logo.png
+  userLogoPath: /reports/icon-user.png
+  emailLogoPath: /reports/icon-email.png
+  amountLogoPath: /reports/icon-amount.png
+  paymentLogoPath: /reports/icon-payment.png
+  calendarLogoPath: /reports/icon-calendar.png
 
 aws:
   secretsmanager:

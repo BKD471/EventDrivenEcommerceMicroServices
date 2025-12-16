@@ -1,9 +1,14 @@
 package com.forsaken.ecommerce.notification.service;
 
+import com.forsaken.ecommerce.notification.configs.invoice.InvoiceProperties;
 import com.forsaken.ecommerce.notification.models.PdfConstants;
-import net.sf.jasperreports.engine.JRException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -15,73 +20,77 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link PdfServiceImpl}.
  *
  * <p>
- * This test class validates the behavior of the PDF generation service
- * responsible for creating invoice PDFs using JasperReports.
+ * This test suite verifies the behavior of the invoice PDF generation service
+ * backed by JasperReports.
  * </p>
  *
  * <p>
  * <b>Testing strategy:</b>
  * <ul>
  *     <li>Positive test executes the real JasperReports pipeline using
- *         the invoice JRXML template available on the classpath.</li>
- *     <li>No mocking is used for the positive scenario to ensure that
- *         PDF generation works end-to-end.</li>
- *     <li>Negative scenarios validate exception propagation for
- *         template loading and Jasper compilation failures.</li>
+ *         classpath-based templates and resources.</li>
+ *     <li>Configuration paths are provided via mocked {@link InvoiceProperties}
+ *         to keep the tests deterministic.</li>
+ *     <li>Negative tests validate fail-fast behavior for misconfiguration and
+ *         missing mandatory invoice data.</li>
+ *     <li>Parameterized tests are used to ensure all required invoice fields
+ *         are validated consistently.</li>
  * </ul>
  * </p>
  *
  * <p>
- * <b>Why real execution is used:</b>
- * <ul>
- *     <li>JasperReports relies heavily on static APIs and resource files.</li>
- *     <li>Mocking these APIs provides little value and leads to brittle tests.</li>
- *     <li>Verifying real PDF generation ensures higher confidence.</li>
- * </ul>
+ * Mockito is used in strict mode to prevent unnecessary stubbing and to ensure
+ * tests accurately reflect real execution paths.
  * </p>
  */
+@ExtendWith(MockitoExtension.class)
 class PdfServiceImplTest {
 
+    @Mock
+    private InvoiceProperties invoiceProperties;
     private PdfServiceImpl pdfService;
 
     /**
-     * Initializes a fresh {@link PdfServiceImpl} instance before each test.
+     * Creates a fresh {@link PdfServiceImpl} instance before each test.
      *
      * <p>
-     * The service is created without mocks since PDF generation relies on
-     * actual JasperReports resources and classpath files.
+     * No configuration values are stubbed here to avoid unnecessary stubbing.
+     * Individual tests provide only the configuration required for their
+     * execution paths.
      * </p>
      */
     @BeforeEach
     void setUp() {
-        pdfService = new PdfServiceImpl();
+        pdfService = new PdfServiceImpl(invoiceProperties);
     }
 
     /**
-     * Verifies that a valid PDF invoice is generated when all required
-     * invoice data is provided.
+     * Verifies that a valid invoice PDF is generated when all required
+     * invoice data and configuration paths are provided.
      *
      * <p>
-     * This test ensures:
+     * This test ensures that:
      * <ul>
      *     <li>The JasperReports template is successfully compiled.</li>
-     *     <li>The report is filled with the provided invoice data.</li>
+     *     <li>All required invoice fields are mapped correctly.</li>
      *     <li>A non-empty PDF byte array is produced.</li>
-     *     <li>The generated output is a valid PDF document
-     *         (validated using the PDF magic number "%PDF").</li>
+     *     <li>The generated output is a valid PDF document, verified using
+     *         the standard "%PDF" file signature.</li>
      * </ul>
      * </p>
      *
      * @throws Exception if PDF generation fails unexpectedly
      */
     @Test
-    void generateAndSendInvoice_shouldGenerateValidPdfBytes() throws Exception {
+    void generateInvoicePdf_shouldGenerateValidPdfBytes() throws Exception {
         // Given
+        stubAllInvoicePaths();
         final Map<PdfConstants, Object> datasource = new EnumMap<>(PdfConstants.class);
         datasource.put(PdfConstants.INVOICE_NUM, "INV-1001");
         datasource.put(PdfConstants.CUSTOMER_NAME, "Bhaskar Das");
@@ -91,12 +100,11 @@ class PdfServiceImplTest {
         datasource.put(PdfConstants.PAYMENT_DATE, LocalDateTime.now().toString());
 
         // When
-        final byte[] pdfBytes = pdfService.generateAndSendInvoice(datasource);
+        final byte[] pdfBytes = pdfService.generateInvoicePdf(datasource);
 
         // Then
         assertNotNull(pdfBytes);
         assertTrue(pdfBytes.length > 0);
-
         // PDF magic number check (%PDF)
         assertEquals('%', pdfBytes[0]);
         assertEquals('P', pdfBytes[1]);
@@ -105,66 +113,101 @@ class PdfServiceImplTest {
     }
 
     /**
-     * Verifies that an {@link IOException} is thrown when the invoice
-     * template cannot be loaded.
+     * Verifies that an {@link IOException} is thrown when the JasperReports
+     * template path is invalid or the template cannot be loaded.
      *
      * <p>
-     * This test simulates a failure scenario where the JRXML template
-     * is missing or inaccessible from the classpath.
+     * This test simulates a misconfiguration scenario where the JRXML template
+     * is missing from the classpath.
      * </p>
      */
     @Test
-    void generateAndSendInvoice_shouldThrowIOException_whenTemplateMissing() {
-        // Given
-        final PdfServiceImpl brokenService = new PdfServiceImpl() {
-            @Override
-            public byte[] generateAndSendInvoice(Map<PdfConstants, Object> datasource)
-                    throws IOException {
-                throw new IOException("Template not found");
-            }
-        };
+    void generateInvoicePdf_shouldThrowIOException_whenTemplatePathInvalid() {
+        // given
+        when(invoiceProperties.jasperTemplatePath())
+                .thenReturn("reports/does-not-exist.jrxml");
 
-        final Map<PdfConstants, Object> datasource = Map.of(
-                PdfConstants.INVOICE_NUM, "INV-1"
-        );
+        final Map<PdfConstants, Object> datasource = new EnumMap<>(PdfConstants.class);
+        datasource.put(PdfConstants.INVOICE_NUM, "INV-2");
+        datasource.put(PdfConstants.CUSTOMER_NAME, "Bhaskar");
+        datasource.put(PdfConstants.EMAIL, "bhaskar@test.com");
+        datasource.put(PdfConstants.AMOUNT, BigDecimal.TEN);
+        datasource.put(PdfConstants.PAYMENT_METHOD, "UPI");
+        datasource.put(PdfConstants.PAYMENT_DATE, LocalDateTime.now().toString());
+
+        // when -> then
+        assertThrows(IOException.class,
+                () -> pdfService.generateInvoicePdf(datasource));
+    }
+
+    /**
+     * Verifies that PDF generation fails fast when any mandatory invoice
+     * field is missing.
+     *
+     * <p>
+     * This parameterized test iterates over all {@link PdfConstants} values
+     * and removes one field at a time from the input datasource. The service
+     * is expected to throw an {@link IllegalArgumentException} identifying
+     * the missing field explicitly.
+     * </p>
+     *
+     * <p>
+     * This approach ensures comprehensive validation coverage and automatically
+     * includes newly added invoice fields without requiring additional tests.
+     * </p>
+     *
+     * @param missingKey the invoice field intentionally omitted for this test case
+     */
+    @ParameterizedTest(name = "Missing field should fail: {0}")
+    @EnumSource(PdfConstants.class)
+    void generateInvoicePdf_shouldThrowException_whenAnyMandatoryFieldMissing(
+            PdfConstants missingKey
+    ) {
+        // Given
+        stubAllInvoicePaths();
+
+        final Map<PdfConstants, Object> datasource = new EnumMap<>(PdfConstants.class);
+        datasource.put(PdfConstants.INVOICE_NUM, "INV-1001");
+        datasource.put(PdfConstants.CUSTOMER_NAME, "Bhaskar");
+        datasource.put(PdfConstants.EMAIL, "bhaskar@test.com");
+        datasource.put(PdfConstants.AMOUNT, BigDecimal.TEN);
+        datasource.put(PdfConstants.PAYMENT_METHOD, "UPI");
+        datasource.put(PdfConstants.PAYMENT_DATE, LocalDateTime.now().toString());
+        // Remove one mandatory field for this iteration
+        datasource.remove(missingKey);
 
         // When / Then
-        assertThrows(IOException.class,
-                () -> brokenService.generateAndSendInvoice(datasource)
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class,
+                        () -> pdfService.generateInvoicePdf(datasource));
+        assertEquals(
+                "Missing required PDF field: " + missingKey.name(),
+                exception.getMessage()
         );
     }
 
     /**
-     * Verifies that a {@link JRException} is thrown when JasperReports
-     * fails to compile or process the invoice template.
+     * Stubs all configuration paths required for successful PDF generation.
      *
      * <p>
-     * This test represents scenarios such as:
-     * <ul>
-     *     <li>Invalid JRXML syntax</li>
-     *     <li>Corrupted report template</li>
-     *     <li>Incompatible JasperReports version</li>
-     * </ul>
+     * This helper method centralizes configuration stubbing and is used only
+     * by tests that execute the full JasperReports pipeline.
      * </p>
      */
-    @Test
-    void generateAndSendInvoice_shouldThrowJRException_whenReportInvalid() {
-        // Given
-        final PdfServiceImpl brokenService = new PdfServiceImpl() {
-            @Override
-            public byte[] generateAndSendInvoice(Map<PdfConstants, Object> datasource)
-                    throws JRException {
-                throw new JRException("Jasper compilation failed");
-            }
-        };
-
-        final Map<PdfConstants, Object> datasource = Map.of(
-                PdfConstants.INVOICE_NUM, "INV-2"
-        );
-
-        // When / Then
-        assertThrows(JRException.class,
-                () -> brokenService.generateAndSendInvoice(datasource)
-        );
+    private void stubAllInvoicePaths() {
+        when(invoiceProperties.jasperTemplatePath())
+                .thenReturn("reports/invoice_template.jrxml");
+        when(invoiceProperties.companyLogoPath())
+                .thenReturn("/reports/accenture-logo.png");
+        when(invoiceProperties.userLogoPath())
+                .thenReturn("/reports/icon-user.png");
+        when(invoiceProperties.emailLogoPath())
+                .thenReturn("/reports/icon-email.png");
+        when(invoiceProperties.amountLogoPath())
+                .thenReturn("/reports/icon-amount.png");
+        when(invoiceProperties.paymentLogoPath())
+                .thenReturn("/reports/icon-payment.png");
+        when(invoiceProperties.calendarLogoPath())
+                .thenReturn("/reports/icon-calendar.png");
     }
 }
