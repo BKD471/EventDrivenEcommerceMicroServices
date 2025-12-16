@@ -138,7 +138,7 @@ class EmailServiceImplTest {
         // Capture exact PDF datasource
         ArgumentCaptor<Map<PdfConstants, Object>> pdfCaptor =
                 ArgumentCaptor.forClass(Map.class);
-        when(pdfService.generateAndSendInvoice(pdfCaptor.capture()))
+        when(pdfService.generateInvoicePdf(pdfCaptor.capture()))
                 .thenReturn(pdfBytes);
         when(s3Service.uploadInvoice(eq(pdfBytes), anyString()))
                 .thenReturn(invoiceKey);
@@ -245,7 +245,7 @@ class EmailServiceImplTest {
     @Test
     void sendPaymentSuccessEmail_shouldNotThrowWhenPdfFails() throws Exception {
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
-        when(pdfService.generateAndSendInvoice(any()))
+        when(pdfService.generateInvoicePdf(any()))
                 .thenThrow(new JRException("PDF error"));
 
         assertDoesNotThrow(() ->

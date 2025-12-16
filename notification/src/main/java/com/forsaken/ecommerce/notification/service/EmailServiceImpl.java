@@ -78,7 +78,7 @@ public class EmailServiceImpl implements IEmailService {
             messageHelper.setSubject(PAYMENT_CONFIRMATION.getSubject());
             log.info("Sending email to: {}", destinationEmail);
 
-            final byte[] pdfBytes = pdfService.generateAndSendInvoice(dataSource);
+            final byte[] pdfBytes = pdfService.generateInvoicePdf(dataSource);
             final String key = s3Service.uploadInvoice(pdfBytes, invoiceNumber);
             final URL presignedUrl = s3Service.generatePresignedUrl(key);
 
