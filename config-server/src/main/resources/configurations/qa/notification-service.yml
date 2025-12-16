@@ -48,8 +48,8 @@ spring:
 
 invoice:
   downloadUrl: http://localhost:8222/api/v1
-  senderEmailAddress: noreply47@gmail.com
-  jasperTemplatePath: reports/invoice_template.jrxml
+  senderEmailAddress: noreply@forsaken-ecommerce.com
+  jasperTemplatePath: /reports/invoice_template.jrxml
   companyLogoPath: /reports/accenture-logo.png
   userLogoPath: /reports/icon-user.png
   emailLogoPath: /reports/icon-email.png
