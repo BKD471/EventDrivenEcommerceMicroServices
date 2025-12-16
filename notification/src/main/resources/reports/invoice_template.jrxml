@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports
+              http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="UltraPremiumGlassInvoice"
+              pageWidth="595" pageHeight="842"
+              columnWidth="555" leftMargin="20" rightMargin="20"
+              topMargin="20" bottomMargin="5">
+
+    <style name="Title" fontSize="26" isBold="true"
+           pdfFontName="Helvetica-Bold" forecolor="#FFFFFF"/>
+
+    <style name="SectionLabel" fontSize="12" isBold="true"
+           pdfFontName="Helvetica-Bold" forecolor="#311B92"/>
+
+    <style name="ValueText" fontSize="12"
+           pdfFontName="Helvetica" forecolor="#1A237E"/>
+
+
+    <style name="GlassCard">
+        <box>
+            <pen lineWidth="0.3" lineColor="#B39DDB"/>
+            <topPen lineWidth="1" lineColor="#CE93D8"/>
+            <leftPen lineWidth="1" lineColor="#CE93D8"/>
+            <rightPen lineWidth="1" lineColor="#CE93D8"/>
+        </box>
+    </style>
+
+    <parameter name="LOGO" class="java.io.InputStream"/>
+    <parameter name="ICON_USER" class="java.io.InputStream"/>
+    <parameter name="ICON_EMAIL" class="java.io.InputStream"/>
+    <parameter name="ICON_AMOUNT" class="java.io.InputStream"/>
+    <parameter name="ICON_PAYMENT" class="java.io.InputStream"/>
+    <parameter name="ICON_CALENDAR" class="java.io.InputStream"/>
+    <parameter name="invoiceNumber" class="java.lang.String"/>
+    <parameter name="customerName" class="java.lang.String"/>
+    <parameter name="email" class="java.lang.String"/>
+    <parameter name="amount" class="java.math.BigDecimal"/>
+    <parameter name="paymentMethod" class="java.lang.String"/>
+    <parameter name="paymentDate" class="java.lang.String"/>
+
+    <title>
+        <band height="160">
+
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="150"
+                               backcolor="#4A148C" mode="Opaque"/>
+            </rectangle>
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="150"
+                               backcolor="#6A1B9A" mode="Opaque"/>
+            </rectangle>
+
+            <image>
+                <reportElement x="420" y="20" width="115" height="55"/>
+                <imageExpression><![CDATA[$P{LOGO}]]></imageExpression>
+            </image>
+
+            <textField>
+                <reportElement style="Title" x="20" y="40" width="350" height="40"/>
+                <textFieldExpression><![CDATA["INVOICE"]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement x="20" y="90" width="350" height="30" forecolor="#EDE7F6"/>
+                <textFieldExpression><![CDATA[
+                    "Invoice No: " + $P{invoiceNumber}
+                ]]></textFieldExpression>
+            </textField>
+
+        </band>
+    </title>
+
+    <detail>
+        <band height="410">
+
+            <rectangle radius="20">
+                <reportElement x="10" y="10" width="535" height="400"
+                               backcolor="#FFFFFF" mode="Transparent" style="GlassCard"/>
+            </rectangle>
+
+
+            <image>
+                <reportElement x="40" y="40" width="30" height="30"/>
+                <imageExpression><![CDATA[$P{ICON_USER}]]></imageExpression>
+            </image>
+
+            <staticText>
+                <reportElement x="80" y="40" width="200" height="20" style="SectionLabel"/>
+                <text><![CDATA[Customer Name]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="80" y="65" width="440" height="20" style="ValueText"/>
+                <textFieldExpression><![CDATA[$P{customerName}]]></textFieldExpression>
+            </textField>
+
+            <image>
+                <reportElement x="40" y="110" width="30" height="30"/>
+                <imageExpression><![CDATA[$P{ICON_EMAIL}]]></imageExpression>
+            </image>
+
+            <staticText>
+                <reportElement x="80" y="110" width="200" height="20" style="SectionLabel"/>
+                <text><![CDATA[Email]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="80" y="135" width="440" height="20" style="ValueText"/>
+                <textFieldExpression><![CDATA[$P{email}]]></textFieldExpression>
+            </textField>
+
+            <image>
+                <reportElement x="40" y="180" width="30" height="30"/>
+                <imageExpression><![CDATA[$P{ICON_AMOUNT}]]></imageExpression>
+            </image>
+
+            <staticText>
+                <reportElement x="80" y="180" width="200" height="20" style="SectionLabel"/>
+                <text><![CDATA[Amount]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="80" y="205" width="440" height="20" style="ValueText"/>
+                <textFieldExpression><![CDATA[
+                    "₹ " + $P{amount}
+                ]]></textFieldExpression>
+            </textField>
+
+            <image>
+                <reportElement x="40" y="250" width="30" height="30"/>
+                <imageExpression><![CDATA[$P{ICON_PAYMENT}]]></imageExpression>
+            </image>
+
+            <staticText>
+                <reportElement x="80" y="250" width="200" height="20" style="SectionLabel"/>
+                <text><![CDATA[Payment Method]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="80" y="275" width="440" height="20" style="ValueText"/>
+                <textFieldExpression><![CDATA[$P{paymentMethod}]]></textFieldExpression>
+            </textField>
+
+            <image>
+                <reportElement x="40" y="320" width="40" height="40"/>
+                <imageExpression><![CDATA[$P{ICON_CALENDAR}]]></imageExpression>
+            </image>
+
+            <staticText>
+                <reportElement x="80" y="320" width="200" height="20" style="SectionLabel"/>
+                <text><![CDATA[Payment Date]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="80" y="345" width="440" height="20" style="ValueText"/>
+                <textFieldExpression><![CDATA[$P{paymentDate}]]></textFieldExpression>
+            </textField>
+
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="50">
+
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="40"
+                               backcolor="#6A1B9A" mode="Opaque"/>
+            </rectangle>
+
+            <textField>
+                <reportElement x="0" y="10" width="555" height="25"
+                               forecolor="#FFFFFF" style="ValueText"/>
+                <textElement textAlignment="Center"/>
+                <textFieldExpression><![CDATA[
+                    "Thank you " + $P{customerName} +
+                    " for choosing us — Payment Received Successfully"
+                ]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+
+</jasperReport>
