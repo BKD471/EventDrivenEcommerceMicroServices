@@ -41,7 +41,7 @@ public class EmailServiceImpl implements IEmailService {
 
     private final JavaMailSender mailSender;
     private final SpringTemplateEngine templateEngine;
-    private final IPdfService pdfService;
+    private final IInvoiceService invoiceService;
     private final IS3Service s3Service;
     private final InvoiceProperties invoiceProperties;
 
@@ -79,7 +79,7 @@ public class EmailServiceImpl implements IEmailService {
             messageHelper.setSubject(PAYMENT_CONFIRMATION.getSubject());
             log.info("Sending email to: {}", destinationEmail);
 
-            final byte[] pdfBytes = pdfService.generateInvoicePdf(dataSource);
+            final byte[] pdfBytes = invoiceService.generateInvoicePdf(dataSource);
             final String key = s3Service.uploadInvoice(pdfBytes, invoiceNumber);
             final URL presignedUrl = s3Service.generatePresignedUrl(key);
 

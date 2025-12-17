@@ -80,7 +80,7 @@ class EmailServiceImplTest {
     private SpringTemplateEngine templateEngine;
 
     @Mock
-    private IPdfService pdfService;
+    private IInvoiceService invoiceService;
 
     @Mock
     private IS3Service s3Service;
@@ -115,7 +115,7 @@ class EmailServiceImplTest {
         emailService = new EmailServiceImpl(
                 mailSender,
                 templateEngine,
-                pdfService,
+                invoiceService,
                 s3Service,
                 invoiceProperties
         );
@@ -152,7 +152,7 @@ class EmailServiceImplTest {
         final URL presignedUrl = new URL("https://s3.aws.com/inv");
         ArgumentCaptor<Map<PdfConstants, Object>> pdfCaptor =
                 ArgumentCaptor.forClass(Map.class);
-        when(pdfService.generateInvoicePdf(pdfCaptor.capture()))
+        when(invoiceService.generateInvoicePdf(pdfCaptor.capture()))
                 .thenReturn(pdfBytes);
         when(s3Service.uploadInvoice(eq(pdfBytes), anyString()))
                 .thenReturn(invoiceKey);
@@ -257,7 +257,7 @@ class EmailServiceImplTest {
      */
     @Test
     void sendPaymentSuccessEmail_shouldNotThrowWhenPdfFails() throws Exception {
-        when(pdfService.generateInvoicePdf(any()))
+        when(invoiceService.generateInvoicePdf(any()))
                 .thenThrow(new JRException("PDF error"));
 
         assertDoesNotThrow(() ->
@@ -329,7 +329,7 @@ class EmailServiceImplTest {
     @Test
     void shouldHandleIllegalArgumentExceptionFromS3Gracefully() throws Exception {
         // given
-        when(pdfService.generateInvoicePdf(any()))
+        when(invoiceService.generateInvoicePdf(any()))
                 .thenReturn("PDF".getBytes());
 
         doThrow(new IllegalArgumentException("Invalid invoiceId"))
@@ -394,7 +394,7 @@ class EmailServiceImplTest {
     void sendPaymentSuccessEmail_shouldHandleAwsSdkExceptionGracefully() throws Exception {
         // Given
         final byte[] pdfBytes = "PDF".getBytes();
-        when(pdfService.generateInvoicePdf(any()))
+        when(invoiceService.generateInvoicePdf(any()))
                 .thenReturn(pdfBytes);
         // Simulate AWS SDK runtime failure (network / auth / service error)
         doThrow(SdkClientException.builder()

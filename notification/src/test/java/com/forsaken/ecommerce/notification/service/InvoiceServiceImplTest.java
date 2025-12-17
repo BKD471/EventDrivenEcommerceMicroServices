@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link PdfServiceImpl}.
+ * Unit tests for {@link InvoiceServiceImpl}.
  *
  * <p>
  * This test suite verifies the behavior of the invoice PDF generation service
@@ -50,14 +50,14 @@ import static org.mockito.Mockito.when;
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
-class PdfServiceImplTest {
+class InvoiceServiceImplTest {
 
     @Mock
     private InvoiceProperties invoiceProperties;
-    private PdfServiceImpl pdfService;
+    private InvoiceServiceImpl invoiceService;
 
     /**
-     * Creates a fresh {@link PdfServiceImpl} instance before each test.
+     * Creates a fresh {@link InvoiceServiceImpl} instance before each test.
      *
      * <p>
      * No configuration values are stubbed here to avoid unnecessary stubbing.
@@ -67,7 +67,7 @@ class PdfServiceImplTest {
      */
     @BeforeEach
     void setUp() {
-        pdfService = new PdfServiceImpl(invoiceProperties);
+        invoiceService = new InvoiceServiceImpl(invoiceProperties);
     }
 
     /**
@@ -100,7 +100,7 @@ class PdfServiceImplTest {
         datasource.put(PdfConstants.PAYMENT_DATE, LocalDateTime.now().toString());
 
         // When
-        final byte[] pdfBytes = pdfService.generateInvoicePdf(datasource);
+        final byte[] pdfBytes = invoiceService.generateInvoicePdf(datasource);
 
         // Then
         assertNotNull(pdfBytes);
@@ -137,7 +137,7 @@ class PdfServiceImplTest {
 
         // when -> then
         assertThrows(IOException.class,
-                () -> pdfService.generateInvoicePdf(datasource));
+                () -> invoiceService.generateInvoicePdf(datasource));
     }
 
     /**
@@ -179,7 +179,7 @@ class PdfServiceImplTest {
         // When / Then
         IllegalArgumentException exception =
                 assertThrows(IllegalArgumentException.class,
-                        () -> pdfService.generateInvoicePdf(datasource));
+                        () -> invoiceService.generateInvoicePdf(datasource));
         assertEquals(
                 "Missing required PDF field: " + missingKey.name(),
                 exception.getMessage()
@@ -224,7 +224,7 @@ class PdfServiceImplTest {
         // When / Then
         final IOException exception = assertThrows(
                 IOException.class,
-                () -> pdfService.generateInvoicePdf(datasource)
+                () -> invoiceService.generateInvoicePdf(datasource)
         );
 
         assertEquals(

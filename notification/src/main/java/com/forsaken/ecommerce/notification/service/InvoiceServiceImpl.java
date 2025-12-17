@@ -22,7 +22,7 @@ import java.util.Map;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class PdfServiceImpl implements IPdfService {
+public class InvoiceServiceImpl implements IInvoiceService {
 
     private final InvoiceProperties invoiceProperties;
 
