@@ -15,15 +15,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
+import software.amazon.awssdk.core.exception.SdkClientException;
 
 import java.math.BigDecimal;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import static com.forsaken.ecommerce.notification.models.EmailTemplates.ORDER_CONFIRMATION;
 import static com.forsaken.ecommerce.notification.models.EmailTemplates.PAYMENT_CONFIRMATION;
@@ -91,9 +92,24 @@ class EmailServiceImplTest {
 
     private MimeMessage mimeMessage;
 
+    /**
+     * Initializes common test fixtures before each test execution.
+     *
+     * <p>
+     * A real {@link MimeMessage} instance is created and returned from the mocked
+     * {@link JavaMailSender} to allow {@link MimeMessageHelper} to function
+     * correctly without triggering {@link NullPointerException}s.
+     * </p>
+     *
+     * <p>
+     * This setup mirrors production behavior closely while still keeping
+     * all external interactions fully mocked.
+     * </p>
+     */
     @BeforeEach
     void setUp() {
-        mimeMessage = new MimeMessage(Session.getDefaultInstance(new Properties()));
+        mimeMessage = new MimeMessage((Session) null);
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         when(invoiceProperties.senderEmailAddress())
                 .thenReturn("noreply@test.com");
         emailService = new EmailServiceImpl(
@@ -134,8 +150,6 @@ class EmailServiceImplTest {
         final byte[] pdfBytes = "PDF_BYTES".getBytes();
         final String invoiceKey = "invoices/INV-1.pdf";
         final URL presignedUrl = new URL("https://s3.aws.com/inv");
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
-        // Capture exact PDF datasource
         ArgumentCaptor<Map<PdfConstants, Object>> pdfCaptor =
                 ArgumentCaptor.forClass(Map.class);
         when(pdfService.generateInvoicePdf(pdfCaptor.capture()))
@@ -201,7 +215,6 @@ class EmailServiceImplTest {
                 constructProduct(1, BigDecimal.valueOf(200)),
                 constructProduct(2, BigDecimal.valueOf(100))
         );
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         final ArgumentCaptor<Context> contextCaptor =
                 ArgumentCaptor.forClass(Context.class);
         when(templateEngine.process(
@@ -244,7 +257,6 @@ class EmailServiceImplTest {
      */
     @Test
     void sendPaymentSuccessEmail_shouldNotThrowWhenPdfFails() throws Exception {
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         when(pdfService.generateInvoicePdf(any()))
                 .thenThrow(new JRException("PDF error"));
 
@@ -279,7 +291,6 @@ class EmailServiceImplTest {
     @Test
     void sendOrderConfirmationEmail_shouldHandleMailException() {
         // Given
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         when(templateEngine.process(
                 eq(ORDER_CONFIRMATION.getTemplate()),
                 any(Context.class)
@@ -299,6 +310,115 @@ class EmailServiceImplTest {
                         List.of()
                 )
         );
+    }
+
+    /**
+     * Verifies that invalid input errors thrown by the S3 service
+     * (for example, invalid invoice identifiers) are handled gracefully.
+     *
+     * <p>
+     * This test ensures that:
+     * <ul>
+     *     <li>{@link IllegalArgumentException}s from {@link IS3Service}
+     *         do not propagate beyond the email service.</li>
+     *     <li>No email is sent when invoice upload fails.</li>
+     *     <li>The failure does not break asynchronous execution.</li>
+     * </ul>
+     * </p>
+     */
+    @Test
+    void shouldHandleIllegalArgumentExceptionFromS3Gracefully() throws Exception {
+        // given
+        when(pdfService.generateInvoicePdf(any()))
+                .thenReturn("PDF".getBytes());
+
+        doThrow(new IllegalArgumentException("Invalid invoiceId"))
+                .when(s3Service)
+                .uploadInvoice(any(), any());
+
+        // when + then
+        assertDoesNotThrow(() ->
+                emailService.sendPaymentSuccessEmail(
+                        "user@test.com",
+                        "John Doe",
+                        BigDecimal.TEN,
+                        "ORD-FAIL",
+                        PaymentMethod.PAYPAL,
+                        LocalDateTime.now()
+                )
+        );
+        verify(s3Service).uploadInvoice(any(), any());
+        verify(s3Service, never()).generatePresignedUrl(any());
+        verify(mailSender, never()).send(any(MimeMessage.class));
+    }
+
+    /**
+     * Verifies that AWS SDK runtime failures occurring during invoice upload
+     * are handled gracefully by the email service.
+     *
+     * <p>
+     * This test simulates an {@link software.amazon.awssdk.core.exception.SdkClientException}
+     * thrown by {@link IS3Service#uploadInvoice(byte[], String)}, which may occur due to:
+     * </p>
+     * <ul>
+     *     <li>Temporary network outages</li>
+     *     <li>AWS authentication or credential issues</li>
+     *     <li>S3 service unavailability</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Expected behavior:</b>
+     * </p>
+     * <ul>
+     *     <li>The exception is caught internally and does not propagate to the caller</li>
+     *     <li>The email sending flow is aborted immediately</li>
+     *     <li>No attempt is made to generate a presigned URL</li>
+     *     <li>No email is sent via {@link JavaMailSender}</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Why this matters:</b>
+     * </p>
+     * <ul>
+     *     <li>AWS SDK exceptions are unchecked and can otherwise crash async execution</li>
+     *     <li>Email delivery must not occur when invoice storage fails</li>
+     *     <li>The system must remain resilient to transient infrastructure failures</li>
+     * </ul>
+     *
+     * <p>
+     * This test guarantees that AWS infrastructure errors do not break the
+     * notification workflow or leak partially constructed emails.
+     * </p>
+     */
+    @Test
+    void sendPaymentSuccessEmail_shouldHandleAwsSdkExceptionGracefully() throws Exception {
+        // Given
+        final byte[] pdfBytes = "PDF".getBytes();
+        when(pdfService.generateInvoicePdf(any()))
+                .thenReturn(pdfBytes);
+        // Simulate AWS SDK runtime failure (network / auth / service error)
+        doThrow(SdkClientException.builder()
+                .message("AWS S3 unavailable")
+                .build())
+                .when(s3Service)
+                .uploadInvoice(any(), any());
+
+        // When -> Then
+        assertDoesNotThrow(() ->
+                emailService.sendPaymentSuccessEmail(
+                        "user@test.com",
+                        "John Doe",
+                        BigDecimal.TEN,
+                        "ORD-AWS",
+                        PaymentMethod.PAYPAL,
+                        LocalDateTime.now()
+                )
+        );
+
+        // Email must NOT be sent
+        verify(mailSender, never()).send(any(MimeMessage.class));
+        // Presigned URL must NOT be generated
+        verify(s3Service, never()).generatePresignedUrl(any());
     }
 
     /**

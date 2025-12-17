@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
@@ -43,5 +47,20 @@ public class AwsSecretsConfiguration {
         } catch (Exception e) {
             throw new RuntimeException("Failed to load AWS credentials from Secrets Manager", e);
         }
+    }
+
+    @Bean
+    public AwsCredentialsProvider credentialsProvider(
+            final AwsCredentialsProperties awsCredentials
+    ) {
+        if (null != awsCredentials.accessKeyId() && !awsCredentials.accessKeyId().isBlank() &&
+                null != awsCredentials.secretKey() && !awsCredentials.secretKey().isBlank()) {
+            return StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(
+                            awsCredentials.accessKeyId(),
+                            awsCredentials.secretKey())
+            );
+        }
+        return DefaultCredentialsProvider.create();
     }
 }
