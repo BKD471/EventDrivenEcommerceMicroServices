@@ -77,8 +77,8 @@ public class PdfServiceImpl implements IPdfService {
      * Ensures a required invoice field is present in the datasource.
      */
     private Object required(
-            Map<PdfConstants, Object> datasource,
-            PdfConstants key
+            final Map<PdfConstants, Object> datasource,
+            final PdfConstants key
     ) {
         final Object value = datasource.get(key);
         if (null == value) {
@@ -94,7 +94,7 @@ public class PdfServiceImpl implements IPdfService {
      */
     private InputStream requiredResource(final String path) throws IOException {
         final InputStream stream = getClass().getResourceAsStream(path);
-        if (stream == null) {
+        if (null == stream) {
             throw new IOException(
                     "Required PDF resource not found on classpath: " + path
             );
