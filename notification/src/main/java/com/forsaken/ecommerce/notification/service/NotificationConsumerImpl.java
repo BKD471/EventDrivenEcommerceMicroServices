@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
@@ -32,11 +33,13 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
     private final INotificationRepository notificationRepository;
     private final IEmailService emailService;
+    private final IDlqS3Service dlqS3Service;
     private final KafkaProperties kafkaProperties;
+    private final KafkaDlqProperties dlqProperties;
 
     @KafkaListener(
-            topics = "${spring.kafka.consumer.paymentTopicName}",
-            groupId = "${spring.kafka.consumer.paymentGroupId}",
+            topics = "#{@kafkaProperties.paymentTopicName()}",
+            groupId = "#{@kafkaProperties.paymentGroupId()}",
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
@@ -96,8 +99,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "${spring.kafka.consumer.orderTopicName}",
-            groupId = "${spring.kafka.consumer.orderGroupId}",
+            topics = "#{@kafkaProperties.orderTopicName()}",
+            groupId = "#{@kafkaProperties.orderGroupId()}",
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
@@ -149,6 +152,43 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             MDC.clear();
         }
     }
+
+
+    @KafkaListener(
+            topics = "#{@dlqProperties.paymentDlqtopicName()}",
+            groupId = "#{@dlqProperties.groupId()}",
+            containerFactory = "paymentKafkaListenerContainerFactory"
+    )
+    @Override
+    public void paymentConsumeDlq(final ConsumerRecord<String, PaymentConfirmation> record) {
+        log.error("Payment DLQ EVENT RECEIVED for key={} value={}, partition={}, offset={}, timestamp={}",
+                record.key(), record.value(), record.partition(), record.offset(), getTimeStampForLogs(record));
+        try {
+            dlqS3Service.storeToS3(record, "payment");
+        } catch (Exception exception) {
+            log.error("Failed to persist DLQ record to S3 {}", getTimeStampForLogs(record), exception);
+            throw exception;
+        }
+    }
+
+
+    @KafkaListener(
+            topics = "#{@dlqProperties.orderDlqtopicName()}",
+            groupId = "#{@dlqProperties.groupId()}",
+            containerFactory = "orderKafkaListenerContainerFactory"
+    )
+    @Override
+    public void orderConsumeDlq(final ConsumerRecord<String, OrderConfirmation> record) {
+        log.error("Order DLQ EVENT RECEIVED for key={} value={}, partition={}, offset={}, timestamp={}",
+                record.key(), record.value(), record.partition(), record.offset(), getTimeStampForLogs(record));
+        try {
+            dlqS3Service.storeToS3(record, "order");
+        } catch (Exception exception) {
+            log.error("Failed to persist DLQ record to S3 {}", getTimeStampForLogs(record), exception);
+            throw exception;
+        }
+    }
+
 
     private LocalDateTime getTimeStampForLogs(final ConsumerRecord<String, ?> record) {
         return LocalDateTime.ofInstant(

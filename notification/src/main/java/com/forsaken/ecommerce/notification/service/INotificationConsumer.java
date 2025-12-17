@@ -3,82 +3,143 @@ package com.forsaken.ecommerce.notification.service;
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.messaging.MessagingException;
 
 /**
- * Contract for consuming notification-related Kafka messages.
+ * Contract for consuming notification-related Kafka events and their
+ * corresponding Dead Letter Queue (DLQ) messages.
+ *
  * <p>
- * Implementations of this interface are responsible for handling
- * domain-specific notification events published to Kafka topics.
+ * Implementations of this interface act as the primary entry point for
+ * processing notification events published to Kafka topics.
+ * These events typically originate from upstream services after
+ * successful business operations such as payments or order creation.
  * </p>
  *
  * <p>
- * <b>Responsibilities:</b>
+ * <b>Primary Responsibilities:</b>
+ * </p>
  * <ul>
  *     <li>Consume and process payment success notification events.</li>
  *     <li>Consume and process order confirmation notification events.</li>
- *     <li>Perform validation, transformation, and downstream notification logic.</li>
+ *     <li>Persist notification data for auditing and traceability.</li>
+ *     <li>Trigger downstream side effects such as email notifications.</li>
+ *     <li>Handle failed messages routed to Dead Letter Topics (DLQ).</li>
  * </ul>
- * </p>
  *
  * <p>
  * <b>Kafka Integration:</b>
- * <ul>
- *     <li>Kafka-specific annotations such as {@code @KafkaListener}
- *     should be applied on the concrete implementation class, not on
- *     this interface.</li>
- *     <li>This interface acts purely as a business contract.</li>
- * </ul>
  * </p>
+ * <ul>
+ *     <li>Concrete implementations are expected to use
+ *         {@code @KafkaListener} annotations.</li>
+ *     <li>Topic names, consumer groups, retry policies, and DLQ configuration
+ *         should be externalized via application configuration.</li>
+ *     <li>This interface intentionally contains no Kafka annotations and
+ *         represents a pure business contract.</li>
+ * </ul>
  *
  * <p>
- * <b>Error Handling:</b>
+ * <b>DLQ Handling:</b>
+ * </p>
  * <ul>
- *     <li>Implementations may throw {@link MessagingException} to indicate
- *     failures during message processing.</li>
- *     <li>Such exceptions can be handled via Kafka error handlers,
- *     retries, or routed to a Dead Letter Topic (DLT).</li>
+ *     <li>Messages that fail processing after retries may be delivered
+ *         to DLQ topics.</li>
+ *     <li>DLQ consumers are responsible for capturing and persisting
+ *         failed records for later inspection or replay.</li>
  * </ul>
+ *
+ * <p>
+ * <b>Error Handling & Resilience:</b>
+ * </p>
+ * <ul>
+ *     <li>Implementations should handle failures gracefully and ensure
+ *         that Kafka listener threads are not terminated unexpectedly.</li>
+ *     <li>Exceptions may be logged, routed to DLQ, or persisted based on
+ *         system retry and recovery policies.</li>
+ * </ul>
+ *
+ * <p>
+ * <b>Thread Safety:</b><br>
+ * Implementations must be stateless and thread-safe, as Kafka listeners
+ * may process records concurrently depending on container configuration.
  * </p>
  */
 public interface INotificationConsumer {
 
     /**
-     * Consume and process payment success notification events.
+     * Consumes and processes payment success notification events.
+     *
      * <p>
-     * This method handles messages produced after a successful payment
-     * transaction. Typical responsibilities include:
+     * These events are emitted after a successful payment transaction.
+     * Typical responsibilities include:
      * </p>
      * <ul>
-     *     <li>Validating the received {@link com.forsaken.ecommerce.avro.PaymentConfirmation} payload.</li>
-     *     <li>Triggering downstream notifications (email, SMS, push, etc.).</li>
-     *     <li>Updating notification or audit state if required.</li>
+     *     <li>Validating the {@link PaymentConfirmation} payload.</li>
+     *     <li>Persisting payment notification details.</li>
+     *     <li>Triggering payment success notifications (e.g. email).</li>
      * </ul>
      *
-     * @param record the Kafka {@link ConsumerRecord} containing the payment
-     *               confirmation event as its value
+     * @param record the Kafka {@link ConsumerRecord} containing a
+     *               {@link PaymentConfirmation} event as its value
      */
     void consumePaymentSuccessNotifications(
             final ConsumerRecord<String, PaymentConfirmation> record
     );
 
-
     /**
-     * Consume and process order confirmation notification events.
+     * Consumes and processes order confirmation notification events.
+     *
      * <p>
-     * This method handles messages emitted after an order is successfully
-     * created or confirmed. Implementations typically:
+     * These events are emitted when an order has been successfully created
+     * or confirmed. Implementations typically:
      * </p>
      * <ul>
-     *     <li>Extract order and customer details from the {@link OrderConfirmation} payload.</li>
-     *     <li>Send order confirmation notifications to the customer.</li>
-     *     <li>Log or audit the notification delivery status.</li>
+     *     <li>Extract order and customer information.</li>
+     *     <li>Persist order notification details.</li>
+     *     <li>Trigger order confirmation notifications.</li>
      * </ul>
      *
-     * @param record the Kafka {@link ConsumerRecord} containing the order
-     *               confirmation event as its value
+     * @param record the Kafka {@link ConsumerRecord} containing an
+     *               {@link OrderConfirmation} event as its value
      */
     void consumeOrderConfirmationNotifications(
             final ConsumerRecord<String, OrderConfirmation> record
     );
+
+    /**
+     * Consumes payment-related messages from the Dead Letter Topic (DLQ).
+     *
+     * <p>
+     * This method is invoked for payment events that could not be processed
+     * successfully after exhausting all retry attempts.
+     * </p>
+     *
+     * <p>
+     * Implementations are expected to persist the failed record
+     * (along with metadata such as topic, partition, and offset)
+     * for later analysis or replay.
+     * </p>
+     *
+     * @param record the Kafka {@link ConsumerRecord} containing the
+     *               failed {@link PaymentConfirmation} event
+     */
+    void paymentConsumeDlq(final ConsumerRecord<String, PaymentConfirmation> record);
+
+    /**
+     * Consumes order-related messages from the Dead Letter Topic (DLQ).
+     *
+     * <p>
+     * This method handles order confirmation events that failed processing
+     * and were redirected to a DLQ.
+     * </p>
+     *
+     * <p>
+     * Implementations should store the failed event in durable storage
+     * and make it available for manual inspection or replay.
+     * </p>
+     *
+     * @param record the Kafka {@link ConsumerRecord} containing the
+     *               failed {@link OrderConfirmation} event
+     */
+    void orderConsumeDlq(final ConsumerRecord<String, OrderConfirmation> record);
 }

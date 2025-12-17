@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.notification.service;
 import com.forsaken.ecommerce.avro.CustomerResponse;
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.models.PaymentMethod;
 import com.forsaken.ecommerce.notification.repository.INotificationRepository;
@@ -29,6 +30,7 @@ import static com.forsaken.ecommerce.notification.models.NotificationType.ORDER_
 import static com.forsaken.ecommerce.notification.models.NotificationType.PAYMENT_CONFIRMATION;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -36,6 +38,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -66,6 +69,41 @@ import static org.mockito.Mockito.when;
  * This setup ensures that tests focus exclusively on the consumer’s
  * business behavior without relying on infrastructure components.
  * </p>
+ * <p>
+ * <b>Dead Letter Queue (DLQ) handling:</b>
+ * </p>
+ *
+ * <p>
+ * This test suite explicitly covers DLQ consumers for payment and order events.
+ * DLQ listeners are intentionally designed to be minimal and deterministic:
+ * </p>
+ *
+ * <ul>
+ *     <li>No validation or business processing is performed</li>
+ *     <li>No database writes or email notifications are triggered</li>
+ *     <li>The original {@link ConsumerRecord} is persisted verbatim to S3</li>
+ * </ul>
+ *
+ * <p>
+ * This guarantees that messages exceeding retry limits are preserved
+ * for audit, debugging, and manual replay without risk of data loss.
+ * </p>
+ * /**
+ * <p>
+ * <b>Kafka acknowledgment and retry scope:</b>
+ * </p>
+ *
+ * <p>
+ * These tests invoke consumer methods directly and do not validate
+ * Kafka acknowledgment, retry, or backoff behavior.
+ * </p>
+ *
+ * <p>
+ * Such concerns are handled by Spring Kafka configuration
+ * (error handlers, retry policies, and DLQ routing) and are
+ * intentionally tested at the integration level rather than
+ * in unit tests.
+ * </p>
  */
 @ExtendWith(MockitoExtension.class)
 class NotificationConsumerImplTest {
@@ -77,7 +115,13 @@ class NotificationConsumerImplTest {
     private IEmailService emailService;
 
     @Mock
+    private IDlqS3Service dlqS3Service;
+
+    @Mock
     private KafkaProperties kafkaProperties;
+
+    @Mock
+    private KafkaDlqProperties dlqProperties;
 
     @InjectMocks
     private NotificationConsumerImpl consumer;
@@ -428,6 +472,214 @@ class NotificationConsumerImplTest {
                         any(),
                         any()
                 );
+    }
+
+    /**
+     * Verifies that a payment-related Dead Letter Queue (DLQ) message
+     * is persisted to S3 for later inspection or replay.
+     *
+     * <p>
+     * This test ensures that when a {@link PaymentConfirmation} record
+     * is consumed from the payment DLQ topic:
+     * </p>
+     *
+     * <ul>
+     *     <li>The consumer does not attempt normal processing (email, DB, etc.).</li>
+     *     <li>The original Kafka {@link ConsumerRecord} is forwarded as-is
+     *         to {@link IDlqS3Service}.</li>
+     *     <li>The event is categorized correctly using the {@code "payment"}
+     *         DLQ prefix.</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Why this matters:</b>
+     * </p>
+     * <ul>
+     *     <li>Preserves failed payment events for audit and replay.</li>
+     *     <li>Ensures no data loss for messages that exceeded retry limits.</li>
+     *     <li>Guarantees consistent DLQ handling behavior.</li>
+     * </ul>
+     * <p>
+     * DLQ consumers are intentionally allowed to fail fast if S3 persistence
+     * fails. Swallowing such failures would result in silent data loss and
+     * is therefore avoided by design.
+     * </p>
+     */
+    @Test
+    void paymentConsumeDlq_shouldStoreRecordInS3() {
+        // given
+        final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
+        final ConsumerRecord<String, PaymentConfirmation> record =
+                new ConsumerRecord<>(
+                        "payment-dlq-topic",
+                        0,
+                        10L,
+                        "key-1",
+                        paymentConfirmation
+                );
+
+        // when
+        consumer.paymentConsumeDlq(record);
+
+        // then
+        verify(dlqS3Service).storeToS3(record, "payment");
+    }
+
+    /**
+     * Verifies that an order-related Dead Letter Queue (DLQ) message
+     * is persisted to S3 for recovery or manual replay.
+     *
+     * <p>
+     * This test validates that when an {@link OrderConfirmation} record
+     * is received from the order DLQ topic:
+     * </p>
+     *
+     * <ul>
+     *     <li>The consumer skips normal order notification processing.</li>
+     *     <li>The full Kafka {@link ConsumerRecord} is stored without modification.</li>
+     *     <li>The event is stored under the {@code "order"} DLQ prefix
+     *         to allow logical separation from payment DLQ events.</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Operational importance:</b>
+     * </p>
+     * <ul>
+     *     <li>Allows safe replay of failed order notifications.</li>
+     *     <li>Prevents repeated Kafka retries for permanently failing records.</li>
+     *     <li>Improves observability and operational debugging.</li>
+     * </ul>
+     */
+    @Test
+    void orderConsumeDlq_shouldStoreRecordInS3() {
+        // given
+        final CustomerResponse customer = constructCustomer();
+        final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
+
+        final ConsumerRecord<String, OrderConfirmation> record =
+                new ConsumerRecord<>(
+                        "order-dlq-topic",
+                        1,
+                        22L,
+                        "key-2",
+                        orderConfirmation
+                );
+
+        // when
+        consumer.orderConsumeDlq(record);
+
+        // then
+        verify(dlqS3Service).storeToS3(record, "order");
+    }
+
+    /**
+     * Verifies that the payment DLQ consumer fails fast when persisting
+     * a DLQ record to S3 fails.
+     *
+     * <p>
+     * This test validates the following behavior:
+     * </p>
+     * <ul>
+     *     <li>The DLQ consumer attempts to persist the failed
+     *         {@link PaymentConfirmation} record to S3.</li>
+     *     <li>If {@link IDlqS3Service#storeToS3} throws an exception,
+     *         the exception is re-thrown by the consumer.</li>
+     *     <li>The exception is not swallowed, ensuring Kafka retry or
+     *         error-handling mechanisms are triggered.</li>
+     *     <li>No normal processing logic (database persistence or
+     *         email sending) is executed for DLQ records.</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Why this matters:</b>
+     * </p>
+     * <ul>
+     *     <li>DLQ events represent already-failed messages and must
+     *         never be silently dropped.</li>
+     *     <li>Fail-fast behavior guarantees visibility of DLQ persistence
+     *         failures.</li>
+     *     <li>Ensures operational safety by preventing silent data loss.</li>
+     * </ul>
+     */
+    @Test
+    void paymentConsumeDlq_shouldRethrowExceptionWhenS3Fails() {
+        // given
+        final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
+        final ConsumerRecord<String, PaymentConfirmation> record =
+                new ConsumerRecord<>(
+                        "payment-dlq-topic",
+                        0,
+                        10L,
+                        "key-1",
+                        paymentConfirmation
+                );
+        doThrow(new RuntimeException("S3 unavailable"))
+                .when(dlqS3Service)
+                .storeToS3(record, "payment");
+
+        // when -> then
+        assertThrows(RuntimeException.class, () ->
+                consumer.paymentConsumeDlq(record)
+        );
+        // verify S3 attempt happened
+        verify(dlqS3Service).storeToS3(record, "payment");
+        // verify no normal processing happened
+        verifyNoInteractions(notificationRepository);
+        verifyNoInteractions(emailService);
+    }
+
+    /**
+     * Verifies that the order DLQ consumer re-throws exceptions when
+     * persisting DLQ records to S3 fails.
+     *
+     * <p>
+     * This test ensures that:
+     * </p>
+     * <ul>
+     *     <li>The {@link OrderConfirmation} DLQ record is passed
+     *         unchanged to {@link IDlqS3Service}.</li>
+     *     <li>Any exception thrown while storing the record in S3
+     *         is propagated back to the Kafka listener.</li>
+     *     <li>The consumer does not attempt any normal order notification
+     *         processing (database writes or email delivery).</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Operational significance:</b>
+     * </p>
+     * <ul>
+     *     <li>Prevents silent loss of order-related DLQ messages.</li>
+     *     <li>Allows Kafka retry policies or error handlers to take action.</li>
+     *     <li>Preserves failed events for later investigation or replay.</li>
+     * </ul>
+     */
+    @Test
+    void orderConsumeDlq_shouldRethrowExceptionWhenS3Fails() {
+        // given
+        final CustomerResponse customer = constructCustomer();
+        final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
+        final ConsumerRecord<String, OrderConfirmation> record =
+                new ConsumerRecord<>(
+                        "order-dlq-topic",
+                        1,
+                        22L,
+                        "key-2",
+                        orderConfirmation
+                );
+        doThrow(new RuntimeException("S3 write failed"))
+                .when(dlqS3Service)
+                .storeToS3(record, "order");
+
+        // when -> then
+        assertThrows(RuntimeException.class, () ->
+                consumer.orderConsumeDlq(record)
+        );
+
+        // verify S3 attempt happened
+        verify(dlqS3Service).storeToS3(record, "order");
+        // DLQ path must not trigger normal flows
+        verifyNoInteractions(notificationRepository);
+        verifyNoInteractions(emailService);
     }
 
     /**

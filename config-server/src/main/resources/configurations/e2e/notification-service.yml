@@ -63,9 +63,11 @@ aws:
     secretName: EcommerceCredentials
   s3:
     bucketName: my-invoice-pdfs-e2e
-    # Pre-signed URL expiration (in minutes).
-    # Intentionally kept short for security; links can be regenerated.
-    expiration: 30
+    expiration: 30 # Pre-signed URL expiration (in minutes).
+    dlq:
+      bucket: dlq-bucket-e2e
+      paymentPrefix: payment-dlq
+      orderPrefix: order-dlq
   dynamodb:
     tableName: Notification
 
