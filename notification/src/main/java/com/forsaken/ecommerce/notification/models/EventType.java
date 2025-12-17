@@ -1,5 +1,5 @@
 package com.forsaken.ecommerce.notification.models;
 
-public enum DLQEvent {
+public enum EventType {
     PAYMENT,ORDER
 }

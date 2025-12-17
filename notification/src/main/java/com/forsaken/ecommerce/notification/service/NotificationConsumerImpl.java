@@ -5,7 +5,6 @@ import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
-import com.forsaken.ecommerce.notification.models.DLQEvent;
 import com.forsaken.ecommerce.notification.models.Notification;
 import com.forsaken.ecommerce.notification.repository.INotificationRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +23,8 @@ import static com.forsaken.ecommerce.notification.mapper.AvroMapper.getCustomerN
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapPaymentMethod;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapToOrderConfirmation;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapToPaymentConfirmation;
+import static com.forsaken.ecommerce.notification.models.EventType.ORDER;
+import static com.forsaken.ecommerce.notification.models.EventType.PAYMENT;
 import static com.forsaken.ecommerce.notification.models.NotificationType.ORDER_CONFIRMATION;
 import static com.forsaken.ecommerce.notification.models.NotificationType.PAYMENT_CONFIRMATION;
 
@@ -165,10 +166,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
         log.error("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         try {
-            dlqS3Service.storeToS3(record, DLQEvent.PAYMENT);
+            dlqS3Service.storeToS3(record, PAYMENT);
         } catch (Exception exception) {
             log.error("Failed to persist DLQ record to S3 at timestamp={}", getTimeStampForLogs(record), exception);
-            throw exception;
+            throw new RuntimeException(exception);
         }
     }
 
@@ -183,10 +184,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
         log.error("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         try {
-            dlqS3Service.storeToS3(record, DLQEvent.ORDER);
+            dlqS3Service.storeToS3(record, ORDER);
         } catch (Exception exception) {
             log.error("Failed to persist DLQ record to S3 at timestamp={}", getTimeStampForLogs(record), exception);
-            throw exception;
+            throw new RuntimeException(exception);
         }
     }
 

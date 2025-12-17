@@ -43,7 +43,7 @@ public class KafkaConsumerConfigurations {
 
 
     @Bean
-    public NewTopic OrderNotificationsDlqTopic() {
+    public NewTopic orderNotificationsDlqTopic() {
         return TopicBuilder
                 .name(kafkaDlqProperties.orderDlqTopicName())
                 .partitions(kafkaDlqProperties.partitions())

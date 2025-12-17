@@ -26,8 +26,8 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.fromBytes;
-import static com.forsaken.ecommerce.notification.models.DLQEvent.ORDER;
-import static com.forsaken.ecommerce.notification.models.DLQEvent.PAYMENT;
+import static com.forsaken.ecommerce.notification.models.EventType.ORDER;
+import static com.forsaken.ecommerce.notification.models.EventType.PAYMENT;
 import static com.forsaken.ecommerce.notification.models.NotificationType.ORDER_CONFIRMATION;
 import static com.forsaken.ecommerce.notification.models.NotificationType.PAYMENT_CONFIRMATION;
 
