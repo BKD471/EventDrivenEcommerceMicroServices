@@ -29,7 +29,7 @@ import java.util.Map;
  * used as Spring-managed singleton beans.
  * </p>
  */
-public interface IPdfService {
+public interface IInvoiceService {
 
     /**
      * Generates a payment invoice PDF using the provided datasource
