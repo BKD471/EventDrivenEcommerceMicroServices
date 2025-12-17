@@ -77,7 +77,9 @@ public interface IDlqS3Service {
      * @throws RuntimeException if the record cannot be serialized or
      *                          the S3 upload fails
      */
-    void storeToS3(final ConsumerRecord<String, ?> record, final String eventType);
+    void storeToS3(
+            final ConsumerRecord<String, ?> record, final String eventType
+    );
 
     /**
      * Lists all S3 object keys stored under the given prefix.

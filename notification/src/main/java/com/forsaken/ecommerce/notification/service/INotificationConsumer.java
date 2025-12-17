@@ -123,7 +123,9 @@ public interface INotificationConsumer {
      * @param record the Kafka {@link ConsumerRecord} containing the
      *               failed {@link PaymentConfirmation} event
      */
-    void paymentConsumeDlq(final ConsumerRecord<String, PaymentConfirmation> record);
+    void paymentConsumeDlq(
+            final ConsumerRecord<String, PaymentConfirmation> record
+    );
 
     /**
      * Consumes order-related messages from the Dead Letter Topic (DLQ).
@@ -141,5 +143,7 @@ public interface INotificationConsumer {
      * @param record the Kafka {@link ConsumerRecord} containing the
      *               failed {@link OrderConfirmation} event
      */
-    void orderConsumeDlq(final ConsumerRecord<String, OrderConfirmation> record);
+    void orderConsumeDlq(
+            final ConsumerRecord<String, OrderConfirmation> record
+    );
 }
