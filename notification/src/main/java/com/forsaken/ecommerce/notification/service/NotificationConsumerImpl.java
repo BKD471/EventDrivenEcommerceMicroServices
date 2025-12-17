@@ -165,12 +165,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
         log.error("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
-        try {
-            dlqS3Service.storeToS3(record, PAYMENT);
-        } catch (Exception exception) {
-            log.error("Failed to persist DLQ record to S3 at timestamp={}", getTimeStampForLogs(record), exception);
-            throw exception;
-        }
+        dlqS3Service.storeToS3(record, PAYMENT);
     }
 
 
@@ -183,12 +178,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
         log.error("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
-        try {
-            dlqS3Service.storeToS3(record, ORDER);
-        } catch (Exception exception) {
-            log.error("Failed to persist DLQ record to S3 at timestamp={}", getTimeStampForLogs(record), exception);
-            throw exception;
-        }
+        dlqS3Service.storeToS3(record, ORDER);
     }
 
 
