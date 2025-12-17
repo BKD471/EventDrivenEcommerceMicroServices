@@ -169,7 +169,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             dlqS3Service.storeToS3(record, PAYMENT);
         } catch (Exception exception) {
             log.error("Failed to persist DLQ record to S3 at timestamp={}", getTimeStampForLogs(record), exception);
-            throw new RuntimeException(exception);
+            throw exception;
         }
     }
 
@@ -187,7 +187,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             dlqS3Service.storeToS3(record, ORDER);
         } catch (Exception exception) {
             log.error("Failed to persist DLQ record to S3 at timestamp={}", getTimeStampForLogs(record), exception);
-            throw new RuntimeException(exception);
+            throw exception;
         }
     }
 
