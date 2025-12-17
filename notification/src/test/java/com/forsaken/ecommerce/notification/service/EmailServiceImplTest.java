@@ -18,6 +18,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
+import software.amazon.awssdk.core.exception.SdkClientException;
 
 import java.math.BigDecimal;
 import java.net.URL;
@@ -349,6 +350,75 @@ class EmailServiceImplTest {
         verify(s3Service).uploadInvoice(any(), any());
         verify(s3Service, never()).generatePresignedUrl(any());
         verify(mailSender, never()).send(any(MimeMessage.class));
+    }
+
+    /**
+     * Verifies that AWS SDK runtime failures occurring during invoice upload
+     * are handled gracefully by the email service.
+     *
+     * <p>
+     * This test simulates an {@link software.amazon.awssdk.core.exception.SdkClientException}
+     * thrown by {@link IS3Service#uploadInvoice(byte[], String)}, which may occur due to:
+     * </p>
+     * <ul>
+     *     <li>Temporary network outages</li>
+     *     <li>AWS authentication or credential issues</li>
+     *     <li>S3 service unavailability</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Expected behavior:</b>
+     * </p>
+     * <ul>
+     *     <li>The exception is caught internally and does not propagate to the caller</li>
+     *     <li>The email sending flow is aborted immediately</li>
+     *     <li>No attempt is made to generate a presigned URL</li>
+     *     <li>No email is sent via {@link JavaMailSender}</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Why this matters:</b>
+     * </p>
+     * <ul>
+     *     <li>AWS SDK exceptions are unchecked and can otherwise crash async execution</li>
+     *     <li>Email delivery must not occur when invoice storage fails</li>
+     *     <li>The system must remain resilient to transient infrastructure failures</li>
+     * </ul>
+     *
+     * <p>
+     * This test guarantees that AWS infrastructure errors do not break the
+     * notification workflow or leak partially constructed emails.
+     * </p>
+     */
+    @Test
+    void sendPaymentSuccessEmail_shouldHandleAwsSdkExceptionGracefully() throws Exception {
+        // Given
+        final byte[] pdfBytes = "PDF".getBytes();
+        when(pdfService.generateInvoicePdf(any()))
+                .thenReturn(pdfBytes);
+        // Simulate AWS SDK runtime failure (network / auth / service error)
+        doThrow(SdkClientException.builder()
+                .message("AWS S3 unavailable")
+                .build())
+                .when(s3Service)
+                .uploadInvoice(any(), any());
+
+        // When -> Then
+        assertDoesNotThrow(() ->
+                emailService.sendPaymentSuccessEmail(
+                        "user@test.com",
+                        "John Doe",
+                        BigDecimal.TEN,
+                        "ORD-AWS",
+                        PaymentMethod.PAYPAL,
+                        LocalDateTime.now()
+                )
+        );
+
+        // Email must NOT be sent
+        verify(mailSender, never()).send(any(MimeMessage.class));
+        // Presigned URL must NOT be generated
+        verify(s3Service, never()).generatePresignedUrl(any());
     }
 
     /**

@@ -36,7 +36,7 @@ public class S3ServiceImpl implements IS3Service {
         if (!StringUtils.hasText(invoiceId))
             throw new IllegalArgumentException("Invoice id must not be null or blank");
 
-        log.info("Received request to upload invoice with id {}", invoiceId);
+        log.debug("Received request to upload invoice with id {}", invoiceId);
         final String key = "invoices/" + invoiceId + ".pdf";
         final PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(s3Properties.bucketName())
@@ -45,7 +45,7 @@ public class S3ServiceImpl implements IS3Service {
                 .serverSideEncryption(ServerSideEncryption.AES256)
                 .build();
         s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
-        log.info("Uploaded invoice with id {}", invoiceId);
+        log.debug("Uploaded invoice with id {}", invoiceId);
         return key;
     }
 
@@ -53,7 +53,7 @@ public class S3ServiceImpl implements IS3Service {
     public URL generatePresignedUrl(final String key) throws IllegalArgumentException {
         if (!StringUtils.hasText(key)) throw new IllegalArgumentException("S3 object key must not be null or blank");
 
-        log.info("Received request to generate presigned url for key {}", key);
+        log.debug("Received request to generate presigned url for key {}", key);
         final GetObjectRequest getRequest = GetObjectRequest.builder()
                 .bucket(s3Properties.bucketName())
                 .key(key)
@@ -64,7 +64,7 @@ public class S3ServiceImpl implements IS3Service {
                 .build();
 
         final URL presignedUrl = s3Presigner.presignGetObject(presignRequest).url();
-        log.info("Generated presigned url for key {}", key);
+        log.debug("Generated presigned url for key {}", key);
         return presignedUrl;
     }
 }

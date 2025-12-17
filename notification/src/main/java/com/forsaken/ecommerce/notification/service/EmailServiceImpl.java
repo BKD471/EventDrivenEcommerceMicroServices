@@ -17,6 +17,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
+import software.amazon.awssdk.core.exception.SdkException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -106,6 +107,13 @@ public class EmailServiceImpl implements IEmailService {
                     destinationEmail,
                     orderReference,
                     e.getMessage(),
+                    e
+            );
+        } catch (SdkException e) {
+            log.error(
+                    "AWS S3 failure while sending payment email to {}. OrderRef={}",
+                    destinationEmail,
+                    orderReference,
                     e
             );
         } catch (MessagingException | MailException | JRException | IOException e) {

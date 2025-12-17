@@ -20,7 +20,6 @@ import java.util.Map;
 public class AwsSecretsConfiguration {
 
     private final SecretsManagerProperties secretsManagerProperties;
-    private final AwsCredentialsProperties awsCredentials;
 
     @Bean
     public AwsCredentialsProperties awsCredentialsProperties() {
@@ -51,7 +50,9 @@ public class AwsSecretsConfiguration {
     }
 
     @Bean
-    public AwsCredentialsProvider credentialsProvider() {
+    public AwsCredentialsProvider credentialsProvider(
+            final AwsCredentialsProperties awsCredentials
+    ) {
         if (null != awsCredentials.accessKeyId() && !awsCredentials.accessKeyId().isBlank() &&
                 null != awsCredentials.secretKey() && !awsCredentials.secretKey().isBlank()) {
             return StaticCredentialsProvider.create(

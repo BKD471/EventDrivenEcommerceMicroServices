@@ -67,11 +67,24 @@ class S3ServiceImplTest {
     private S3ServiceImpl s3Service;
 
     /**
-     * Initializes the {@link S3ServiceImpl} before each test.
+     * Initializes the {@link S3ServiceImpl} before each test execution.
      *
      * <p>
-     * The S3 bucket name is stubbed once here since it is required
-     * by all service methods.
+     * A fresh instance of {@link S3ServiceImpl} is created for every test to ensure
+     * complete isolation between test cases and to avoid shared mutable state.
+     * </p>
+     *
+     * <p>
+     * All constructor dependencies ({@link S3Properties}, {@link S3Client},
+     * and {@link S3Presigner}) are mocked using Mockito, allowing each test
+     * to precisely control and verify interactions with AWS SDK components
+     * without making real network calls.
+     * </p>
+     *
+     * <p>
+     * Common stubbing (such as bucket name configuration) is intentionally
+     * kept out of this method and applied explicitly in individual tests
+     * to keep test intent clear and avoid hidden coupling.
      * </p>
      */
     @BeforeEach
