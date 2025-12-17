@@ -1,7 +1,6 @@
 package com.forsaken.ecommerce.notification.service;
 
 
-import java.io.IOException;
 import java.net.URL;
 
 /**
@@ -47,12 +46,11 @@ public interface IS3Service {
      * @param invoiceId the unique identifier of the invoice, used to derive
      *                  the storage object key
      * @return the storage key of the uploaded invoice (e.g. {@code invoices/{invoiceId}.pdf})
-     * @throws IOException if an I/O error occurs during upload
      */
     String uploadInvoice(
             final byte[] pdfBytes,
             final String invoiceId
-    ) throws IOException;
+    );
 
     /**
      * Generates a time-limited pre-signed URL for accessing an invoice.

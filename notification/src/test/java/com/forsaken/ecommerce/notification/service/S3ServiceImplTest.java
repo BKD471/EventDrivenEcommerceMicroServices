@@ -103,7 +103,6 @@ class S3ServiceImplTest {
         // Given
         final byte[] pdfBytes = "PDF_CONTENT".getBytes();
         final String invoiceId = "INV-123";
-
         final ArgumentCaptor<PutObjectRequest> requestCaptor =
                 ArgumentCaptor.forClass(PutObjectRequest.class);
         final ArgumentCaptor<RequestBody> bodyCaptor =
@@ -111,14 +110,12 @@ class S3ServiceImplTest {
 
         // When
         final String resultKey = s3Service.uploadInvoice(pdfBytes, invoiceId);
-
-        // Then
-        final PutObjectRequest request = requestCaptor.getValue();
-        assertEquals("invoices/INV-123.pdf", resultKey);
         verify(s3Client).putObject(
                 requestCaptor.capture(),
                 bodyCaptor.capture()
         );
+        final PutObjectRequest request = requestCaptor.getValue();
+        assertEquals("invoices/INV-123.pdf", resultKey);
         assertEquals(bucketName, request.bucket());
         assertEquals("invoices/INV-123.pdf", request.key());
         assertEquals("application/pdf", request.contentType());
