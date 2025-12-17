@@ -60,5 +60,8 @@ invoice:
 aws:
   secretsmanager:
     secretName: EcommerceCredentials
+  s3:
+    bucketName: my-invoice-pdfs-47
+    expiration: 30
   dynamodb:
     tableName: Notification

@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -344,6 +345,89 @@ class NotificationConsumerImplTest {
                 eq("ORD-200"),
                 eq(List.of())
         );
+    }
+
+    /**
+     * Verifies that the payment notification consumer safely ignores
+     * Kafka records with a null {@link PaymentConfirmation} payload.
+     *
+     * <p>
+     * Expected behavior:
+     * <ul>
+     *     <li>The consumer does not throw any exception</li>
+     *     <li>No notification is persisted</li>
+     *     <li>No email is sent</li>
+     * </ul>
+     * </p>
+     *
+     * <p>
+     * This scenario can occur due to:
+     * <ul>
+     *     <li>Deserialization failures</li>
+     *     <li>Poison messages</li>
+     *     <li>Upstream producer bugs</li>
+     * </ul>
+     * </p>
+     */
+    @Test
+    void shouldSkipProcessingWhenPaymentConfirmationIsNull() {
+        // given
+        final ConsumerRecord<String, PaymentConfirmation> record =
+                new ConsumerRecord<>("payment-topic", 0, 0L, "key", null);
+
+        // when -> then
+        assertDoesNotThrow(() ->
+                consumer.consumePaymentSuccessNotifications(record)
+        );
+        verify(notificationRepository, never()).save(any());
+        verify(emailService, never())
+                .sendPaymentSuccessEmail(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    /**
+     * Verifies that the order notification consumer safely ignores
+     * Kafka records with a null {@link OrderConfirmation} payload.
+     *
+     * <p>
+     * Expected behavior:
+     * <ul>
+     *     <li>The consumer does not throw any exception</li>
+     *     <li>No notification is persisted</li>
+     *     <li>No order confirmation email is sent</li>
+     * </ul>
+     * </p>
+     *
+     * <p>
+     * This scenario can occur due to deserialization issues,
+     * malformed Kafka messages, or upstream producer bugs.
+     * </p>
+     */
+    @Test
+    void shouldSkipProcessingWhenOrderConfirmationIsNull() {
+        // given
+        final ConsumerRecord<String, OrderConfirmation> record =
+                new ConsumerRecord<>("order-topic", 0, 0L, "key", null);
+
+        // when -> then
+        assertDoesNotThrow(() ->
+                consumer.consumeOrderConfirmationNotifications(record)
+        );
+        verify(notificationRepository, never()).save(any());
+        verify(emailService, never())
+                .sendOrderConfirmationEmail(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
     }
 
     /**
