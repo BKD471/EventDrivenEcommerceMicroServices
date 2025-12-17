@@ -62,7 +62,9 @@ public class S3ServiceImpl implements IS3Service {
                 .signatureDuration(Duration.ofMinutes(s3Properties.expiration()))
                 .getObjectRequest(getRequest)
                 .build();
+
+        final URL presignedUrl = s3Presigner.presignGetObject(presignRequest).url();
         log.info("Generated presigned url for key {}", key);
-        return s3Presigner.presignGetObject(presignRequest).url();
+        return presignedUrl;
     }
 }
