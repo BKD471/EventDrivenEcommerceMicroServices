@@ -9,6 +9,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
@@ -41,6 +42,7 @@ public class S3ServiceImpl implements IS3Service {
                 .bucket(s3Properties.bucketName())
                 .key(key)
                 .contentType("application/pdf")
+                .serverSideEncryption(ServerSideEncryption.AES256)
                 .build();
         s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
         log.info("Uploaded invoice with id {}", invoiceId);

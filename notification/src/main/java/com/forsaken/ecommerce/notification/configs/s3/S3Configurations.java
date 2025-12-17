@@ -17,7 +17,7 @@ public class S3Configurations {
     private final AwsCredentialsProvider awsCredentialsProvider;
 
 
-    @Bean
+    @Bean(destroyMethod = "close")
     public S3Client s3Client() {
         return S3Client.builder()
                 .region(Region.of(awsCredentials.region()))
@@ -25,7 +25,7 @@ public class S3Configurations {
                 .build();
     }
 
-    @Bean
+    @Bean(destroyMethod = "close")
     public S3Presigner s3Presigner() {
         return S3Presigner.builder()
                 .region(Region.of(awsCredentials.region()))

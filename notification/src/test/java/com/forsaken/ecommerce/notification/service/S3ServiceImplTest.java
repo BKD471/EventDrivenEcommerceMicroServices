@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class S3ServiceImplTest {
 
-    private static final String bucketName = "invoice-bucket";
+    private static final String BUCKET_NAME = "invoice-bucket";
 
     @Mock
     private S3Properties s3Properties;
@@ -116,7 +116,7 @@ class S3ServiceImplTest {
         );
         final PutObjectRequest request = requestCaptor.getValue();
         assertEquals("invoices/INV-123.pdf", resultKey);
-        assertEquals(bucketName, request.bucket());
+        assertEquals(BUCKET_NAME, request.bucket());
         assertEquals("invoices/INV-123.pdf", request.key());
         assertEquals("application/pdf", request.contentType());
     }
@@ -165,7 +165,7 @@ class S3ServiceImplTest {
                 presignRequest.signatureDuration()
         );
         assertEquals(expectedUrl, result);
-        assertEquals(bucketName, getRequest.bucket());
+        assertEquals(BUCKET_NAME, getRequest.bucket());
         assertEquals(key, getRequest.key());
     }
 
@@ -302,6 +302,6 @@ class S3ServiceImplTest {
      * </p>
      */
     private void stubAllCommonProperties() {
-        when(s3Properties.bucketName()).thenReturn(bucketName);
+        when(s3Properties.bucketName()).thenReturn(BUCKET_NAME);
     }
 }
