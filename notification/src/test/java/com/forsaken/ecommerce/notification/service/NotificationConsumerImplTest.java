@@ -26,6 +26,8 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.fromBytes;
+import static com.forsaken.ecommerce.notification.models.DLQEvent.ORDER;
+import static com.forsaken.ecommerce.notification.models.DLQEvent.PAYMENT;
 import static com.forsaken.ecommerce.notification.models.NotificationType.ORDER_CONFIRMATION;
 import static com.forsaken.ecommerce.notification.models.NotificationType.PAYMENT_CONFIRMATION;
 
@@ -518,10 +520,10 @@ class NotificationConsumerImplTest {
                 );
 
         // when
-        consumer.paymentConsumeDlq(record);
+        consumer.consumePaymentDlqMessages(record);
 
         // then
-        verify(dlqS3Service).storeToS3(record, "payment");
+        verify(dlqS3Service).storeToS3(record, PAYMENT);
     }
 
     /**
@@ -565,10 +567,10 @@ class NotificationConsumerImplTest {
                 );
 
         // when
-        consumer.orderConsumeDlq(record);
+        consumer.consumeOrderDlqMessages(record);
 
         // then
-        verify(dlqS3Service).storeToS3(record, "order");
+        verify(dlqS3Service).storeToS3(record, ORDER);
     }
 
     /**
@@ -614,14 +616,14 @@ class NotificationConsumerImplTest {
                 );
         doThrow(new RuntimeException("S3 unavailable"))
                 .when(dlqS3Service)
-                .storeToS3(record, "payment");
+                .storeToS3(record, PAYMENT);
 
         // when -> then
         assertThrows(RuntimeException.class, () ->
-                consumer.paymentConsumeDlq(record)
+                consumer.consumePaymentDlqMessages(record)
         );
         // verify S3 attempt happened
-        verify(dlqS3Service).storeToS3(record, "payment");
+        verify(dlqS3Service).storeToS3(record, PAYMENT);
         // verify no normal processing happened
         verifyNoInteractions(notificationRepository);
         verifyNoInteractions(emailService);
@@ -667,15 +669,15 @@ class NotificationConsumerImplTest {
                 );
         doThrow(new RuntimeException("S3 write failed"))
                 .when(dlqS3Service)
-                .storeToS3(record, "order");
+                .storeToS3(record, ORDER);
 
         // when -> then
         assertThrows(RuntimeException.class, () ->
-                consumer.orderConsumeDlq(record)
+                consumer.consumeOrderDlqMessages(record)
         );
 
         // verify S3 attempt happened
-        verify(dlqS3Service).storeToS3(record, "order");
+        verify(dlqS3Service).storeToS3(record, ORDER);
         // DLQ path must not trigger normal flows
         verifyNoInteractions(notificationRepository);
         verifyNoInteractions(emailService);

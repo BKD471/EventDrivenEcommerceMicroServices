@@ -35,7 +35,7 @@ public class KafkaConsumerConfigurations {
     @Bean
     public NewTopic paymentNotificationsDlqTopic() {
         return TopicBuilder
-                .name(kafkaDlqProperties.paymentDlqtopicName())
+                .name(kafkaDlqProperties.paymentDlqTopicName())
                 .partitions(kafkaDlqProperties.partitions())
                 .replicas(kafkaDlqProperties.replicas())
                 .build();
@@ -45,7 +45,7 @@ public class KafkaConsumerConfigurations {
     @Bean
     public NewTopic OrderNotificationsDlqTopic() {
         return TopicBuilder
-                .name(kafkaDlqProperties.orderDlqtopicName())
+                .name(kafkaDlqProperties.orderDlqTopicName())
                 .partitions(kafkaDlqProperties.partitions())
                 .replicas(kafkaDlqProperties.replicas())
                 .build();

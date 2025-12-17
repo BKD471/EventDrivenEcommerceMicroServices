@@ -123,7 +123,7 @@ public interface INotificationConsumer {
      * @param record the Kafka {@link ConsumerRecord} containing the
      *               failed {@link PaymentConfirmation} event
      */
-    void paymentConsumeDlq(
+    void consumePaymentDlqMessages(
             final ConsumerRecord<String, PaymentConfirmation> record
     );
 
@@ -143,7 +143,7 @@ public interface INotificationConsumer {
      * @param record the Kafka {@link ConsumerRecord} containing the
      *               failed {@link OrderConfirmation} event
      */
-    void orderConsumeDlq(
+    void consumeOrderDlqMessages(
             final ConsumerRecord<String, OrderConfirmation> record
     );
 }

@@ -45,8 +45,8 @@ public class KafkaErrorHandlerConfigurations {
                     // choose DLQ topic based on source topic (optional)
                     String sourceTopic = record.topic();
                     String dlq = sourceTopic != null && sourceTopic.startsWith("order") ?
-                            kafkaDlqProperties.orderDlqtopicName() :
-                            kafkaDlqProperties.paymentDlqtopicName();
+                            kafkaDlqProperties.orderDlqTopicName() :
+                            kafkaDlqProperties.paymentDlqTopicName();
                     return new TopicPartition(dlq, record.partition());
                 }
         );

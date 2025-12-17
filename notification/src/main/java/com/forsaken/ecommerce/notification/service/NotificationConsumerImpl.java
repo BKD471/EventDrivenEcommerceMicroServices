@@ -5,6 +5,7 @@ import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
+import com.forsaken.ecommerce.notification.models.DLQEvent;
 import com.forsaken.ecommerce.notification.models.Notification;
 import com.forsaken.ecommerce.notification.repository.INotificationRepository;
 import lombok.RequiredArgsConstructor;
@@ -160,11 +161,11 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
-    public void paymentConsumeDlq(final ConsumerRecord<String, PaymentConfirmation> record) {
+    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
         log.error("Payment DLQ EVENT RECEIVED for key={} value={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.value(), record.partition(), record.offset(), getTimeStampForLogs(record));
         try {
-            dlqS3Service.storeToS3(record, "payment");
+            dlqS3Service.storeToS3(record, DLQEvent.PAYMENT);
         } catch (Exception exception) {
             log.error("Failed to persist DLQ record to S3 {}", getTimeStampForLogs(record), exception);
             throw exception;
@@ -178,11 +179,11 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
-    public void orderConsumeDlq(final ConsumerRecord<String, OrderConfirmation> record) {
+    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
         log.error("Order DLQ EVENT RECEIVED for key={} value={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.value(), record.partition(), record.offset(), getTimeStampForLogs(record));
         try {
-            dlqS3Service.storeToS3(record, "order");
+            dlqS3Service.storeToS3(record, DLQEvent.ORDER);
         } catch (Exception exception) {
             log.error("Failed to persist DLQ record to S3 {}", getTimeStampForLogs(record), exception);
             throw exception;

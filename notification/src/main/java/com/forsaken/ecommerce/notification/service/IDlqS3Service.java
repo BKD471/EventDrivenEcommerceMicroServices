@@ -1,5 +1,6 @@
 package com.forsaken.ecommerce.notification.service;
 
+import com.forsaken.ecommerce.notification.models.DLQEvent;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import java.util.List;
@@ -78,7 +79,7 @@ public interface IDlqS3Service {
      *                          the S3 upload fails
      */
     void storeToS3(
-            final ConsumerRecord<String, ?> record, final String eventType
+            final ConsumerRecord<String, ?> record, final DLQEvent eventType
     );
 
     /**
@@ -103,7 +104,7 @@ public interface IDlqS3Service {
      *
      * <p>
      * The returned string represents the full JSON document originally
-     * stored by {@link #storeToS3(ConsumerRecord, String)}, including
+     * stored by {@link #storeToS3(ConsumerRecord, DLQEvent)}, including
      * Kafka metadata and the serialized message payload.
      * </p>
      *
