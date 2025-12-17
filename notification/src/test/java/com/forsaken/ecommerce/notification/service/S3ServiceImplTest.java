@@ -76,7 +76,6 @@ class S3ServiceImplTest {
      */
     @BeforeEach
     void setUp() {
-        when(s3Properties.bucketName()).thenReturn(bucketName);
         s3Service = new S3ServiceImpl(
                 s3Properties,
                 s3Client,
@@ -101,6 +100,7 @@ class S3ServiceImplTest {
     @Test
     void uploadInvoice_shouldUploadPdfAndReturnS3Key() {
         // Given
+        stubAllCommonProperties();
         final byte[] pdfBytes = "PDF_CONTENT".getBytes();
         final String invoiceId = "INV-123";
         final ArgumentCaptor<PutObjectRequest> requestCaptor =
@@ -139,6 +139,7 @@ class S3ServiceImplTest {
     @Test
     void generatePresignedUrl_shouldReturnValidPresignedUrl() throws Exception {
         // Given
+        stubAllCommonProperties();
         final String key = "invoices/INV-123.pdf";
         final long expirationMinutes = 15;
         final URL expectedUrl = new URL("https://s3.aws.com/invoice");
@@ -214,5 +215,93 @@ class S3ServiceImplTest {
         assertThrows(RuntimeException.class,
                 () -> s3Service.generatePresignedUrl("invoices/INV-1.pdf")
         );
+    }
+
+    /**
+     * Verifies that {@link S3ServiceImpl#uploadInvoice(byte[], String)}
+     * rejects a {@code null} PDF payload.
+     *
+     * <p>
+     * This test enforces the service contract that callers must provide
+     * a valid, non-null PDF byte array.
+     * </p>
+     *
+     * <p>
+     * The service is expected to fail fast with an
+     * {@link IllegalArgumentException} rather than attempting
+     * an invalid S3 upload.
+     * </p>
+     */
+    @Test
+    void uploadInvoice_shouldThrowException_whenPdfBytesIsNull() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> s3Service.uploadInvoice(null, "INV-1")
+        );
+    }
+
+    /**
+     * Verifies that {@link S3ServiceImpl#uploadInvoice(byte[], String)}
+     * rejects blank invoice identifiers.
+     *
+     * <p>
+     * A blank or whitespace-only invoice ID would result in an invalid
+     * or ambiguous S3 object key.
+     * </p>
+     *
+     * <p>
+     * This test ensures such input is rejected early via
+     * {@link IllegalArgumentException}.
+     * </p>
+     */
+    @Test
+    void uploadInvoice_shouldThrowException_whenInvoiceIdIsBlank() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> s3Service.uploadInvoice("PDF".getBytes(), " ")
+        );
+    }
+
+    /**
+     * Verifies that {@link S3ServiceImpl#generatePresignedUrl(String)}
+     * rejects blank or whitespace-only object keys.
+     *
+     * <p>
+     * Blank keys would generate invalid or unpredictable S3 requests.
+     * </p>
+     *
+     * <p>
+     * This test ensures strict input validation and predictable behavior.
+     * </p>
+     */
+    @Test
+    void generatePresignedUrl_shouldThrowException_whenKeyIsBlank() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> s3Service.generatePresignedUrl("   ")
+        );
+    }
+
+    /**
+     * Stubs common S3 configuration properties required by all tests.
+     *
+     * <p>
+     * Currently, this method provides the S3 bucket name used by
+     * {@link S3ServiceImpl} when constructing upload and download requests.
+     * </p>
+     *
+     * <p>
+     * Centralizing this stubbing logic avoids duplication across test cases
+     * and ensures consistency if the required configuration changes in the future.
+     * </p>
+     *
+     * <p>
+     * This method should be invoked explicitly by tests that require
+     * valid S3 configuration, keeping negative-path tests free from
+     * unnecessary stubbing.
+     * </p>
+     */
+    private void stubAllCommonProperties() {
+        when(s3Properties.bucketName()).thenReturn(bucketName);
     }
 }

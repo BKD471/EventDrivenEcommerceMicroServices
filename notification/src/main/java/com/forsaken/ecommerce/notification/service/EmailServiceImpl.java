@@ -100,6 +100,14 @@ public class EmailServiceImpl implements IEmailService {
 
             mailSender.send(mimeMessage);
             log.info("Payment Email successfully sent to {} with template {} ", destinationEmail, templateName);
+        } catch (IllegalArgumentException e) {
+            log.error(
+                    "Invalid input while sending payment email to {}. OrderRef={}, reason={}",
+                    destinationEmail,
+                    orderReference,
+                    e.getMessage(),
+                    e
+            );
         } catch (MessagingException | MailException | JRException | IOException e) {
             log.warn("Cannot send Payment Email to {} ", destinationEmail, e);
         }

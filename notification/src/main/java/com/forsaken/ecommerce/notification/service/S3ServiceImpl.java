@@ -4,6 +4,7 @@ import com.forsaken.ecommerce.notification.configs.s3.S3Properties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -27,30 +28,35 @@ public class S3ServiceImpl implements IS3Service {
     public String uploadInvoice(
             final byte[] pdfBytes,
             final String invoiceId
-    ) {
+    ) throws IllegalArgumentException {
+        if (null == pdfBytes || pdfBytes.length == 0)
+            throw new IllegalArgumentException("Invoice PDF content must not be null or empty");
+
+        if (!StringUtils.hasText(invoiceId))
+            throw new IllegalArgumentException("Invoice id must not be null or blank");
+
         log.info("Received request to upload invoice with id {}", invoiceId);
         final String key = "invoices/" + invoiceId + ".pdf";
-
         final PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(s3Properties.bucketName())
                 .key(key)
                 .contentType("application/pdf")
                 .build();
-
         s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
         log.info("Uploaded invoice with id {}", invoiceId);
         return key;
     }
 
     @Override
-    public URL generatePresignedUrl(final String key) {
+    public URL generatePresignedUrl(final String key) throws IllegalArgumentException {
+        if (!StringUtils.hasText(key)) throw new IllegalArgumentException("S3 object key must not be null or blank");
+
         log.info("Received request to generate presigned url for key {}", key);
-        GetObjectRequest getRequest = GetObjectRequest.builder()
+        final GetObjectRequest getRequest = GetObjectRequest.builder()
                 .bucket(s3Properties.bucketName())
                 .key(key)
                 .build();
-
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+        final GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
                 .signatureDuration(Duration.ofMinutes(s3Properties.expiration()))
                 .getObjectRequest(getRequest)
                 .build();

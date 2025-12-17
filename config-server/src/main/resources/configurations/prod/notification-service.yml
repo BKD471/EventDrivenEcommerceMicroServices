@@ -62,6 +62,8 @@ aws:
     secretName: EcommerceCredentials
   s3:
     bucketName: my-invoice-pdfs-prod
-    expiration: 30
+    # Pre-signed URL expiration (in minutes).
+    # Intentionally kept short for security; links can be regenerated.
+    expiration: 120
   dynamodb:
     tableName: Notification

@@ -46,11 +46,13 @@ public interface IS3Service {
      * @param invoiceId the unique identifier of the invoice, used to derive
      *                  the storage object key
      * @return the storage key of the uploaded invoice (e.g. {@code invoices/{invoiceId}.pdf})
+     * @throws IllegalArgumentException if {@code pdfBytes} is {@code null} or empty, or if {@code invoiceId}
+     *                                  is {@code null} or blank
      */
     String uploadInvoice(
             final byte[] pdfBytes,
             final String invoiceId
-    );
+    ) throws IllegalArgumentException;
 
     /**
      * Generates a time-limited pre-signed URL for accessing an invoice.
@@ -62,6 +64,7 @@ public interface IS3Service {
      *
      * @param key the storage key of the invoice object
      * @return a pre-signed {@link URL} that can be used to download the invoice
+     * @throws IllegalArgumentException if {@code key} is {@code null} or blank
      */
-    URL generatePresignedUrl(final String key);
+    URL generatePresignedUrl(final String key) throws IllegalArgumentException;
 }
