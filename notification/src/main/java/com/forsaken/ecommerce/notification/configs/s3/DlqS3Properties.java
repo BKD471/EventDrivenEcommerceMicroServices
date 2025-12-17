@@ -30,8 +30,8 @@ import org.springframework.validation.annotation.Validated;
  *   s3:
  *     dlq:
  *       bucket: payment-dlq-bucket
- *       payment-prefix: payments/
- *       order-prefix: orders/
+ *       paymentPrefix: payments/
+ *       orderPrefix: orders/
  * </pre>
  *
  * <p>
