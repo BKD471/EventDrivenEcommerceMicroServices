@@ -12,10 +12,10 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "spring.kafka.dlq")
 public record KafkaDlqProperties(
         @NotBlank
-        String paymentDlqtopicName,
+        String paymentDlqTopicName,
 
         @NotBlank
-        String orderDlqtopicName,
+        String orderDlqTopicName,
 
         @NotBlank
         String groupId,

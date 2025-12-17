@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
@@ -22,6 +23,8 @@ import static com.forsaken.ecommerce.notification.mapper.AvroMapper.getCustomerN
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapPaymentMethod;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapToOrderConfirmation;
 import static com.forsaken.ecommerce.notification.mapper.AvroMapper.mapToPaymentConfirmation;
+import static com.forsaken.ecommerce.notification.models.EventType.ORDER;
+import static com.forsaken.ecommerce.notification.models.EventType.PAYMENT;
 import static com.forsaken.ecommerce.notification.models.NotificationType.ORDER_CONFIRMATION;
 import static com.forsaken.ecommerce.notification.models.NotificationType.PAYMENT_CONFIRMATION;
 
@@ -32,11 +35,13 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
     private final INotificationRepository notificationRepository;
     private final IEmailService emailService;
+    private final IDlqS3Service dlqS3Service;
     private final KafkaProperties kafkaProperties;
+    private final KafkaDlqProperties dlqProperties;
 
     @KafkaListener(
-            topics = "${spring.kafka.consumer.paymentTopicName}",
-            groupId = "${spring.kafka.consumer.paymentGroupId}",
+            topics = "#{@kafkaProperties.paymentTopicName()}",
+            groupId = "#{@kafkaProperties.paymentGroupId()}",
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
@@ -96,8 +101,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "${spring.kafka.consumer.orderTopicName}",
-            groupId = "${spring.kafka.consumer.orderGroupId}",
+            topics = "#{@kafkaProperties.orderTopicName()}",
+            groupId = "#{@kafkaProperties.orderGroupId()}",
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
@@ -149,6 +154,33 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             MDC.clear();
         }
     }
+
+
+    @KafkaListener(
+            topics = "#{@dlqProperties.paymentDlqTopicName()}",
+            groupId = "#{@dlqProperties.groupId()}",
+            containerFactory = "paymentKafkaListenerContainerFactory"
+    )
+    @Override
+    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
+        log.warn("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
+                record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
+        dlqS3Service.storeToS3(record, PAYMENT);
+    }
+
+
+    @KafkaListener(
+            topics = "#{@dlqProperties.orderDlqTopicName()}",
+            groupId = "#{@dlqProperties.groupId()}",
+            containerFactory = "orderKafkaListenerContainerFactory"
+    )
+    @Override
+    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
+        log.warn("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
+                record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
+        dlqS3Service.storeToS3(record, ORDER);
+    }
+
 
     private LocalDateTime getTimeStampForLogs(final ConsumerRecord<String, ?> record) {
         return LocalDateTime.ofInstant(

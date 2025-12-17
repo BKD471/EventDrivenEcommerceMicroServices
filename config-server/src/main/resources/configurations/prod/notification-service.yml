@@ -18,8 +18,8 @@ spring:
       schemaRegistryUrl: "http://127.0.0.1:8081"
       timeZone: UTC
     dlq:
-      paymentDlqtopicName: payment-notifications-dlq
-      orderDlqtopicName: order-notifications-dlq
+      paymentDlqTopicName: payment-notifications-dlq
+      orderDlqTopicName: order-notifications-dlq
       groupId: notification-dlq
       partitions: 10
       replicas: 3
@@ -62,8 +62,10 @@ aws:
     secretName: EcommerceCredentials
   s3:
     bucketName: my-invoice-pdfs-prod
-    # Pre-signed URL expiration (in minutes).
-    # Intentionally kept short for security; links can be regenerated.
-    expiration: 120
+    expiration: 120  # Pre-signed URL expiration (in minutes).
+    dlq:
+      bucket: dlq-bucket-prod
+      paymentPrefix: payment-dlq
+      orderPrefix: order-dlq
   dynamodb:
     tableName: Notification

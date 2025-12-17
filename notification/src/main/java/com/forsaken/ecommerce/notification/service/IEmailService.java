@@ -2,7 +2,6 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.notification.models.PaymentMethod;
 import com.forsaken.ecommerce.notification.models.Product;
-import jakarta.mail.MessagingException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

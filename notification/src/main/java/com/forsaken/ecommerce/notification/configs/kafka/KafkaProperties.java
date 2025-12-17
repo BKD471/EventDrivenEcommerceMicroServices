@@ -13,7 +13,13 @@ import java.util.List;
 @ConfigurationProperties(prefix = "spring.kafka.consumer")
 public record KafkaProperties(
         @NotBlank
+        String paymentTopicName,
+
+        @NotBlank
         String paymentGroupId,
+
+        @NotBlank
+        String orderTopicName,
 
         @NotBlank
         String orderGroupId,

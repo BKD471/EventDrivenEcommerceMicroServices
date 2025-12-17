@@ -1,5 +1,6 @@
 package com.forsaken.ecommerce.notification.configs.kafka;
 
+import com.forsaken.ecommerce.notification.models.EventType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -43,11 +44,13 @@ public class KafkaErrorHandlerConfigurations {
                 avroKafkaTemplate,
                 (record, ex) -> {
                     // choose DLQ topic based on source topic (optional)
-                    String sourceTopic = record.topic();
-                    String dlq = sourceTopic != null && sourceTopic.startsWith("order") ?
-                            kafkaDlqProperties.orderDlqtopicName() :
-                            kafkaDlqProperties.paymentDlqtopicName();
-                    return new TopicPartition(dlq, record.partition());
+                    final String sourceTopic = record.topic();
+                    final EventType eventType = resolveEventType(sourceTopic);
+                    final String dlqTopic = switch (eventType) {
+                        case PAYMENT -> kafkaDlqProperties.paymentDlqTopicName();
+                        case ORDER -> kafkaDlqProperties.orderDlqTopicName();
+                    };
+                    return new TopicPartition(dlqTopic, record.partition());
                 }
         );
 
@@ -70,5 +73,18 @@ public class KafkaErrorHandlerConfigurations {
                         ex.getMessage())
         );
         return handler;
+    }
+
+    private EventType resolveEventType(final String sourceTopic) {
+        return switch (sourceTopic) {
+            case null -> throw new IllegalArgumentException(
+                    "No DLQ mapping configured for source topic: null"
+            );
+            case String topicName when topicName.equals(kafkaProperties.paymentTopicName()) -> EventType.PAYMENT;
+            case String topicName when topicName.equals(kafkaProperties.orderTopicName()) -> EventType.ORDER;
+            default -> throw new IllegalArgumentException(
+                    "No DLQ mapping configured for source topic: " + sourceTopic
+            );
+        };
     }
 }
