@@ -163,7 +163,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     )
     @Override
     public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
-        log.error("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
+        log.warn("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         dlqS3Service.storeToS3(record, PAYMENT);
     }
@@ -176,7 +176,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     )
     @Override
     public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
-        log.error("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
+        log.warn("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         dlqS3Service.storeToS3(record, ORDER);
     }

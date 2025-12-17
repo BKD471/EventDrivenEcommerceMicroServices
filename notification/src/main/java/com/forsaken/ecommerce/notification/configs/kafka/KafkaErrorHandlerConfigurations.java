@@ -77,8 +77,11 @@ public class KafkaErrorHandlerConfigurations {
 
     private EventType resolveEventType(final String sourceTopic) {
         return switch (sourceTopic) {
-            case String t when t.equals(kafkaProperties.paymentTopicName()) -> EventType.PAYMENT;
-            case String t when t.equals(kafkaProperties.orderTopicName()) -> EventType.ORDER;
+            case null -> throw new IllegalArgumentException(
+                    "No DLQ mapping configured for source topic: null"
+            );
+            case String s when s.equals(kafkaProperties.paymentTopicName()) -> EventType.PAYMENT;
+            case String s when s.equals(kafkaProperties.orderTopicName()) -> EventType.ORDER;
             default -> throw new IllegalArgumentException(
                     "No DLQ mapping configured for source topic: " + sourceTopic
             );
