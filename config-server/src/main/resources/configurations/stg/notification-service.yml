@@ -18,8 +18,8 @@ spring:
       schemaRegistryUrl: "http://127.0.0.1:8081"
       timeZone: UTC
     dlq:
-      paymentDlqtopicName: payment-notifications-dlq
-      orderDlqtopicName: order-notifications-dlq
+      paymentDlqTopicName: payment-notifications-dlq
+      orderDlqTopicName: order-notifications-dlq
       groupId: notification-dlq
       partitions: 10
       replicas: 3

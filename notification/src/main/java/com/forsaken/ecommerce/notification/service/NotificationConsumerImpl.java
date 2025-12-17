@@ -155,7 +155,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "#{@dlqProperties.paymentDlqtopicName()}",
+            topics = "#{@dlqProperties.paymentDlqTopicName()}",
             groupId = "#{@dlqProperties.groupId()}",
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
@@ -173,7 +173,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "#{@dlqProperties.orderDlqtopicName()}",
+            topics = "#{@dlqProperties.orderDlqTopicName()}",
             groupId = "#{@dlqProperties.groupId()}",
             containerFactory = "orderKafkaListenerContainerFactory"
     )

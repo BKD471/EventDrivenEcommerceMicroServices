@@ -88,7 +88,6 @@ import static org.mockito.Mockito.when;
  * This guarantees that messages exceeding retry limits are preserved
  * for audit, debugging, and manual replay without risk of data loss.
  * </p>
- * /**
  * <p>
  * <b>Kafka acknowledgment and retry scope:</b>
  * </p>
