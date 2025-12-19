@@ -115,7 +115,7 @@ public record MailProperties(
          * and should not be hardcoded in version-controlled configuration files.
          * </p>
          */
-        @NotBlank(message = "Mail password must not be blank and should be supplied via environment variables, Spring Cloud Config, or a secrets manager (avoid hardcoding in configuration files)")
+        @NotBlank(message = "Mail password must not be blank")
         String password,
 
         /**
