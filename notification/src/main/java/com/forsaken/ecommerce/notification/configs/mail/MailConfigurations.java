@@ -71,7 +71,11 @@ public class MailConfigurations {
         sender.setPassword(mailProperties.password());
 
         final Properties properties = new Properties();
-        properties.putAll(mailProperties.properties());
+        final var mailProps = mailProperties.properties();
+        if (mailProps == null || mailProps.isEmpty()) {
+            throw new IllegalStateException("Mail properties must not be empty. Please configure required SMTP settings (e.g. authentication and TLS).");
+        }
+        properties.putAll(mailProps);
         sender.setJavaMailProperties(properties);
         return sender;
     }
