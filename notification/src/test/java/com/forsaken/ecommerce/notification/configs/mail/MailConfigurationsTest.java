@@ -571,6 +571,7 @@ class MailConfigurationsTest {
      * vendor-specific SMTP settings.
      * </p>
      */
+    @DisplayName("Should log warning when unknown SMTP properties are detected")
     @Test
     void shouldLogWarningForUnknownSmtpProperties() {
         // given
