@@ -104,10 +104,11 @@ public record MailProperties(
          * Password used for SMTP authentication.
          * <p>
          * This value should be provided securely via environment variables,
-         * Spring Cloud Config, or a secrets manager in production environments.
+         * Spring Cloud Config, or a secrets manager in production environments
+         * and should not be hardcoded in version-controlled configuration files.
          * </p>
          */
-        @NotBlank(message = "Mail password must not be blank")
+        @NotBlank(message = "Mail password must not be blank and should be supplied via environment variables, Spring Cloud Config, or a secrets manager (avoid hardcoding in configuration files)")
         String password,
 
         /**
