@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
@@ -48,6 +49,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class MailConfigurationsTest {
 
+    private static final String TEST_HOST = "localhost";
+    private static final int TEST_PORT = 1025;
+    private static final String TEST_USERNAME = "admin";
+    private static final String TEST_PASSWORD = "admin";
+
     /**
      * Verifies that a {@link JavaMailSenderImpl} is successfully created
      * when all required SMTP properties are present.
@@ -78,10 +84,10 @@ class MailConfigurationsTest {
 
         // Then
         assertNotNull(sender);
-        assertEquals("localhost", sender.getHost());
-        assertEquals(1025, sender.getPort());
-        assertEquals("admin", sender.getUsername());
-        assertEquals("admin", sender.getPassword());
+        assertEquals(TEST_HOST, sender.getHost());
+        assertEquals(TEST_PORT, sender.getPort());
+        assertEquals(TEST_USERNAME, sender.getUsername());
+        assertEquals(TEST_PASSWORD, sender.getPassword());
 
         final Properties javaMailProperties = sender.getJavaMailProperties();
         assertNotNull(javaMailProperties);
@@ -169,23 +175,10 @@ class MailConfigurationsTest {
     @ParameterizedTest(name = "Missing required SMTP property: {0}")
     @MethodSource("missingRequiredPropertyProvider")
     @DisplayName("Should fail fast when a required SMTP property is missing")
-    void shouldFailWhenRequiredPropertyIsMissing(String missingKey) {
+    void shouldFailWhenRequiredPropertyIsMissing(final String missingKey) {
         // Given
-        Map<String, String> incompleteProps = Map.of(
-                "mail.smtp.auth", "true",
-                "mail.smtp.starttls.enable", "true",
-                "mail.smtp.connectiontimeout", "5000",
-                "mail.smtp.timeout", "3000",
-                "mail.smtp.writetimeout", "5000"
-        );
-        // Remove exactly one required key
-        incompleteProps = incompleteProps.entrySet()
-                .stream()
-                .filter(entry -> !entry.getKey().equals(missingKey))
-                .collect(java.util.stream.Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue
-                ));
+        final Map<String, String> incompleteProps = new HashMap<>(constructValidMailProperties());
+        incompleteProps.remove(missingKey);
         final MailConfigurations configuration = constructConfigurationWith(incompleteProps);
 
         // When / Then
@@ -230,10 +223,10 @@ class MailConfigurationsTest {
     private static MailConfigurations constructConfigurationWith(Map<String, String> props) {
         return new MailConfigurations(
                 new MailProperties(
-                        "localhost",
-                        1025,
-                        "admin",
-                        "admin",
+                        TEST_HOST,
+                        TEST_PORT,
+                        TEST_USERNAME,
+                        TEST_PASSWORD,
                         props
                 )
         );

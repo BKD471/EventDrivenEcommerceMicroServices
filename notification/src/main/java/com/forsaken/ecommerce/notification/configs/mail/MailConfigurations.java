@@ -53,11 +53,21 @@ import java.util.Properties;
 public class MailConfigurations {
 
     /**
-     * List of mandatory JavaMail SMTP configuration keys.
+     * Mandatory SMTP properties for this application.
      *
      * <p>
-     * These properties are required to ensure secure and reliable SMTP
-     * communication, including authentication, TLS, and timeout handling.
+     * These properties are intentionally enforced to guarantee:
+     * </p>
+     * <ul>
+     *   <li>Authenticated SMTP communication</li>
+     *   <li>Explicit TLS configuration</li>
+     *   <li>Deterministic timeout behavior</li>
+     * </ul>
+     *
+     * <p>
+     * This application does not support implicit defaults or partially
+     * configured SMTP servers. All notification delivery must be explicit,
+     * secure, and fail-fast.
      * </p>
      */
     private static final String[] REQUIRED_SMTP_KEYS = {
