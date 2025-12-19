@@ -139,14 +139,107 @@ public class MailConfigurations {
     private Map<String, String> constructPropertiesMap() {
         final Map<String, String> mailProps = mailProperties.properties();
         if (null == mailProps || mailProps.isEmpty()) {
-            throw new IllegalStateException("Mail properties must not be empty. " +
-                    "Please configure required SMTP settings (e.g. authentication and TLS).");
+            throw new IllegalStateException(
+                    "Mail properties must not be empty. " +
+                            "Required SMTP properties: " + String.join(", ", REQUIRED_SMTP_KEYS)
+            );
         }
         for (final String key : REQUIRED_SMTP_KEYS) {
             if (!mailProps.containsKey(key)) {
                 throw new IllegalStateException("Missing required mail property: " + key);
             }
         }
+        validateBoolean(mailProps, "mail.smtp.auth");
+        validateBoolean(mailProps, "mail.smtp.starttls.enable");
+        validatePositiveInteger(mailProps, "mail.smtp.connectiontimeout");
+        validatePositiveInteger(mailProps, "mail.smtp.timeout");
+        validatePositiveInteger(mailProps, "mail.smtp.writetimeout");
         return mailProps;
+    }
+
+    /**
+     * Validates that a mail configuration property represents a valid boolean value.
+     * <p>
+     * This method enforces strict boolean semantics for SMTP-related properties
+     * (for example {@code mail.smtp.auth} or {@code mail.smtp.starttls.enable}).
+     * Only the values {@code "true"} or {@code "false"} (case-insensitive) are accepted.
+     * </p>
+     *
+     * <p>
+     * Any other value (including {@code null}, empty strings, or arbitrary text)
+     * is considered invalid and results in immediate application startup failure.
+     * </p>
+     *
+     * <h3>Fail-fast behavior</h3>
+     * <p>
+     * This validation prevents obscure runtime failures caused by invalid
+     * boolean values being silently accepted and later misinterpreted by
+     * the JavaMail implementation.
+     * </p>
+     *
+     * @param props the resolved mail properties map
+     * @param key   the property key to validate
+     * @throws IllegalStateException if the property value is not a valid boolean
+     */
+    private void validateBoolean(
+            final Map<String, String> props,
+            final String key
+    ) {
+        final String value = props.get(key);
+        if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+            throw new IllegalStateException(
+                    "Invalid boolean value for mail property '" + key + "': " + value
+            );
+        }
+    }
+
+    /**
+     * Validates that a mail configuration property represents a positive integer.
+     * <p>
+     * This method is intended for SMTP timeout-related properties such as
+     * {@code mail.smtp.timeout}, {@code mail.smtp.connectiontimeout}, and
+     * {@code mail.smtp.writetimeout}.
+     * </p>
+     *
+     * <p>
+     * The property value must:
+     * </p>
+     * <ul>
+     *   <li>Be parseable as an integer</li>
+     *   <li>Be greater than zero</li>
+     * </ul>
+     *
+     * <p>
+     * Values that are negative, zero, non-numeric, or missing will cause
+     * application startup to fail immediately.
+     * </p>
+     *
+     * <h3>Fail-fast behavior</h3>
+     * <p>
+     * This validation avoids late-stage runtime errors that would otherwise
+     * occur when JavaMail attempts to interpret invalid timeout values.
+     * </p>
+     *
+     * @param props the resolved mail properties map
+     * @param key   the property key to validate
+     * @throws IllegalStateException if the property value is not a valid positive integer
+     */
+    private void validatePositiveInteger(
+            final Map<String, String> props,
+            final String key
+    ) {
+        try {
+            int value = Integer.parseInt(props.get(key));
+            if (value <= 0) {
+                throw new IllegalStateException(
+                        "Mail property '" + key + "' must be a positive integer"
+                );
+            }
+        } catch (NumberFormatException ex) {
+            throw new IllegalStateException(
+                    "Mail property '" + key + "' must be a valid integer",
+                    ex
+            );
+        }
     }
 }
