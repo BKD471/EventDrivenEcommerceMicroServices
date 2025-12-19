@@ -35,7 +35,9 @@ import java.util.Map;
  * <p><strong>Note:</strong></p>
  * <ul>
  *   <li>{@code mail.smtp.ssl.trust} is the correct JavaMail property for
- *       trusting SSL certificates.</li>
+ *       configuring how SSL certificates are trusted. It is an optional
+ *       setting that should be used when you need to customize SSL/TLS trust
+ *       behavior (for example, trusting specific hosts or certificates).</li>
  *   <li>{@code mail.smtp.trust} is <strong>not</strong> a valid JavaMail key
  *       and will be ignored.</li>
  * </ul>
