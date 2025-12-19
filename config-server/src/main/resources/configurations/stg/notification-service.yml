@@ -38,7 +38,6 @@ spring:
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
-      mail.smtp.ssl.trust: "*"
       mail.smtp.connectiontimeout: 5000
       mail.smtp.timeout: 3000
       mail.smtp.writetimeout: 5000
