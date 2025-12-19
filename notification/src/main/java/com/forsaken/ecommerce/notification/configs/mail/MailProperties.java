@@ -27,8 +27,28 @@ public record MailProperties(
         String password,
 
         /**
-         * Arbitrary JavaMail properties (flattened automatically).
-         * Example: mail.smtp.auth, mail.smtp.starttls.enabled, etc.
+         * Additional JavaMail session properties.
+         * <p>
+         * These properties are passed directly to the underlying JavaMail implementation and
+         * are typically used to configure protocol-specific options such as SMTP authentication
+         * and TLS settings.
+         * </p>
+         *
+         * <p><strong>Examples</strong> (using the {@code spring.mail.properties.*} prefix):</p>
+         * <ul>
+         *     <li>{@code spring.mail.properties.mail.smtp.auth=true}</li>
+         *     <li>{@code spring.mail.properties.mail.smtp.starttls.enable=true}</li>
+         *     <li>{@code spring.mail.properties.mail.debug=false}</li>
+         * </ul>
+         *
+         * <p><strong>Constraints</strong>:</p>
+         * <ul>
+         *     <li>Must not be {@code null} (enforced by {@link jakarta.validation.constraints.NotNull}).</li>
+         *     <li>Keys and values should be valid JavaMail properties supported by the configured mail protocol.</li>
+         * </ul>
+         *
+         * @implNote Properties are bound from configuration using the {@code spring.mail.properties.*} prefix
+         * and then flattened into this map.
          */
         @NotNull(message = "Mail properties must not be null")
         Map<String, String> properties
