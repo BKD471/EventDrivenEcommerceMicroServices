@@ -202,8 +202,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -247,7 +247,7 @@ services:
       AXONSERVER_CLUSTER_ENABLED: "true"
       AXONSERVER_CLUSTER_INTERNAL_HOSTNAME: axonserver-node1
       AXONSERVER_CLUSTER_PROBE_HOSTNAMES: axonserver-node1,axonserver-node2,axonserver-node3
-      AXONSERVER_CLUSTER_TOKEN: "my-secret-token"
+      AXONSERVER_CLUSTER_TOKEN: ${AXON_TOKEN}
       AXONSERVER_ACCESSCONTROL: "false"   # set to true + token for secured access
     ports:
       - "8024:8024" # dashboard
@@ -269,7 +269,7 @@ services:
       AXONSERVER_CLUSTER_ENABLED: "true"
       AXONSERVER_CLUSTER_INTERNAL_HOSTNAME: axonserver-node2
       AXONSERVER_CLUSTER_PROBE_HOSTNAMES: axonserver-node1,axonserver-node2,axonserver-node3
-      AXONSERVER_CLUSTER_TOKEN: "my-secret-token"
+      AXONSERVER_CLUSTER_TOKEN: ${AXON_TOKEN}
       AXONSERVER_ACCESSCONTROL: "false"
     volumes:
       - axon-node2-data:/data
@@ -288,7 +288,7 @@ services:
       AXONSERVER_CLUSTER_ENABLED: "true"
       AXONSERVER_CLUSTER_INTERNAL_HOSTNAME: axonserver-node3
       AXONSERVER_CLUSTER_PROBE_HOSTNAMES: axonserver-node1,axonserver-node2,axonserver-node3
-      AXONSERVER_CLUSTER_TOKEN: "my-secret-token"
+      AXONSERVER_CLUSTER_TOKEN: ${AXON_TOKEN}
       AXONSERVER_ACCESSCONTROL: "false"
     volumes:
       - axon-node3-data:/data
