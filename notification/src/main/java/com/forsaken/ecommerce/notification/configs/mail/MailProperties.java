@@ -36,13 +36,13 @@ import java.util.Map;
  *     username: admin
  *     password: admin
  *     properties:
- *       mail:
- *         smtp:
- *           auth: true
- *           starttls:
- *             enable: true
- *           trust: "*"
+ *       mail.smtp.auth: true
+ *       mail.smtp.starttls.enable: true
+ *       mail.smtp.trust: "*"
  * }</pre>
+ *
+ * <p><strong>Note:</strong> The {@code trust} property shown in the example above is
+ * optional and is <em>not</em> part of the required SMTP keys. It is typically only
  *
  * <p><strong>Note:</strong> The {@code trust} property shown in the example above is
  * optional and is <em>not</em> part of the required SMTP keys. It is typically only
