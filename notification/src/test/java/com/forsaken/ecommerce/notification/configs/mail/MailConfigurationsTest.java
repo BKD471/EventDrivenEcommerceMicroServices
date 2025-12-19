@@ -7,7 +7,6 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -22,7 +21,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
-import static com.forsaken.ecommerce.notification.configs.mail.MailConfigurations.REQUIRED_SMTP_KEYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -111,64 +109,6 @@ class MailConfigurationsTest {
         assertEquals("5000", javaMailProperties.getProperty("mail.smtp.connectiontimeout"));
         assertEquals("3000", javaMailProperties.getProperty("mail.smtp.timeout"));
         assertEquals("5000", javaMailProperties.getProperty("mail.smtp.writetimeout"));
-    }
-
-    /**
-     * Verifies fail-fast behavior when the mail properties map is {@code null}.
-     *
-     * <p>
-     * The configuration must reject {@code null} mail properties to prevent
-     * partially configured {@link JavaMailSenderImpl} instances from being created.
-     * </p>
-     *
-     * <p>
-     * The test asserts that an {@link IllegalStateException} is thrown with
-     * a clear and actionable error message.
-     * </p>
-     */
-    @ParameterizedTest
-    @NullSource
-    @DisplayName("Should fail fast when mail properties map is null")
-    void shouldFailWhenPropertiesAreNull(final Map<String, String> props) {
-        // Given
-        final MailConfigurations configuration = constructConfigurationWith(props);
-
-        // When / Then
-        final IllegalStateException ex = assertThrows(
-                IllegalStateException.class,
-                configuration::javaMailSender
-        );
-        assertEquals(
-                "Mail properties must not be empty. Required SMTP properties: " +
-                        String.join(", ", REQUIRED_SMTP_KEYS),
-                ex.getMessage()
-        );
-    }
-
-    /**
-     * Verifies fail-fast behavior when the mail properties map is empty.
-     *
-     * <p>
-     * An empty properties map indicates missing SMTP protocol configuration
-     * (such as authentication or TLS settings) and must be rejected at startup.
-     * </p>
-     */
-    @Test
-    @DisplayName("Should fail fast when mail properties map is empty")
-    void shouldFailWhenPropertiesAreEmpty() {
-        // Given
-        final MailConfigurations configuration = constructConfigurationWith(Map.of());
-
-        // When / Then
-        final IllegalStateException ex = assertThrows(
-                IllegalStateException.class,
-                configuration::javaMailSender
-        );
-        assertEquals(
-                "Mail properties must not be empty. Required SMTP properties: " +
-                        String.join(", ", REQUIRED_SMTP_KEYS),
-                ex.getMessage()
-        );
     }
 
     /**

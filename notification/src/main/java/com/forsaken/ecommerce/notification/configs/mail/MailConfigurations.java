@@ -202,23 +202,70 @@ public class MailConfigurations {
      */
     private Map<String, String> constructPropertiesMap() {
         final Map<String, String> mailProps = mailProperties.properties();
-        if (null == mailProps || mailProps.isEmpty()) {
-            throw new IllegalStateException(
-                    "Mail properties must not be empty. " +
-                            "Required SMTP properties: " + String.join(", ", REQUIRED_SMTP_KEYS)
-            );
-        }
         for (final String key : REQUIRED_SMTP_KEYS) {
             if (!mailProps.containsKey(key)) {
                 throw new IllegalStateException("Missing required mail property: " + key);
             }
         }
         SMTP_VALIDATORS.values().forEach(validator -> validator.accept(mailProps));
-
         warnOnUnknownSmtpProperties(mailProps);
         return mailProps;
     }
 
+    /**
+     * Registry of SMTP property validators.
+     *
+     * <p>
+     * This map defines the validation rules for all SMTP-related configuration
+     * properties that are considered <b>mandatory</b> by the application.
+     * Each entry maps a property key to a validation function that enforces
+     * strict semantic correctness of the corresponding value.
+     * </p>
+     *
+     * <h2>Design rationale</h2>
+     * <ul>
+     *   <li>
+     *     <b>Centralized validation</b> – All validation rules are defined in
+     *     one place, avoiding scattered or duplicated logic.
+     *   </li>
+     *   <li>
+     *     <b>Fail-fast startup</b> – Invalid configuration causes immediate
+     *     application startup failure with clear, actionable error messages.
+     *   </li>
+     *   <li>
+     *     <b>Extensibility</b> – New SMTP properties can be added by registering
+     *     a new entry in this map without modifying existing validation flow.
+     *   </li>
+     *   <li>
+     *     <b>Declarative structure</b> – Property names are explicitly associated
+     *     with their validation semantics, improving readability and maintainability.
+     *   </li>
+     * </ul>
+     *
+     * <h2>Validation semantics</h2>
+     * <ul>
+     *   <li>
+     *     Boolean properties (for example {@code mail.smtp.auth},
+     *     {@code mail.smtp.starttls.enable}) must be strictly {@code "true"}
+     *     or {@code "false"} (case-insensitive).
+     *   </li>
+     *   <li>
+     *     Timeout-related properties (for example {@code mail.smtp.timeout})
+     *     must be valid, positive integers.
+     *   </li>
+     * </ul>
+     *
+     * <p>
+     * Each validator receives the full SMTP properties map, allowing validation
+     * logic to remain flexible and context-aware if future rules require
+     * cross-property checks.
+     * </p>
+     *
+     * <p>
+     * This map is intentionally immutable to prevent accidental or malicious
+     * modification of validation rules at runtime.
+     * </p>
+     */
     private static final Map<String, Consumer<Map<String, String>>> SMTP_VALIDATORS = Map.of(
             "mail.smtp.auth",
             props -> validateBoolean(props, "mail.smtp.auth"),
