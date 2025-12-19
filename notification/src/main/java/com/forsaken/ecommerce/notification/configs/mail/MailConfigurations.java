@@ -404,7 +404,6 @@ public class MailConfigurations {
      * <h3>Derivation rules</h3>
      * <ul>
      *   <li>{@code mail.smtp.starttls.enable} → {@code mail.smtp.starttls.}</li>
-     *   <li>{@code mail.smtp.auth} → {@code mail.smtp.auth}</li>
      * </ul>
      *
      * <p>
@@ -418,9 +417,7 @@ public class MailConfigurations {
         return REQUIRED_SMTP_KEYS.stream()
                 .map(key -> {
                     // allow hierarchy only for structured keys
-                    if (key.endsWith(".enable")) {
-                        return key.substring(0, key.lastIndexOf('.')) + ".";
-                    }
+                    if (key.endsWith(".enable")) return key.substring(0, key.lastIndexOf('.')) + ".";
                     return key;
                 })
                 .collect(Collectors.toUnmodifiableSet());
