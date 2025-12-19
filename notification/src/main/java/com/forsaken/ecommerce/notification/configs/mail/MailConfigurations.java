@@ -418,7 +418,7 @@ public class MailConfigurations {
         return REQUIRED_SMTP_KEYS.stream()
                 .map(key -> {
                     // allow hierarchy only for structured keys
-                    if (key.endsWith(".enable") || key.endsWith(".trust")) {
+                    if (key.endsWith(".enable")) {
                         return key.substring(0, key.lastIndexOf('.')) + ".";
                     }
                     return key;
