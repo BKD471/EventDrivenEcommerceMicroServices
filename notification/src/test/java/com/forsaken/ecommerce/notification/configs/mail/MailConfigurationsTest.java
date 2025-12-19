@@ -9,8 +9,15 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
+
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
@@ -187,7 +194,7 @@ class MailConfigurationsTest {
     @DisplayName("Should fail fast when a required SMTP property is missing")
     void shouldFailWhenRequiredPropertyIsMissing(final String missingKey) {
         // Given
-        final Map<String, String> incompleteProps = new HashMap<>(constructValidMailProperties());
+        final Map<String, String> incompleteProps = constructValidMailProperties();
         incompleteProps.remove(missingKey);
         final MailConfigurations configuration = constructConfigurationWith(incompleteProps);
 
@@ -256,7 +263,7 @@ class MailConfigurationsTest {
     @DisplayName("Should fail when boolean SMTP properties are blank or null")
     void shouldFailWhenBooleanPropertyIsBlank(String key, String value) {
         // given
-        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        final Map<String, String> props = constructValidMailProperties();
         props.put(key, value);
 
         final MailConfigurations configuration = constructConfigurationWith(props);
@@ -329,7 +336,7 @@ class MailConfigurationsTest {
     @DisplayName("Should fail when boolean SMTP properties are not true or false")
     void shouldFailWhenBooleanPropertyIsInvalid(String key, String value) {
         // given
-        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        final Map<String, String> props = constructValidMailProperties();
         props.put(key, value);
         final MailConfigurations configuration = constructConfigurationWith(props);
 
@@ -393,7 +400,7 @@ class MailConfigurationsTest {
     @DisplayName("Should fail fast when integer SMTP property is null or blank")
     void shouldFailWhenIntegerPropertyIsBlank(String key, String value) {
         // given
-        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        final Map<String, String> props = constructValidMailProperties();
         props.put(key, value);
         final MailConfigurations configuration = constructConfigurationWith(props);
 
@@ -455,7 +462,7 @@ class MailConfigurationsTest {
     @DisplayName("Should fail fast when integer SMTP property is not a number")
     void shouldFailWhenIntegerPropertyIsNotANumber(String key, String value) {
         // given
-        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        final Map<String, String> props = constructValidMailProperties();
         props.put(key, value);
         final MailConfigurations configuration = constructConfigurationWith(props);
 
@@ -514,7 +521,7 @@ class MailConfigurationsTest {
     @DisplayName("Should fail fast when integer SMTP property is zero or negative")
     void shouldFailWhenIntegerPropertyIsNonPositive(String key, String value) {
         // given
-        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        final Map<String, String> props = constructValidMailProperties();
         props.put(key, value);
 
         final MailConfigurations configuration = constructConfigurationWith(props);
@@ -526,6 +533,69 @@ class MailConfigurationsTest {
         assertEquals(
                 "Mail property '" + key + "' must be a positive integer",
                 ex.getMessage()
+        );
+    }
+
+    /**
+     * Verifies that a warning is logged when an unknown SMTP property is detected.
+     *
+     * <p>
+     * This test ensures that the mail configuration performs <strong>non-fatal
+     * validation</strong> for unrecognized SMTP properties. Unknown properties
+     * should not prevent application startup, but must be surfaced via a
+     * warning log to help detect configuration mistakes or typos.
+     * </p>
+     *
+     * <p>
+     * The test:
+     * </p>
+     * <ul>
+     *   <li>Creates a valid SMTP configuration</li>
+     *   <li>Adds a single unknown SMTP property</li>
+     *   <li>Invokes {@link MailConfigurations#javaMailSender()}</li>
+     *   <li>Captures log output using a Logback {@link ListAppender}</li>
+     * </ul>
+     *
+     * <p>
+     * The assertion verifies that:
+     * </p>
+     * <ul>
+     *   <li>Exactly one warning log entry is produced</li>
+     *   <li>The log level is {@code WARN}</li>
+     *   <li>The log message clearly identifies the unknown property</li>
+     * </ul>
+     *
+     * <p>
+     * This behavior provides early visibility into configuration issues while
+     * preserving forward compatibility with JavaMail extensions and
+     * vendor-specific SMTP settings.
+     * </p>
+     */
+    @Test
+    void shouldLogWarningForUnknownSmtpProperties() {
+        // given
+        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        props.put("mail.smtp.unknown.property", "value");
+        final MailConfigurations configuration = constructConfigurationWith(props);
+
+        final Logger logger = (Logger) LoggerFactory.getLogger(MailConfigurations.class);
+        logger.setLevel(Level.WARN);
+        logger.setAdditive(false);
+
+        final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        // when
+        configuration.javaMailSender();
+
+        // then
+        List<ILoggingEvent> logs = appender.list;
+        assertEquals(1, logs.size());
+        assertEquals(Level.WARN, logs.get(0).getLevel());
+        assertEquals(
+                "Unknown SMTP property detected: mail.smtp.unknown.property",
+                logs.get(0).getFormattedMessage()
         );
     }
 
@@ -549,19 +619,22 @@ class MailConfigurationsTest {
     }
 
     /**
-     * Constructs a valid set of SMTP mail properties containing all
-     * required configuration keys.
+     * Returns a mutable map of valid SMTP properties for use in unit tests.
      *
-     * @return a fully populated mail properties map
+     * <p>
+     * Mutability is intentional here, as most tests modify individual properties
+     * to verify fail-fast validation behavior. Using a mutable map avoids
+     * unnecessary intermediate copies and keeps test setup concise and explicit.
+     * </p>
      */
     private Map<String, String> constructValidMailProperties() {
-        return Map.of(
-                "mail.smtp.auth", "true",
-                "mail.smtp.starttls.enable", "true",
-                "mail.smtp.connectiontimeout", "5000",
-                "mail.smtp.timeout", "3000",
-                "mail.smtp.writetimeout", "5000"
-        );
+        final Map<String, String> props = new HashMap<>();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.connectiontimeout", "5000");
+        props.put("mail.smtp.timeout", "3000");
+        props.put("mail.smtp.writetimeout", "5000");
+        return props;
     }
 
     /**

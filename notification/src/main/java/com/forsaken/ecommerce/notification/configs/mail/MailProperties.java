@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.notification.configs.mail;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -10,57 +11,38 @@ import org.springframework.validation.annotation.Validated;
 import java.util.Map;
 
 /**
- * Configuration properties for mail support in the notification service.
- * <p>
- * This record binds external configuration (YAML / properties / Config Server /
- * environment variables) under the {@code spring.mail.*} namespace and provides
- * a type-safe, validated representation of mail-related settings.
- * </p>
+ * JavaMail SMTP properties passed directly to the underlying JavaMail Session.
  *
  * <p>
- * These properties are typically used to configure a {@link org.springframework.mail.javamail.JavaMailSender}
- * instance for sending emails via SMTP.
+ * Example configuration:
  * </p>
  *
- * <h2>Configuration Prefix</h2>
  * <pre>
- * spring.mail
+ * mail:
+ *   properties:
+ *     mail:
+ *       smtp:
+ *         auth: true
+ *         starttls:
+ *           enabled: true
+ *         ssl:
+ *           trust: "*"
+ *         connectiontimeout: 5000
+ *         timeout: 3000
+ *         writetimeout: 5000
  * </pre>
  *
- * <h2>Example Configuration</h2>
- * <pre>{@code
- * spring:
- *   mail:
- *     host: localhost
- *     port: 1025
- *     username: admin
- *     password: admin
- *     properties:
- *       mail.smtp.auth: true
- *       mail.smtp.starttls.enable: true
- *       mail.smtp.trust: "*"
- * }</pre>
- *
- * <p><strong>Note:</strong> The {@code trust} property shown in the example above is
- * optional and is <em>not</em> part of the required SMTP keys. It is typically only
- * needed in specific scenarios, such as local development or testing with
- * self-signed certificates, where you want to trust all SSL certificates
- * (for example, using {@code trust="*"}). In production, you should avoid
- * blindly trusting all certificates and instead rely on a proper trust store.</p>
- *
- * <h2>Validation</h2>
+ * <p><strong>Note:</strong></p>
  * <ul>
- *   <li>Fails fast at application startup if mandatory properties are missing or invalid.</li>
- *   <li>Ensures correctness before attempting to create or use mail infrastructure.</li>
+ *   <li>{@code mail.smtp.ssl.trust} is the correct JavaMail property for
+ *       trusting SSL certificates.</li>
+ *   <li>{@code mail.smtp.trust} is <strong>not</strong> a valid JavaMail key
+ *       and will be ignored.</li>
  * </ul>
  *
  * <p>
- * Validation is enabled via {@link org.springframework.validation.annotation.Validated}
- * and Jakarta Bean Validation constraints.
+ * Using {@code "*"} should be limited to development or test environments.
  * </p>
- *
- * @see org.springframework.boot.context.properties.ConfigurationProperties
- * @see org.springframework.mail.javamail.JavaMailSender
  */
 @Validated
 @ConfigurationProperties(prefix = "spring.mail")
@@ -116,30 +98,33 @@ public record MailProperties(
         String password,
 
         /**
-         * Additional JavaMail session properties.
+         * Additional JavaMail SMTP properties.
+         *
          * <p>
-         * These properties are passed directly to the underlying JavaMail implementation and
-         * are typically used to configure protocol-specific options such as SMTP authentication
-         * and TLS settings.
+         * This map contains protocol-level SMTP configuration required by the
+         * underlying JavaMail sender (for example authentication flags, TLS settings,
+         * and timeout values).
          * </p>
          *
-         * <p><strong>Examples</strong> (using the {@code spring.mail.properties.*} prefix):</p>
+         * <p><strong>Validation rules:</strong></p>
          * <ul>
-         *     <li>{@code spring.mail.properties.mail.smtp.auth=true}</li>
-         *     <li>{@code spring.mail.properties.mail.smtp.starttls.enable=true}</li>
-         *     <li>{@code spring.mail.properties.mail.debug=false}</li>
+         *   <li>Must not be {@code null}.</li>
+         *   <li>Must not be empty.</li>
          * </ul>
          *
-         * <p><strong>Constraints</strong>:</p>
-         * <ul>
-         *     <li>Must not be {@code null} (enforced by {@link jakarta.validation.constraints.NotNull}).</li>
-         *     <li>Keys and values should be valid JavaMail properties supported by the configured mail protocol.</li>
-         * </ul>
+         * <p>
+         * These constraints are enforced at configuration binding time using
+         * {@link jakarta.validation.constraints.NotEmpty} to ensure fail-fast
+         * application startup when mail configuration is missing or incomplete.
+         * </p>
          *
-         * @implNote Properties are bound from configuration using the {@code spring.mail.properties.*} prefix
-         * and then flattened into this map.
+         * <p>
+         * Additional semantic validation (such as required keys, boolean values,
+         * and positive integer constraints) is performed explicitly in
+         * {@link MailConfigurations} to provide clear and actionable error messages.
+         * </p>
          */
-        @NotNull(message = "Mail properties must not be null")
+        @NotEmpty(message = "Mail properties must not be null or empty")
         Map<String, String> properties
 ) {
 }

@@ -38,13 +38,14 @@ spring:
     properties:
       mail:
         smtp:
-          trust: "*"
-        auth: true
-        starttls:
-          enabled: true
-        connectiontimeout: 5000
-        timeout: 3000
-        writetimeout: 5000
+          ssl:
+            trust: "*"
+          auth: true
+          starttls:
+            enabled: true
+          connectiontimeout: 5000
+          timeout: 3000
+          writetimeout: 5000
 
 invoice:
   downloadUrl: http://localhost:8222/api/v1
