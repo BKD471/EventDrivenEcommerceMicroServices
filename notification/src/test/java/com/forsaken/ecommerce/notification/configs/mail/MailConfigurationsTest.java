@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
+import static com.forsaken.ecommerce.notification.configs.mail.MailConfigurations.REQUIRED_SMTP_KEYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,30 +24,34 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Unit tests for {@link MailConfigurations}.
  *
  * <p>
- * This test suite verifies the fail-fast behavior and correctness of
- * {@link MailConfigurations#javaMailSender()} without loading a Spring
- * application context.
+ * This test suite validates the fail-fast configuration behavior of the
+ * JavaMail sender setup without relying on the Spring application context.
  * </p>
  *
- * <h2>Test scope</h2>
+ * <p>
+ * The goal of these tests is to ensure that invalid SMTP configurations
+ * are rejected early during application startup, producing deterministic
+ * and actionable error messages instead of deferred runtime failures.
+ * </p>
+ *
+ * <h2>Design principles</h2>
  * <ul>
- *   <li>Pure unit testing (no Spring Test, no ApplicationContext).</li>
- *   <li>Validation of required SMTP configuration properties.</li>
- *   <li>Correct construction and configuration of {@link JavaMailSenderImpl}.</li>
+ *   <li>Pure unit tests (no {@code @SpringBootTest}, no container startup).</li>
+ *   <li>Explicit validation of error messages to prevent silent regressions.</li>
+ *   <li>Fail-fast semantics for all critical SMTP properties.</li>
+ *   <li>Readable test intent over compactness.</li>
  * </ul>
  *
- * <h2>Covered scenarios</h2>
+ * <h2>What is intentionally NOT tested</h2>
  * <ul>
- *   <li>Successful creation of {@link JavaMailSenderImpl} when all required
- *       mail properties are present.</li>
- *   <li>Fail-fast behavior when mail properties are {@code null} or empty.</li>
- *   <li>Fail-fast behavior when any required SMTP property is missing
- *       (validated via parameterized tests).</li>
+ *   <li>Actual SMTP connectivity.</li>
+ *   <li>JavaMail internal behavior.</li>
+ *   <li>Spring auto-configuration.</li>
  * </ul>
  *
  * <p>
- * The tests assert both behavior and error messages to ensure configuration
- * failures are explicit, deterministic, and actionable.
+ * These concerns are outside the responsibility of {@link MailConfigurations}
+ * and are therefore excluded by design.
  * </p>
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -56,32 +61,6 @@ class MailConfigurationsTest {
     private static final int TEST_PORT = 1025;
     private static final String TEST_USERNAME = "admin";
     private static final String TEST_PASSWORD = "admin";
-
-    /**
-     * Mandatory SMTP properties for this application.
-     *
-     * <p>
-     * These properties are intentionally enforced to guarantee:
-     * </p>
-     * <ul>
-     *   <li>Authenticated SMTP communication</li>
-     *   <li>Explicit TLS configuration</li>
-     *   <li>Deterministic timeout behavior</li>
-     * </ul>
-     *
-     * <p>
-     * This application does not support implicit defaults or partially
-     * configured SMTP servers. All notification delivery must be explicit,
-     * secure, and fail-fast.
-     * </p>
-     */
-    private static final String[] REQUIRED_SMTP_KEYS_TEST = {
-            "mail.smtp.auth",
-            "mail.smtp.starttls.enable",
-            "mail.smtp.connectiontimeout",
-            "mail.smtp.timeout",
-            "mail.smtp.writetimeout"
-    };
 
     /**
      * Verifies that a {@link JavaMailSenderImpl} is successfully created
@@ -154,7 +133,7 @@ class MailConfigurationsTest {
         );
         assertEquals(
                 "Mail properties must not be empty. Required SMTP properties: " +
-                        String.join(", ", REQUIRED_SMTP_KEYS_TEST),
+                        String.join(", ", REQUIRED_SMTP_KEYS),
                 ex.getMessage()
         );
     }
@@ -180,7 +159,7 @@ class MailConfigurationsTest {
         );
         assertEquals(
                 "Mail properties must not be empty. Required SMTP properties: " +
-                        String.join(", ", REQUIRED_SMTP_KEYS_TEST),
+                        String.join(", ", REQUIRED_SMTP_KEYS),
                 ex.getMessage()
         );
     }
@@ -224,84 +203,130 @@ class MailConfigurationsTest {
     }
 
     /**
-     * Verifies fail-fast behavior when SMTP timeout configuration values are invalid.
+     * Supplies the list of required SMTP property keys used for
+     * parameterized validation tests.
+     *
+     * @return stream of required SMTP property keys
+     */
+    private static Stream<String> missingRequiredPropertyProvider() {
+        return Stream.of(
+                "mail.smtp.auth",
+                "mail.smtp.starttls.enable",
+                "mail.smtp.connectiontimeout",
+                "mail.smtp.timeout",
+                "mail.smtp.writetimeout"
+        );
+    }
+
+    /**
+     * Verifies fail-fast behavior when required boolean SMTP properties are
+     * {@code null}, empty, or contain only whitespace.
+     *
      * <p>
-     * This parameterized test ensures that the mail configuration rejects
-     * malformed or invalid timeout values <strong>before</strong> a
-     * {@link org.springframework.mail.javamail.JavaMailSender} is created.
+     * Boolean SMTP properties such as {@code mail.smtp.auth} and
+     * {@code mail.smtp.starttls.enable} are required to have explicit boolean
+     * values ({@code true} or {@code false}). A blank or missing value represents
+     * a configuration error that must be detected during application startup.
      * </p>
      *
      * <p>
-     * Timeout-related SMTP properties are expected to be positive integers
-     * expressed as strings, as required by the underlying JavaMail implementation.
-     * Invalid values would otherwise cause obscure runtime failures during
-     * mail delivery.
+     * This test ensures that:
      * </p>
-     *
-     * <h3>Validation scenarios covered</h3>
      * <ul>
-     *   <li>Negative timeout values (e.g. {@code -1})</li>
-     *   <li>Zero timeout values (e.g. {@code 0})</li>
-     *   <li>Non-numeric timeout values (e.g. {@code abc})</li>
+     *   <li>Blank values (e.g. {@code ""} or whitespace-only strings) are rejected.</li>
+     *   <li>The application fails fast with a clear, deterministic error message.</li>
+     *   <li>Misconfigurations do not silently fall back to default behavior.</li>
      * </ul>
      *
      * <p>
-     * For each invalid input, the test asserts that application startup
-     * fails immediately with an {@link IllegalStateException}, enforcing
-     * strict configuration correctness.
+     * This validation is intentionally separated from tests that handle
+     * <em>non-boolean</em> values (such as {@code "yes"} or {@code "1"}) to
+     * preserve semantic clarity between:
      * </p>
+     * <ul>
+     *   <li><strong>Missing values</strong> (null / blank)</li>
+     *   <li><strong>Invalid values</strong> (not {@code true}/{@code false})</li>
+     * </ul>
      *
      * @param key   the SMTP property key being validated
-     * @param value the invalid timeout value to test
+     * @param value the blank or whitespace-only value supplied for the property
      */
-    @ParameterizedTest
-    @MethodSource("invalidTimeoutProvider")
-    @DisplayName("Should fail fast when timeout values are invalid")
-    void shouldFailWhenTimeoutIsInvalid(final String key, final String value) {
+    @ParameterizedTest(name = "Blank boolean value for {0}")
+    @MethodSource("blankBooleanProvider")
+    @DisplayName("Should fail when boolean SMTP properties are blank or null")
+    void shouldFailWhenBooleanPropertyIsBlank(String key, String value) {
         // given
         final Map<String, String> props = new HashMap<>(constructValidMailProperties());
         props.put(key, value);
 
-        // when / then
         final MailConfigurations configuration = constructConfigurationWith(props);
-        assertThrows(IllegalStateException.class, configuration::javaMailSender);
+
+        // when / then
+        final IllegalStateException ex =
+                assertThrows(IllegalStateException.class, configuration::javaMailSender);
+        assertEquals(
+                "Mail property '" + key + "' must not be null and must be either 'true' or 'false'",
+                ex.getMessage()
+        );
     }
 
     /**
-     * Verifies fail-fast validation for boolean-based SMTP configuration properties.
+     * Supplies blank or whitespace-only values for boolean SMTP properties.
      *
      * <p>
-     * This test ensures that mail configuration fails immediately when a boolean
-     * SMTP property (such as {@code mail.smtp.auth} or
-     * {@code mail.smtp.starttls.enable}) is provided with an invalid value.
+     * These inputs simulate common configuration mistakes such as:
+     * </p>
+     * <ul>
+     *   <li>Leaving a property value empty in YAML or properties files</li>
+     *   <li>Providing whitespace instead of a concrete boolean value</li>
+     * </ul>
+     *
+     * <p>
+     * Such configurations are invalid and must be rejected during application
+     * startup to avoid ambiguous or environment-dependent behavior.
+     * </p>
+     *
+     * @return a stream of SMTP property keys paired with blank values
+     */
+    private static Stream<Arguments> blankBooleanProvider() {
+        return Stream.of(
+                Arguments.of("mail.smtp.auth", ""),
+                Arguments.of("mail.smtp.starttls.enable", "   ")
+        );
+    }
+
+    /**
+     * Verifies fail-fast behavior when required boolean SMTP properties
+     * contain non-boolean values.
+     *
+     * <p>
+     * Boolean SMTP properties (such as {@code mail.smtp.auth} and
+     * {@code mail.smtp.starttls.enable}) must explicitly be set to
+     * {@code true} or {@code false}. Any other value is considered
+     * invalid and must be rejected during application startup.
      * </p>
      *
      * <p>
-     * Only the literal values {@code "true"} and {@code "false"} (case-insensitive)
-     * are considered valid. Any other value—including numeric strings, empty values,
-     * or arbitrary text—must result in an {@link IllegalStateException}.
+     * This test ensures that:
+     * </p>
+     * <ul>
+     *   <li>Non-boolean values (e.g. {@code "yes"}, {@code "1"}, {@code "enabled"}) are rejected.</li>
+     *   <li>The configuration fails fast before creating a {@link org.springframework.mail.javamail.JavaMailSender}.</li>
+     *   <li>The error message clearly identifies the offending property and value.</li>
+     * </ul>
+     *
+     * <p>
+     * This validation is intentionally separate from tests that handle
+     * <em>blank</em> or <em>missing</em> values to preserve semantic clarity
+     * between missing and invalid configurations.
      * </p>
      *
-     * <h3>Why this matters</h3>
-     * <ul>
-     *   <li>JavaMail silently accepts invalid boolean values and misinterprets them at runtime.</li>
-     *   <li>Fail-fast validation prevents obscure SMTP connection failures.</li>
-     *   <li>Ensures configuration errors are detected during application startup.</li>
-     * </ul>
-     *
-     * <h3>Test strategy</h3>
-     * <ul>
-     *   <li>Uses {@link ParameterizedTest} to validate multiple invalid values.</li>
-     *   <li>Mutates a known-good configuration to isolate the failing property.</li>
-     *   <li>Asserts both exception type and error message for clarity.</li>
-     * </ul>
-     *
-     * @param key   the SMTP property key under validation
-     * @param value the invalid boolean value supplied for the property
+     * @param key   the boolean SMTP property key being validated
+     * @param value the invalid (non-boolean) value supplied
      */
     @ParameterizedTest(name = "Invalid boolean value for {0} = {1}")
     @MethodSource("invalidBooleanProvider")
-    @DisplayName("Should fail fast when boolean SMTP properties are invalid")
+    @DisplayName("Should fail when boolean SMTP properties are not true or false")
     void shouldFailWhenBooleanPropertyIsInvalid(String key, String value) {
         // given
         final Map<String, String> props = new HashMap<>(constructValidMailProperties());
@@ -318,34 +343,208 @@ class MailConfigurationsTest {
     }
 
     /**
-     * Supplies invalid SMTP timeout configurations for parameterized testing.
-     * <p>
-     * Each argument pair represents a timeout-related SMTP property key
-     * and an invalid value that should be rejected by the mail configuration.
-     * </p>
+     * Supplies invalid non-boolean values for boolean SMTP properties.
      *
      * <p>
-     * These cases intentionally violate expected constraints:
+     * These values intentionally violate the expected boolean contract
+     * and simulate common configuration mistakes such as:
      * </p>
      * <ul>
-     *   <li>Negative numeric values</li>
-     *   <li>Zero values (timeouts must be positive)</li>
-     *   <li>Non-numeric strings</li>
+     *   <li>Using human-readable values (e.g. {@code "yes"}, {@code "enabled"})</li>
+     *   <li>Using numeric placeholders (e.g. {@code "1"})</li>
+     *   <li>Using string literals that resemble {@code null}</li>
      * </ul>
      *
+     * @return a stream of invalid boolean property key/value pairs
+     */
+    private static Stream<Arguments> invalidBooleanProvider() {
+        return Stream.of(
+                Arguments.of("mail.smtp.auth", "yes"),
+                Arguments.of("mail.smtp.auth", "1"),
+                Arguments.of("mail.smtp.starttls.enable", "enabled"),
+                Arguments.of("mail.smtp.starttls.enable", "null")
+        );
+    }
+
+    /**
+     * Verifies fail-fast behavior when integer-based SMTP properties
+     * are {@code null}, empty, or contain only whitespace.
+     *
      * <p>
-     * The provider is designed to ensure comprehensive coverage of
-     * common misconfiguration scenarios that may otherwise only surface
-     * at runtime.
+     * Integer SMTP properties such as timeouts must be provided as
+     * non-empty positive integers. Blank or missing values indicate
+     * an invalid configuration and must be rejected during startup.
      * </p>
      *
-     * @return a stream of invalid SMTP timeout configurations
+     * <p>
+     * This test ensures that:
+     * </p>
+     * <ul>
+     *   <li>Empty or whitespace-only values are not accepted.</li>
+     *   <li>The configuration fails immediately with a deterministic error.</li>
+     *   <li>Ambiguous defaults or runtime parsing errors are avoided.</li>
+     * </ul>
+     *
+     * @param key   the integer SMTP property key being validated
+     * @param value the blank or {@code null} value supplied
      */
-    private static Stream<Arguments> invalidTimeoutProvider() {
+    @ParameterizedTest(name = "Blank integer value for {0}")
+    @MethodSource("blankIntegerProvider")
+    @DisplayName("Should fail fast when integer SMTP property is null or blank")
+    void shouldFailWhenIntegerPropertyIsBlank(String key, String value) {
+        // given
+        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        props.put(key, value);
+        final MailConfigurations configuration = constructConfigurationWith(props);
+
+        // when / then
+        final IllegalStateException ex =
+                assertThrows(IllegalStateException.class, configuration::javaMailSender);
+        assertEquals(
+                "Mail property '" + key + "' must be a non-empty positive integer",
+                ex.getMessage()
+        );
+    }
+
+    /**
+     * Supplies blank or {@code null} values for integer SMTP properties.
+     *
+     * <p>
+     * These inputs simulate common configuration errors such as:
+     * </p>
+     * <ul>
+     *   <li>Leaving timeout values empty in YAML or properties files</li>
+     *   <li>Accidentally removing a value while keeping the key</li>
+     * </ul>
+     *
+     * @return a stream of integer property keys with blank or {@code null} values
+     */
+    private static Stream<Arguments> blankIntegerProvider() {
         return Stream.of(
-                Arguments.of("mail.smtp.timeout", "-1"),
+                Arguments.of("mail.smtp.timeout", ""),
+                Arguments.of("mail.smtp.timeout", "   "),
+                Arguments.of("mail.smtp.connectiontimeout", null),
+                Arguments.of("mail.smtp.writetimeout", "")
+        );
+    }
+
+    /**
+     * Verifies fail-fast behavior when integer SMTP properties
+     * contain non-numeric values.
+     *
+     * <p>
+     * Integer SMTP properties must be parsable as base-10 integers.
+     * Any non-numeric value would cause runtime failures in the
+     * underlying JavaMail implementation and must be rejected early.
+     * </p>
+     *
+     * <p>
+     * This test ensures that:
+     * </p>
+     * <ul>
+     *   <li>Alphabetic or decimal values are rejected.</li>
+     *   <li>Misleading numeric formats (e.g. {@code "1_000"}) are not accepted.</li>
+     *   <li>Clear error messages are produced during application startup.</li>
+     * </ul>
+     *
+     * @param key   the integer SMTP property key being validated
+     * @param value the non-numeric value supplied
+     */
+    @ParameterizedTest(name = "Non-numeric integer value for {0} = {1}")
+    @MethodSource("invalidIntegerProvider")
+    @DisplayName("Should fail fast when integer SMTP property is not a number")
+    void shouldFailWhenIntegerPropertyIsNotANumber(String key, String value) {
+        // given
+        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        props.put(key, value);
+        final MailConfigurations configuration = constructConfigurationWith(props);
+
+        // when / then
+        final IllegalStateException ex =
+                assertThrows(IllegalStateException.class, configuration::javaMailSender);
+        assertEquals(
+                "Mail property '" + key + "' must be a valid integer",
+                ex.getMessage()
+        );
+    }
+
+    /**
+     * Supplies non-numeric values for integer SMTP properties.
+     *
+     * <p>
+     * These values intentionally violate numeric constraints and
+     * represent realistic misconfiguration scenarios.
+     * </p>
+     *
+     * @return a stream of integer property keys with non-numeric values
+     */
+    private static Stream<Arguments> invalidIntegerProvider() {
+        return Stream.of(
+                Arguments.of("mail.smtp.timeout", "abc"),
+                Arguments.of("mail.smtp.timeout", "12.5"),
+                Arguments.of("mail.smtp.connectiontimeout", "ten"),
+                Arguments.of("mail.smtp.writetimeout", "1_000")
+        );
+    }
+
+    /**
+     * Verifies fail-fast behavior when integer SMTP properties
+     * contain zero or negative values.
+     *
+     * <p>
+     * Timeout-related SMTP properties must be strictly positive integers.
+     * Zero or negative values are semantically invalid and may cause
+     * undefined behavior in mail transport.
+     * </p>
+     *
+     * <p>
+     * This test ensures that:
+     * </p>
+     * <ul>
+     *   <li>Zero values are rejected.</li>
+     *   <li>Negative values are rejected.</li>
+     *   <li>Configuration errors are detected at startup, not at runtime.</li>
+     * </ul>
+     *
+     * @param key   the integer SMTP property key being validated
+     * @param value the non-positive value supplied
+     */
+    @ParameterizedTest(name = "Non-positive integer value for {0} = {1}")
+    @MethodSource("nonPositiveIntegerProvider")
+    @DisplayName("Should fail fast when integer SMTP property is zero or negative")
+    void shouldFailWhenIntegerPropertyIsNonPositive(String key, String value) {
+        // given
+        final Map<String, String> props = new HashMap<>(constructValidMailProperties());
+        props.put(key, value);
+
+        final MailConfigurations configuration = constructConfigurationWith(props);
+
+        // when / then
+        final IllegalStateException ex =
+                assertThrows(IllegalStateException.class, configuration::javaMailSender);
+
+        assertEquals(
+                "Mail property '" + key + "' must be a positive integer",
+                ex.getMessage()
+        );
+    }
+
+    /**
+     * Supplies zero and negative values for integer SMTP properties.
+     *
+     * <p>
+     * These values violate the positive-integer constraint required
+     * for timeout configuration and must be rejected.
+     * </p>
+     *
+     * @return a stream of integer property keys with non-positive values
+     */
+    private static Stream<Arguments> nonPositiveIntegerProvider() {
+        return Stream.of(
                 Arguments.of("mail.smtp.timeout", "0"),
-                Arguments.of("mail.smtp.timeout", "abc")
+                Arguments.of("mail.smtp.timeout", "-1"),
+                Arguments.of("mail.smtp.connectiontimeout", "-500"),
+                Arguments.of("mail.smtp.writetimeout", "0")
         );
     }
 
@@ -386,55 +585,6 @@ class MailConfigurationsTest {
                         TEST_PASSWORD,
                         props
                 )
-        );
-    }
-
-    /**
-     * Supplies the list of required SMTP property keys used for
-     * parameterized validation tests.
-     *
-     * @return stream of required SMTP property keys
-     */
-    private Stream<String> missingRequiredPropertyProvider() {
-        return Stream.of(
-                "mail.smtp.auth",
-                "mail.smtp.starttls.enable",
-                "mail.smtp.connectiontimeout",
-                "mail.smtp.timeout",
-                "mail.smtp.writetimeout"
-        );
-    }
-
-    /**
-     * Supplies invalid boolean values for SMTP-related mail properties.
-     *
-     * <p>
-     * This provider intentionally includes values that are commonly misused or
-     * accidentally configured in YAML or environment variables.
-     * </p>
-     *
-     * <h3>Covered invalid cases</h3>
-     * <ul>
-     *   <li>Non-boolean text values (e.g. {@code "yes"}, {@code "enabled"})</li>
-     *   <li>Numeric representations (e.g. {@code "1"})</li>
-     *   <li>Empty strings</li>
-     *   <li>String literals that look like null values</li>
-     * </ul>
-     *
-     * <p>
-     * These cases ensure the configuration layer strictly enforces valid boolean
-     * semantics rather than relying on JavaMail’s permissive parsing.
-     * </p>
-     *
-     * @return a stream of invalid SMTP boolean property key/value pairs
-     */
-    private Stream<Arguments> invalidBooleanProvider() {
-        return Stream.of(
-                Arguments.of("mail.smtp.auth", "yes"),
-                Arguments.of("mail.smtp.auth", "1"),
-                Arguments.of("mail.smtp.auth", ""),
-                Arguments.of("mail.smtp.starttls.enable", "enabled"),
-                Arguments.of("mail.smtp.starttls.enable", "null")
         );
     }
 }

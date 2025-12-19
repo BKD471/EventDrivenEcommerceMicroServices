@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.util.StringUtils;
 
 import java.util.Map;
 import java.util.Properties;
@@ -70,7 +71,7 @@ public class MailConfigurations {
      * secure, and fail-fast.
      * </p>
      */
-    private static final String[] REQUIRED_SMTP_KEYS = {
+    public static final String[] REQUIRED_SMTP_KEYS = {
             "mail.smtp.auth",
             "mail.smtp.starttls.enable",
             "mail.smtp.connectiontimeout",
@@ -120,21 +121,33 @@ public class MailConfigurations {
      * Validates and returns the JavaMail session properties.
      *
      * <p>
-     * This method ensures:
+     * This method performs comprehensive fail-fast validation on the configured
+     * JavaMail SMTP properties before they are applied to the {@link JavaMailSender}.
      * </p>
+     *
+     * <h3>Validation rules</h3>
      * <ul>
-     *   <li>The properties map is not {@code null}.</li>
-     *   <li>The properties map is not empty.</li>
-     *   <li>All required SMTP keys are present.</li>
+     *   <li>The properties map must not be {@code null}.</li>
+     *   <li>The properties map must not be empty.</li>
+     *   <li>All required SMTP keys defined in {@code REQUIRED_SMTP_KEYS} must be present.</li>
+     *   <li>Boolean properties (for example {@code mail.smtp.auth} and
+     *       {@code mail.smtp.starttls.enable}) must have values {@code true} or {@code false}
+     *       (case-insensitive).</li>
+     *   <li>Timeout-related properties (for example
+     *       {@code mail.smtp.connectiontimeout}, {@code mail.smtp.timeout},
+     *       {@code mail.smtp.writetimeout}) must be valid positive integers.</li>
      * </ul>
      *
+     * <h3>Fail-fast behavior</h3>
      * <p>
-     * Any validation failure results in an {@link IllegalStateException}
-     * with a descriptive error message.
+     * Any validation failure results in an {@link IllegalStateException} being thrown
+     * during application startup. This prevents the application from running with
+     * invalid or partially configured mail settings and avoids obscure runtime failures
+     * inside the JavaMail implementation.
      * </p>
      *
      * @return a validated map of JavaMail session properties
-     * @throws IllegalStateException if validation fails
+     * @throws IllegalStateException if any required property is missing or invalid
      */
     private Map<String, String> constructPropertiesMap() {
         final Map<String, String> mailProps = mailProperties.properties();
@@ -186,6 +199,11 @@ public class MailConfigurations {
             final String key
     ) {
         final String value = props.get(key);
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalStateException(
+                    "Mail property '" + key + "' must not be null and must be either 'true' or 'false'"
+            );
+        }
         if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
             throw new IllegalStateException(
                     "Invalid boolean value for mail property '" + key + "': " + value
@@ -228,8 +246,14 @@ public class MailConfigurations {
             final Map<String, String> props,
             final String key
     ) {
+        final String rawValue = props.get(key);
+        if (!StringUtils.hasText(rawValue)) {
+            throw new IllegalStateException(
+                    "Mail property '" + key + "' must be a non-empty positive integer"
+            );
+        }
         try {
-            int value = Integer.parseInt(props.get(key));
+            final int value = Integer.parseInt(rawValue);
             if (value <= 0) {
                 throw new IllegalStateException(
                         "Mail property '" + key + "' must be a positive integer"
