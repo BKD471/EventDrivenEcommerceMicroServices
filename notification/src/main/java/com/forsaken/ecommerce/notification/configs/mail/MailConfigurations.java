@@ -6,33 +6,44 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+import java.util.Map;
 import java.util.Properties;
 
 /**
  * Mail configuration for the notification service.
+ *
  * <p>
- * This configuration class creates and configures a {@link JavaMailSender}
- * bean using externally supplied mail settings bound via
- * {@link MailProperties}.
+ * This configuration class is responsible for creating and configuring
+ * a {@link JavaMailSender} using externally supplied SMTP settings
+ * bound via {@link MailProperties}.
  * </p>
  *
  * <p>
- * All SMTP connection details (host, port, credentials, and protocol-level
- * properties) are provided through {@code spring.mail.*} configuration
- * and validated at application startup.
+ * All mail-related configuration is expected to be provided under the
+ * {@code spring.mail.*} namespace and validated before the application
+ * begins processing requests.
+ * </p>
+ *
+ * <h2>Fail-fast configuration validation</h2>
+ * <p>
+ * This configuration enforces the presence of required JavaMail SMTP
+ * properties at startup. If any mandatory property is missing or the
+ * properties map is empty, application startup will fail immediately
+ * with a clear and actionable error message.
+ * </p>
+ *
+ * <p>
+ * This approach prevents subtle runtime failures such as silent mail
+ * delivery errors, misconfigured TLS, or authentication issues.
  * </p>
  *
  * <h2>Responsibilities</h2>
  * <ul>
- *   <li>Instantiate a {@link JavaMailSender} implementation.</li>
- *   <li>Apply SMTP connection details such as host, port, username, and password.</li>
- *   <li>Forward additional JavaMail session properties (TLS, auth, timeouts, etc.).</li>
+ *   <li>Create a {@link JavaMailSenderImpl} instance.</li>
+ *   <li>Apply SMTP connection parameters (host, port, username, password).</li>
+ *   <li>Apply JavaMail session properties.</li>
+ *   <li>Validate the presence of required SMTP configuration keys.</li>
  * </ul>
- *
- * <p>
- * This configuration does <strong>not</strong> perform any runtime logic and
- * exists purely to wire infrastructure components.
- * </p>
  *
  * @see MailProperties
  * @see JavaMailSender
@@ -42,25 +53,43 @@ import java.util.Properties;
 public class MailConfigurations {
 
     /**
-     * Validated, immutable mail configuration properties.
+     * List of mandatory JavaMail SMTP configuration keys.
+     *
+     * <p>
+     * These properties are required to ensure secure and reliable SMTP
+     * communication, including authentication, TLS, and timeout handling.
+     * </p>
+     */
+    private static final String[] REQUIRED_SMTP_KEYS = {
+            "mail.smtp.auth",
+            "mail.smtp.starttls.enable",
+            "mail.smtp.connectiontimeout",
+            "mail.smtp.timeout",
+            "mail.smtp.writetimeout"
+    };
+
+    /**
+     * Validated, immutable mail configuration properties bound from
+     * {@code spring.mail.*}.
      */
     private final MailProperties mailProperties;
 
     /**
-     * Creates and configures a {@link JavaMailSender} bean.
+     * Creates and configures the {@link JavaMailSender} bean.
+     *
      * <p>
-     * The returned {@link JavaMailSender} is fully configured using the
-     * {@link MailProperties} record and is suitable for injection into
-     * application services that send email.
+     * This method applies SMTP connection parameters and validated
+     * JavaMail session properties to a {@link JavaMailSenderImpl}.
      * </p>
      *
      * <p>
-     * Additional JavaMail session properties (for example, SMTP authentication,
-     * STARTTLS, connection timeouts, and debug flags) are applied directly to
-     * the underlying JavaMail session.
+     * The method performs additional runtime validation to ensure that
+     * required SMTP properties are present. If validation fails, application
+     * startup is aborted.
      * </p>
      *
-     * @return a fully configured {@link JavaMailSender} instance
+     * @return a fully configured {@link JavaMailSender}
+     * @throws IllegalStateException if required SMTP properties are missing
      */
     @Bean
     public JavaMailSender javaMailSender() {
@@ -71,12 +100,43 @@ public class MailConfigurations {
         sender.setPassword(mailProperties.password());
 
         final Properties properties = new Properties();
-        final var mailProps = mailProperties.properties();
-        if (mailProps == null || mailProps.isEmpty()) {
-            throw new IllegalStateException("Mail properties must not be empty. Please configure required SMTP settings (e.g. authentication and TLS).");
-        }
+        final Map<String, String> mailProps = constructPropertiesMap();
         properties.putAll(mailProps);
         sender.setJavaMailProperties(properties);
         return sender;
+    }
+
+    /**
+     * Validates and returns the JavaMail session properties.
+     *
+     * <p>
+     * This method ensures:
+     * </p>
+     * <ul>
+     *   <li>The properties map is not {@code null}.</li>
+     *   <li>The properties map is not empty.</li>
+     *   <li>All required SMTP keys are present.</li>
+     * </ul>
+     *
+     * <p>
+     * Any validation failure results in an {@link IllegalStateException}
+     * with a descriptive error message.
+     * </p>
+     *
+     * @return a validated map of JavaMail session properties
+     * @throws IllegalStateException if validation fails
+     */
+    private Map<String, String> constructPropertiesMap() {
+        final Map<String, String> mailProps = mailProperties.properties();
+        if (null == mailProps || mailProps.isEmpty()) {
+            throw new IllegalStateException("Mail properties must not be empty. " +
+                    "Please configure required SMTP settings (e.g. authentication and TLS).");
+        }
+        for (final String key : REQUIRED_SMTP_KEYS) {
+            if (!mailProps.containsKey(key)) {
+                throw new IllegalStateException("Missing required mail property: " + key);
+            }
+        }
+        return mailProps;
     }
 }
