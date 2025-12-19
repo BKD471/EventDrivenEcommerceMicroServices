@@ -44,6 +44,13 @@ import java.util.Map;
  *           trust: "*"
  * }</pre>
  *
+ * <p><strong>Note:</strong> The {@code trust} property shown in the example above is
+ * optional and is <em>not</em> part of the required SMTP keys. It is typically only
+ * needed in specific scenarios, such as local development or testing with
+ * self-signed certificates, where you want to trust all SSL certificates
+ * (for example, using {@code trust="*"}). In production, you should avoid
+ * blindly trusting all certificates and instead rely on a proper trust store.</p>
+ *
  * <h2>Validation</h2>
  * <ul>
  *   <li>Fails fast at application startup if mandatory properties are missing or invalid.</li>
