@@ -33,18 +33,14 @@ spring:
   mail:
     host: localhost
     port: 1025
-    username: admin
-    password: admin
+    username: ${EMAIL_USERNAME:}
+    password: ${EMAIL_PASSWORD:}
     properties:
-      mail:
-        smtp:
-          trust: "*"
-        auth: true
-        starttls:
-          enabled: true
-        connectiontimeout: 5000
-        timeout: 3000
-        writetimeout: 5000
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 3000
+      mail.smtp.writetimeout: 5000
 
 invoice:
   downloadUrl: http://localhost:8222/api/v1
