@@ -214,9 +214,9 @@ public class MailConfigurations {
     /**
      * Validates that a mail configuration property represents a positive integer.
      * <p>
-     * This method is intended for SMTP timeout-related properties such as
+     * This method is intended for SMTP timeout-related properties (e.g.
      * {@code mail.smtp.timeout}, {@code mail.smtp.connectiontimeout}, and
-     * {@code mail.smtp.writetimeout}.
+     * {@code mail.smtp.writetimeout}).
      * </p>
      *
      * <p>
