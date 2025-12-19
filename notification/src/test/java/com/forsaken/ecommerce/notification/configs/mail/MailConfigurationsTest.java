@@ -114,7 +114,7 @@ class MailConfigurationsTest {
     @ParameterizedTest
     @NullSource
     @DisplayName("Should fail fast when mail properties map is null")
-    void shouldFailWhenPropertiesAreNull(Map<String, String> props) {
+    void shouldFailWhenPropertiesAreNull(final Map<String, String> props) {
         // Given
         final MailConfigurations configuration = constructConfigurationWith(props);
 
@@ -220,7 +220,7 @@ class MailConfigurationsTest {
      * @param props mail properties to apply
      * @return a configured {@link MailConfigurations} instance
      */
-    private static MailConfigurations constructConfigurationWith(Map<String, String> props) {
+    private static MailConfigurations constructConfigurationWith(final Map<String, String> props) {
         return new MailConfigurations(
                 new MailProperties(
                         TEST_HOST,
