@@ -569,7 +569,7 @@ class NotificationConsumerImplTest {
     }
 
     /**
-     * Verifies that a order-related Dead Letter Queue (DLQ) message
+     * Verifies that an order-related Dead Letter Queue (DLQ) message
      * is persisted to S3.
      *
      * <p>
