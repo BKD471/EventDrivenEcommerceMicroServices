@@ -7,6 +7,7 @@ import com.forsaken.ecommerce.notification.configs.s3.DlqS3Properties;
 import com.forsaken.ecommerce.notification.models.EventType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -52,18 +53,17 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
         };
         final String jsonPayload;
         final Object value = record.value();
-        if (value instanceof org.apache.avro.specific.SpecificRecordBase) {
-            jsonPayload = avroToJson((org.apache.avro.specific.SpecificRecordBase) value);
-        } else {
-            jsonPayload = mapper.writeValueAsString(value);
-        }
+
+        if (value instanceof SpecificRecordBase) jsonPayload = avroToJson((SpecificRecordBase) value);
+        else jsonPayload = mapper.writeValueAsString(value);
+
         final Map<String, Object> wrapper = new HashMap<>();
         wrapper.put("partition", record.partition());
         wrapper.put("offset", record.offset());
         wrapper.put("topic", record.topic());
         wrapper.put("key", record.key());
         wrapper.put("timestamp", record.timestamp());
-        wrapper.put("valueJson", jsonPayload);
+        wrapper.put("valueJson", mapper.readValue(jsonPayload, Object.class));
 
         final String finalJson = mapper.writeValueAsString(wrapper);
         final String s3Key = prefix + "/" + UUID.randomUUID() + ".json";
