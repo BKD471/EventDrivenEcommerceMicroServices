@@ -245,26 +245,31 @@ public interface INotificationConsumer {
      *
      * <p>
      * <b>Acknowledgment strategy:</b><br>
-     * The Kafka offset is acknowledged <b>only after</b> the DLQ record has been
-     * successfully persisted to S3. This ensures that order-related DLQ messages
-     * are not silently lost.
+     * In the current implementation, the Kafka offset is acknowledged as part of
+     * the normal listener flow and is <b>not strictly coupled</b> to successful
+     * persistence of the DLQ record to S3. As a result, once the listener has
+     * processed the message without propagating an exception, Kafka will treat
+     * the record as successfully handled and will not re-deliver it.
      * </p>
      *
      * <p>
      * <b>Failure handling:</b><br>
      * If persistence to S3 fails (for example due to transient infrastructure
-     * issues), the exception is caught and logged. In this case, the offset is
-     * <b>not acknowledged</b>, allowing Kafka to re-deliver the DLQ message based
-     * on the consumer configuration.
+     * issues), the exception is caught and logged, but it is <b>not</b> rethrown
+     * to the Kafka listener container. In practice this means the offset will
+     * still be considered acknowledged according to the listener configuration,
+     * and the DLQ message will <b>not</b> be re-delivered automatically. This
+     * behavior can lead to effective loss of the DLQ record when S3 persistence
+     * fails.
      * </p>
      *
      * <p>
-     * This design provides:
+     * This design currently provides:
      * </p>
      * <ul>
-     *     <li>At-least-once delivery semantics for DLQ records</li>
-     *     <li>Protection against silent data loss</li>
      *     <li>Stable DLQ processing without crashing the listener container</li>
+     *     <li>Logged visibility into S3 persistence failures</li>
+     *     <li>But <b>does not</b> guarantee at-least-once delivery semantics for DLQ records</li>
      * </ul>
      *
      * @param record         the Kafka {@link ConsumerRecord} containing the failed
