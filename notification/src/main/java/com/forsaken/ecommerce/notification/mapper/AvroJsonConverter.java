@@ -48,6 +48,13 @@ public class AvroJsonConverter {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     /**
+     * Private constructor to prevent instantiation of this utility class.
+     */
+    private AvroJsonConverter() {
+        throw new UnsupportedOperationException("Utility class cannot be instantiated");
+    }
+
+    /**
      * Converts a given Avro {@link SpecificRecordBase} instance into its
      * JSON representation using the record's schema.
      *
