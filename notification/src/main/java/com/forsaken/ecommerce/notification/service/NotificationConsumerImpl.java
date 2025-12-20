@@ -2,7 +2,6 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
-import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
@@ -12,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -38,7 +38,6 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     private final IEmailService emailService;
     private final IDlqS3Service dlqS3Service;
     private final KafkaProperties kafkaProperties;
-    private final KafkaDlqProperties dlqProperties;
 
     @KafkaListener(
             topics = "#{@kafkaProperties.paymentTopicName()}",
@@ -47,7 +46,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     )
     @Override
     public void consumePaymentSuccessNotifications(
-            final ConsumerRecord<String, PaymentConfirmation> record
+            final ConsumerRecord<String, PaymentConfirmation> record,
+            final Acknowledgment acknowledgment
     ) {
         log.info("#Consuming the message from Payment Topic:: {}", getTimeStampForLogs(record));
 
@@ -56,8 +56,11 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             MDC.put("spanId", "-");
 
             final PaymentConfirmation paymentConfirmation = record.value();
+            // Null values can occur due to tombstone records or producer bugs.
+            // These are non-recoverable and should be acknowledged to avoid retry loops.
             if (null == paymentConfirmation) {
                 log.warn("Received null PaymentConfirmation in Kafka record, skipping processing.");
+                acknowledgment.acknowledge();
                 return;
             }
 
@@ -82,6 +85,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             ZoneId.of(kafkaProperties.timeZone())
                     )
             );
+            acknowledgment.acknowledge();
             log.info("PaymentConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
             log.error(
@@ -95,6 +99,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
+            throw new RuntimeException("Payment notification processing failed", ex);
         } finally {
             MDC.clear();
         }
@@ -108,7 +113,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     )
     @Override
     public void consumeOrderConfirmationNotifications(
-            final ConsumerRecord<String, OrderConfirmation> record
+            final ConsumerRecord<String, OrderConfirmation> record,
+            final Acknowledgment acknowledgment
     ) {
         log.info("#Consuming the message from Order Topic:: {}", getTimeStampForLogs(record));
 
@@ -117,8 +123,11 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             MDC.put("spanId", "-");
 
             final OrderConfirmation orderConfirmation = record.value();
+            // Null values can occur due to tombstone records or producer bugs.
+            // These are non-recoverable and should be acknowledged to avoid retry loops.
             if (null == orderConfirmation) {
                 log.warn("Received null OrderConfirmation in Kafka record, skipping processing.");
+                acknowledgment.acknowledge();
                 return;
             }
 
@@ -138,6 +147,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     orderConfirmation.getOrderReference(),
                     orderConfirmation.getProducts().stream().map(AvroMapper::toProduct).toList()
             );
+            acknowledgment.acknowledge();
             log.info("OrderConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
             log.error(
@@ -151,6 +161,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
+            throw new RuntimeException("Order notification processing failed", ex);
         } finally {
             MDC.clear();
         }
@@ -163,11 +174,16 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
-    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
+    public void consumePaymentDlqMessages(
+            final ConsumerRecord<String, PaymentConfirmation> record,
+            final Acknowledgment acknowledgment
+    ) {
         log.warn("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         try {
             dlqS3Service.storeToS3(record, PAYMENT);
+            // Acknowledge only after successful persistence to avoid losing DLQ records
+            acknowledgment.acknowledge();
         } catch (IOException ex) {
             log.error(
                     "Failed to persist Payment DLQ message to S3 for key={}, offset={}, partition={}, timestamp={}",
@@ -187,11 +203,16 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
-    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
+    public void consumeOrderDlqMessages(
+            final ConsumerRecord<String, OrderConfirmation> record,
+            final Acknowledgment acknowledgment
+    ) {
         log.warn("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         try {
             dlqS3Service.storeToS3(record, ORDER);
+            // Acknowledge only after successful persistence to avoid losing DLQ records
+            acknowledgment.acknowledge();
         } catch (IOException ex) {
             log.error(
                     "Failed to persist Order DLQ message to S3 for key={}, offset={}, partition={}, timestamp={}",

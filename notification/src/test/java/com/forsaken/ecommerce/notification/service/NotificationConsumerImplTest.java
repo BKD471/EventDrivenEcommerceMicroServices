@@ -3,7 +3,6 @@ package com.forsaken.ecommerce.notification.service;
 import com.forsaken.ecommerce.avro.CustomerResponse;
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
-import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.models.EventType;
 import com.forsaken.ecommerce.notification.models.PaymentMethod;
@@ -18,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.support.Acknowledgment;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -46,66 +47,105 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit test configuration for {@link NotificationConsumerImpl}.
+ * Unit tests for {@link NotificationConsumerImpl}.
  *
  * <p>
- * This test class uses {@link org.mockito.junit.jupiter.MockitoExtension}
- * to create an isolated test environment where all external dependencies
- * of the notification consumer are mocked.
+ * This test class validates the behavior of Kafka listener methods responsible
+ * for consuming payment and order notification events, as well as their
+ * corresponding Dead Letter Queue (DLQ) consumers.
+ * </p>
+ *
+ * <h2>Test scope</h2>
+ *
+ * <p>
+ * These are <b>pure unit tests</b>. Kafka infrastructure, retry policies,
+ * error handlers, and acknowledgment semantics provided by Spring Kafka
+ * are intentionally <b>out of scope</b> and mocked.
  * </p>
  *
  * <p>
- * <b>Mocked dependencies:</b>
+ * The tests invoke listener methods directly and verify:
  * </p>
+ * <ul>
+ *     <li>Business logic execution</li>
+ *     <li>Correct interaction with repositories and email services</li>
+ *     <li>Explicit acknowledgment behavior</li>
+ *     <li>Exception propagation or suppression as designed</li>
+ * </ul>
+ *
+ * <h2>Mocked dependencies</h2>
+ *
  * <ul>
  *     <li>{@link INotificationRepository} – prevents real persistence</li>
- *     <li>{@link IEmailService} – prevents real email delivery</li>
- *     <li>{@link KafkaProperties} – provides required configuration values</li>
+ *     <li>{@link IEmailService} – prevents external email delivery</li>
+ *     <li>{@link IDlqS3Service} – prevents real S3 interactions</li>
+ *     <li>{@link KafkaProperties} – supplies required configuration values</li>
+ *     <li>{@link Acknowledgment} – verifies manual offset control</li>
  * </ul>
  *
- * <p>
- * The {@link NotificationConsumerImpl} under test is instantiated using
- * {@link InjectMocks}, allowing Mockito to inject all mocked dependencies
- * automatically.
- * </p>
+ * <h2>Kafka acknowledgment strategy</h2>
  *
  * <p>
- * This setup ensures that tests focus exclusively on the consumer’s
- * business behavior without relying on infrastructure components.
- * </p>
- * <p>
- * <b>Dead Letter Queue (DLQ) handling:</b>
- * </p>
- *
- * <p>
- * This test suite explicitly covers DLQ consumers for payment and order events.
- * DLQ listeners are intentionally designed to be minimal and deterministic:
+ * The production consumer uses <b>manual acknowledgment</b>. These tests verify:
  * </p>
  *
  * <ul>
- *     <li>No validation or business processing is performed</li>
- *     <li>No database writes or email notifications are triggered</li>
- *     <li>The original {@link ConsumerRecord} is persisted verbatim to S3</li>
+ *     <li>Acknowledgment occurs only after successful processing</li>
+ *     <li>No acknowledgment occurs when processing fails</li>
+ *     <li>Null (tombstone) records are acknowledged immediately</li>
  * </ul>
  *
  * <p>
- * This guarantees that messages exceeding retry limits are preserved
- * for audit, debugging, and manual replay without risk of data loss.
- * </p>
- * <p>
- * <b>Kafka acknowledgment and retry scope:</b>
+ * Actual Kafka commit behavior, retries, and DLQ routing are enforced by
+ * Spring Kafka configuration and are validated separately via integration tests.
  * </p>
  *
- * <p>
- * These tests invoke consumer methods directly and do not validate
- * Kafka acknowledgment, retry, or backoff behavior.
- * </p>
+ * <h2>Error handling philosophy</h2>
+ *
+ * <ul>
+ *     <li>Primary consumers (payment/order):
+ *         <ul>
+ *             <li>Throw exceptions on processing failures</li>
+ *             <li>Allow Spring Kafka to trigger retries or DLQ routing</li>
+ *         </ul>
+ *     </li>
+ *     <li>DLQ consumers:
+ *         <ul>
+ *             <li>Persist failed records to S3</li>
+ *             <li>Acknowledge only after successful persistence</li>
+ *             <li>Fail fast if DLQ persistence itself fails</li>
+ *         </ul>
+ *     </li>
+ * </ul>
+ *
+ * <h2>Null (tombstone) record handling</h2>
  *
  * <p>
- * Such concerns are handled by Spring Kafka configuration
- * (error handlers, retry policies, and DLQ routing) and are
- * intentionally tested at the integration level rather than
- * in unit tests.
+ * Kafka records with {@code null} payloads are treated as non-recoverable
+ * (e.g., compaction tombstones or producer bugs). The consumer:
+ * </p>
+ *
+ * <ul>
+ *     <li>Logs the occurrence for observability</li>
+ *     <li>Skips all business processing</li>
+ *     <li>Acknowledges immediately to avoid infinite retry loops</li>
+ * </ul>
+ *
+ * <h2>Why this matters</h2>
+ *
+ * <p>
+ * This test suite ensures that:
+ * </p>
+ * <ul>
+ *     <li>Consumers are resilient to downstream failures</li>
+ *     <li>No message is silently dropped</li>
+ *     <li>DLQ events are preserved safely</li>
+ *     <li>Kafka consumer stability is maintained</li>
+ * </ul>
+ *
+ * <p>
+ * Together, these tests enforce correctness, safety, and operational
+ * predictability of the notification service.
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
@@ -124,7 +164,7 @@ class NotificationConsumerImplTest {
     private KafkaProperties kafkaProperties;
 
     @Mock
-    private KafkaDlqProperties dlqProperties;
+    private Acknowledgment acknowledgment;
 
     @InjectMocks
     private NotificationConsumerImpl consumer;
@@ -133,18 +173,23 @@ class NotificationConsumerImplTest {
      * Initializes common test configuration before each test execution.
      *
      * <p>
-     * The notification consumer relies on a configured time zone when
-     * converting event timestamps. Since {@link KafkaProperties} is mocked,
-     * this value must be explicitly provided to avoid {@link NullPointerException}s.
+     * {@link NotificationConsumerImpl} relies on a configured time zone when
+     * converting Kafka record timestamps into {@link LocalDateTime}.
+     * </p>
+     *
+     * <p>
+     * Since {@link KafkaProperties} is mocked in unit tests, the time zone
+     * must be explicitly defined to prevent {@link NullPointerException}s
+     * during date conversion.
      * </p>
      *
      * <p>
      * Using {@code @BeforeEach} ensures:
      * </p>
      * <ul>
-     *     <li>The configuration is applied consistently across all tests</li>
-     *     <li>Test methods remain clean and free of duplicated setup code</li>
-     *     <li>Future tests do not accidentally fail due to missing configuration</li>
+     *     <li>Consistent configuration across all test cases</li>
+     *     <li>No duplication of setup logic inside individual tests</li>
+     *     <li>Future tests do not fail unexpectedly due to missing configuration</li>
      * </ul>
      */
     @BeforeEach
@@ -153,21 +198,25 @@ class NotificationConsumerImplTest {
     }
 
     /**
-     * Verifies that a payment confirmation Kafka message is:
+     * Verifies successful processing of a payment confirmation Kafka message.
+     *
+     * <p>
+     * Expected behavior:
+     * </p>
      * <ul>
-     *     <li>Consumed successfully</li>
-     *     <li>Persisted as a notification entity</li>
-     *     <li>Triggers a payment success email with correct parameters</li>
+     *     <li>The payment confirmation is persisted as a notification</li>
+     *     <li>A payment success email is sent with correct parameters</li>
+     *     <li>The Kafka offset is acknowledged after successful processing</li>
      * </ul>
      *
      * <p>
-     * This test ensures:
+     * This test validates:
      * </p>
      * <ul>
-     *     <li>Avro {@link PaymentConfirmation} is correctly interpreted</li>
-     *     <li>Decimal amount conversion is correct</li>
-     *     <li>Payment timestamp is converted using the configured time zone</li>
-     *     <li>Email service is invoked exactly once with expected arguments</li>
+     *     <li>Correct interpretation of Avro {@link PaymentConfirmation}</li>
+     *     <li>Accurate monetary amount conversion</li>
+     *     <li>Timestamp conversion using the configured time zone</li>
+     *     <li>Explicit manual acknowledgment on success</li>
      * </ul>
      */
     @Test
@@ -183,7 +232,7 @@ class NotificationConsumerImplTest {
                 ));
 
         // when
-        consumer.consumePaymentSuccessNotifications(record);
+        consumer.consumePaymentSuccessNotifications(record, acknowledgment);
 
         // then
         verify(notificationRepository).save(argThat(n ->
@@ -202,24 +251,25 @@ class NotificationConsumerImplTest {
                 PaymentMethod.PAYPAL,
                 expectedDate
         );
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
-     * Verifies that an order confirmation Kafka message is:
+     * Verifies successful processing of an order confirmation Kafka message.
+     *
+     * <p>
+     * Expected behavior:
+     * </p>
      * <ul>
-     *     <li>Consumed successfully</li>
-     *     <li>Persisted as an order notification</li>
-     *     <li>Triggers an order confirmation email</li>
+     *     <li>The order confirmation is persisted as a notification</li>
+     *     <li>An order confirmation email is sent</li>
+     *     <li>The Kafka offset is acknowledged after successful processing</li>
      * </ul>
      *
      * <p>
-     * This test validates:
+     * This test ensures correct extraction of nested customer data,
+     * correct amount conversion, and correct propagation of order metadata.
      * </p>
-     * <ul>
-     *     <li>Extraction of customer details from nested Avro records</li>
-     *     <li>Correct conversion of total amount</li>
-     *     <li>Correct propagation of order reference and product list</li>
-     * </ul>
      */
     @Test
     void shouldConsumeOrderConfirmationAndSendEmail() {
@@ -235,7 +285,7 @@ class NotificationConsumerImplTest {
                 ));
 
         // when
-        consumer.consumeOrderConfirmationNotifications(record);
+        consumer.consumeOrderConfirmationNotifications(record, acknowledgment);
 
         // then
         verify(notificationRepository).save(argThat(n ->
@@ -249,41 +299,35 @@ class NotificationConsumerImplTest {
                 "ORD-200",
                 List.of()
         );
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
-     * Verifies that the payment notification consumer remains stable when
-     * email delivery fails unexpectedly.
+     * Verifies behavior when payment email delivery fails during processing.
      *
      * <p>
-     * This test simulates a runtime failure (for example, SMTP outage or
-     * downstream email service error) during invocation of
-     * {@link IEmailService#sendPaymentSuccessEmail}.
+     * This test simulates a runtime failure (e.g. SMTP outage) occurring
+     * after the notification entity has already been persisted.
      * </p>
      *
      * <p>
-     * <b>Expected behavior:</b>
+     * Expected behavior:
      * </p>
      * <ul>
-     *     <li>The exception is caught internally by the consumer</li>
-     *     <li>The Kafka listener method does NOT propagate the exception</li>
+     *     <li>The exception is propagated out of the Kafka listener</li>
      *     <li>The notification record is still persisted</li>
-     *     <li>The email sending attempt is made exactly once</li>
+     *     <li>The email send attempt occurs exactly once</li>
+     *     <li>The Kafka offset is <b>not acknowledged</b></li>
      * </ul>
      *
      * <p>
      * <b>Why this matters:</b>
      * </p>
      * <ul>
-     *     <li>Kafka listeners must never throw unchecked exceptions</li>
-     *     <li>Throwing would cause partition revocation and repeated reprocessing</li>
-     *     <li>Failures must be handled gracefully and logged for observability</li>
+     *     <li>Allows Spring Kafka retry / DLQ mechanisms to activate</li>
+     *     <li>Prevents silent loss of failed notifications</li>
+     *     <li>Ensures at-least-once delivery semantics</li>
      * </ul>
-     *
-     * <p>
-     * The test uses {@code assertDoesNotThrow} to explicitly guarantee
-     * consumer stability under failure conditions.
-     * </p>
      */
     @Test
     void shouldNotFailConsumerWhenPaymentEmailSendingThrowsException() {
@@ -308,8 +352,8 @@ class NotificationConsumerImplTest {
                 );
 
         // when + then
-        assertDoesNotThrow(() ->
-                consumer.consumePaymentSuccessNotifications(record)
+        assertThrows(RuntimeException.class, () ->
+                consumer.consumePaymentSuccessNotifications(record, acknowledgment)
         );
         // then
         verify(notificationRepository).save(argThat(n ->
@@ -323,37 +367,26 @@ class NotificationConsumerImplTest {
                 eq(PaymentMethod.PAYPAL),
                 any(LocalDateTime.class)
         );
+        verify(acknowledgment, never()).acknowledge();
     }
 
     /**
-     * Verifies that the order confirmation consumer does not fail when
-     * sending order confirmation emails throws an exception.
+     * Verifies behavior when order confirmation email delivery fails.
      *
      * <p>
-     * This test forces a runtime exception from
-     * {@link IEmailService#sendOrderConfirmationEmail} to ensure:
+     * This test forces a runtime exception during email sending to ensure
+     * the listener does not acknowledge the Kafka offset on failure.
      * </p>
      *
-     * <ul>
-     *     <li>The exception is handled inside the Kafka listener</li>
-     *     <li>The consumer continues processing without crashing</li>
-     *     <li>The notification entity is still persisted</li>
-     *     <li>Customer email delivery is attempted exactly once</li>
-     * </ul>
-     *
      * <p>
-     * <b>Kafka safety guarantee:</b>
+     * Expected behavior:
      * </p>
      * <ul>
-     *     <li>Unchecked exceptions must not escape Kafka listener methods</li>
-     *     <li>Escaping exceptions would cause consumer restart loops</li>
-     *     <li>This test ensures resilience against transient downstream failures</li>
+     *     <li>The exception is propagated</li>
+     *     <li>The notification entity is persisted</li>
+     *     <li>The email send attempt occurs exactly once</li>
+     *     <li>No acknowledgment is performed</li>
      * </ul>
-     *
-     * <p>
-     * This test intentionally validates behavior under failure rather than
-     * successful email delivery.
-     * </p>
      */
     @Test
     void shouldNotFailConsumerWhenOrderEmailSendingThrowsException() {
@@ -378,8 +411,8 @@ class NotificationConsumerImplTest {
                 );
 
         // when + then
-        assertDoesNotThrow(() ->
-                consumer.consumeOrderConfirmationNotifications(record)
+        assertThrows(RuntimeException.class, () ->
+                consumer.consumeOrderConfirmationNotifications(record, acknowledgment)
         );
         // then
         verify(notificationRepository).save(argThat(n ->
@@ -392,28 +425,33 @@ class NotificationConsumerImplTest {
                 eq("ORD-200"),
                 eq(List.of())
         );
+        verify(acknowledgment, never()).acknowledge();
     }
 
     /**
-     * Verifies that the payment notification consumer safely ignores
-     * Kafka records with a null {@link PaymentConfirmation} payload.
+     * Verifies that Kafka records with a {@code null} {@link PaymentConfirmation}
+     * payload are safely ignored.
+     *
+     * <p>
+     * Null payloads may occur due to:
+     * </p>
+     * <ul>
+     *     <li>Kafka compaction tombstone records</li>
+     *     <li>Upstream producer bugs</li>
+     *     <li>Deserialization failures</li>
+     * </ul>
      *
      * <p>
      * Expected behavior:
-     * <ul>
-     *     <li>The consumer does not throw any exception</li>
-     *     <li>No notification is persisted</li>
-     *     <li>No email is sent</li>
-     * </ul>
      * </p>
+     * <ul>
+     *     <li>No exception is thrown</li>
+     *     <li>No persistence or email logic is executed</li>
+     *     <li>The offset is acknowledged immediately</li>
+     * </ul>
      *
      * <p>
-     * This scenario can occur due to:
-     * <ul>
-     *     <li>Deserialization failures</li>
-     *     <li>Poison messages</li>
-     *     <li>Upstream producer bugs</li>
-     * </ul>
+     * These records are considered non-recoverable and must not be retried.
      * </p>
      */
     @Test
@@ -424,7 +462,7 @@ class NotificationConsumerImplTest {
 
         // when -> then
         assertDoesNotThrow(() ->
-                consumer.consumePaymentSuccessNotifications(record)
+                consumer.consumePaymentSuccessNotifications(record, acknowledgment)
         );
         verify(notificationRepository, never()).save(any());
         verify(emailService, never())
@@ -436,24 +474,33 @@ class NotificationConsumerImplTest {
                         any(),
                         any()
                 );
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
-     * Verifies that the order notification consumer safely ignores
-     * Kafka records with a null {@link OrderConfirmation} payload.
+     * Verifies that Kafka records with a {@code null} {@link OrderConfirmation}
+     * payload are safely ignored.
+     *
+     * <p>
+     * Null payloads may occur due to:
+     * </p>
+     * <ul>
+     *     <li>Kafka compaction tombstone records</li>
+     *     <li>Upstream producer bugs</li>
+     *     <li>Deserialization failures</li>
+     * </ul>
      *
      * <p>
      * Expected behavior:
-     * <ul>
-     *     <li>The consumer does not throw any exception</li>
-     *     <li>No notification is persisted</li>
-     *     <li>No order confirmation email is sent</li>
-     * </ul>
      * </p>
+     * <ul>
+     *     <li>No exception is thrown</li>
+     *     <li>No persistence or email logic is executed</li>
+     *     <li>The offset is acknowledged immediately</li>
+     * </ul>
      *
      * <p>
-     * This scenario can occur due to deserialization issues,
-     * malformed Kafka messages, or upstream producer bugs.
+     * These records are considered non-recoverable and must not be retried.
      * </p>
      */
     @Test
@@ -464,7 +511,7 @@ class NotificationConsumerImplTest {
 
         // when -> then
         assertDoesNotThrow(() ->
-                consumer.consumeOrderConfirmationNotifications(record)
+                consumer.consumeOrderConfirmationNotifications(record, acknowledgment)
         );
         verify(notificationRepository, never()).save(any());
         verify(emailService, never())
@@ -475,41 +522,33 @@ class NotificationConsumerImplTest {
                         any(),
                         any()
                 );
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
      * Verifies that a payment-related Dead Letter Queue (DLQ) message
-     * is persisted to S3 for later inspection or replay.
+     * is persisted to S3.
      *
      * <p>
-     * This test ensures that when a {@link PaymentConfirmation} record
-     * is consumed from the payment DLQ topic:
+     * DLQ consumers are intentionally minimal and deterministic:
      * </p>
-     *
      * <ul>
-     *     <li>The consumer does not attempt normal processing (email, DB, etc.).</li>
-     *     <li>The original Kafka {@link ConsumerRecord} is forwarded as-is
-     *         to {@link IDlqS3Service}.</li>
-     *     <li>The event is categorized correctly using the {@code "payment"}
-     *         DLQ prefix.</li>
+     *     <li>No validation or business logic</li>
+     *     <li>No database writes</li>
+     *     <li>No email delivery</li>
      * </ul>
      *
      * <p>
-     * <b>Why this matters:</b>
+     * Expected behavior:
      * </p>
      * <ul>
-     *     <li>Preserves failed payment events for audit and replay.</li>
-     *     <li>Ensures no data loss for messages that exceeded retry limits.</li>
-     *     <li>Guarantees consistent DLQ handling behavior.</li>
+     *     <li>The original Kafka {@link ConsumerRecord} is persisted verbatim</li>
+     *     <li>The record is categorized using {@link EventType#PAYMENT}</li>
+     *     <li>The offset is acknowledged only after successful persistence</li>
      * </ul>
-     * <p>
-     * DLQ consumers are intentionally allowed to fail fast if S3 persistence
-     * fails. Swallowing such failures would result in silent data loss and
-     * is therefore avoided by design.
-     * </p>
      */
     @Test
-    void paymentConsumeDlq_shouldStoreRecordInS3() throws IOException {
+    void paymentConsumeDlqShouldStoreRecordInS3() throws IOException {
         // given
         final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
@@ -522,43 +561,40 @@ class NotificationConsumerImplTest {
                 );
 
         // when
-        consumer.consumePaymentDlqMessages(record);
+        consumer.consumePaymentDlqMessages(record, acknowledgment);
 
         // then
         verify(dlqS3Service).storeToS3(record, PAYMENT);
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
      * Verifies that an order-related Dead Letter Queue (DLQ) message
-     * is persisted to S3 for recovery or manual replay.
+     * is persisted to S3.
      *
      * <p>
-     * This test validates that when an {@link OrderConfirmation} record
-     * is received from the order DLQ topic:
+     * DLQ consumers are intentionally minimal and deterministic:
      * </p>
-     *
      * <ul>
-     *     <li>The consumer skips normal order notification processing.</li>
-     *     <li>The full Kafka {@link ConsumerRecord} is stored without modification.</li>
-     *     <li>The event is stored under the {@code "order"} DLQ prefix
-     *         to allow logical separation from payment DLQ events.</li>
+     *     <li>No validation or business logic</li>
+     *     <li>No database writes</li>
+     *     <li>No email delivery</li>
      * </ul>
      *
      * <p>
-     * <b>Operational importance:</b>
+     * Expected behavior:
      * </p>
      * <ul>
-     *     <li>Allows safe replay of failed order notifications.</li>
-     *     <li>Prevents repeated Kafka retries for permanently failing records.</li>
-     *     <li>Improves observability and operational debugging.</li>
+     *     <li>The original Kafka {@link ConsumerRecord} is persisted verbatim</li>
+     *     <li>The record is categorized using {@link EventType#ORDER}</li>
+     *     <li>The offset is acknowledged only after successful persistence</li>
      * </ul>
      */
     @Test
-    void orderConsumeDlq_shouldStoreRecordInS3() throws IOException {
+    void orderConsumeDlqShouldStoreRecordInS3() throws IOException {
         // given
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
-
         final ConsumerRecord<String, OrderConfirmation> record =
                 new ConsumerRecord<>(
                         "order-dlq-topic",
@@ -569,43 +605,41 @@ class NotificationConsumerImplTest {
                 );
 
         // when
-        consumer.consumeOrderDlqMessages(record);
+        consumer.consumeOrderDlqMessages(record, acknowledgment);
 
         // then
         verify(dlqS3Service).storeToS3(record, ORDER);
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
-     * Verifies that the payment DLQ consumer fails fast when persisting
-     * a DLQ record to S3 fails.
+     * Verifies fail-safe behavior when DLQ persistence to S3 fails.
      *
      * <p>
-     * This test validates the following behavior:
+     * DLQ messages represent records that have already failed normal processing.
+     * DLQ consumers must be resilient and should not fail-fast, as rethrowing
+     * exceptions would lead to repeated retries and consumer crash loops.
+     * </p>
+     *
+     * <p>
+     * Expected behavior:
      * </p>
      * <ul>
-     *     <li>The DLQ consumer attempts to persist the failed
-     *         {@link PaymentConfirmation} record to S3.</li>
-     *     <li>If {@link IDlqS3Service#storeToS3} throws an exception,
-     *         the exception is re-thrown by the consumer.</li>
-     *     <li>The exception is not swallowed, ensuring Kafka retry or
-     *         error-handling mechanisms are triggered.</li>
-     *     <li>No normal processing logic (database persistence or
-     *         email sending) is executed for DLQ records.</li>
+     *     <li>The S3 persistence attempt is made</li>
+     *     <li>The exception is caught and logged</li>
+     *     <li>The exception does <b>not</b> propagate out of the listener</li>
+     *     <li>The Kafka offset is <b>not acknowledged</b></li>
+     *     <li>No normal processing logic is triggered</li>
      * </ul>
      *
      * <p>
-     * <b>Why this matters:</b>
+     * This design preserves operational visibility of DLQ persistence failures
+     * through logging while preventing Kafka consumer disruption and infinite
+     * retry loops.
      * </p>
-     * <ul>
-     *     <li>DLQ events represent already-failed messages and must
-     *         never be silently dropped.</li>
-     *     <li>Fail-fast behavior guarantees visibility of DLQ persistence
-     *         failures.</li>
-     *     <li>Ensures operational safety by preventing silent data loss.</li>
-     * </ul>
      */
     @Test
-    void paymentConsumeDlq_shouldRethrowExceptionWhenS3Fails() throws IOException {
+    void paymentConsumeDlqShouldNotThrowExceptionWhenS3Fails() throws IOException {
         // given
         final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
@@ -616,48 +650,50 @@ class NotificationConsumerImplTest {
                         "key-1",
                         paymentConfirmation
                 );
-        doThrow(new RuntimeException("S3 unavailable"))
+        doThrow(new IOException("S3 unavailable"))
                 .when(dlqS3Service)
                 .storeToS3(record, PAYMENT);
 
         // when -> then
-        assertThrows(RuntimeException.class, () ->
-                consumer.consumePaymentDlqMessages(record)
+        assertDoesNotThrow(() ->
+                consumer.consumePaymentDlqMessages(record, acknowledgment)
         );
         // verify S3 attempt happened
         verify(dlqS3Service).storeToS3(record, PAYMENT);
         // verify no normal processing happened
         verifyNoInteractions(notificationRepository);
         verifyNoInteractions(emailService);
+        verify(acknowledgment, never()).acknowledge();
     }
 
     /**
-     * Verifies that the order DLQ consumer re-throws exceptions when
-     * persisting DLQ records to S3 fails.
+     * Verifies fail-safe behavior when DLQ persistence to S3 fails.
      *
      * <p>
-     * This test ensures that:
+     * DLQ messages represent already-failed records. DLQ consumers must be
+     * resilient and must <b>not</b> fail-fast, as repeated retries provide
+     * little value and can cause consumer crash loops.
+     * </p>
+     *
+     * <p>
+     * Expected behavior:
      * </p>
      * <ul>
-     *     <li>The {@link OrderConfirmation} DLQ record is passed
-     *         unchanged to {@link IDlqS3Service}.</li>
-     *     <li>Any exception thrown while storing the record in S3
-     *         is propagated back to the Kafka listener.</li>
-     *     <li>The consumer does not attempt any normal order notification
-     *         processing (database writes or email delivery).</li>
+     *     <li>The S3 persistence attempt is made</li>
+     *     <li>The exception is caught and logged</li>
+     *     <li>The exception does <b>not</b> propagate out of the listener</li>
+     *     <li>The Kafka offset is <b>not acknowledged</b></li>
+     *     <li>No normal processing logic is triggered</li>
      * </ul>
      *
      * <p>
-     * <b>Operational significance:</b>
+     * This design prevents Kafka consumer disruption while preserving
+     * operational visibility through logs and metrics, ensuring that
+     * failed DLQ persistence remains observable without crashing the consumer.
      * </p>
-     * <ul>
-     *     <li>Prevents silent loss of order-related DLQ messages.</li>
-     *     <li>Allows Kafka retry policies or error handlers to take action.</li>
-     *     <li>Preserves failed events for later investigation or replay.</li>
-     * </ul>
      */
     @Test
-    void orderConsumeDlq_shouldRethrowExceptionWhenS3Fails() throws IOException {
+    void orderConsumeDlqShouldNotThrowExceptionWhenS3Fails() throws IOException {
         // given
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
@@ -669,36 +705,49 @@ class NotificationConsumerImplTest {
                         "key-2",
                         orderConfirmation
                 );
-        doThrow(new RuntimeException("S3 write failed"))
+        doThrow(new IOException("S3 write failed"))
                 .when(dlqS3Service)
                 .storeToS3(record, ORDER);
 
         // when -> then
-        assertThrows(RuntimeException.class, () ->
-                consumer.consumeOrderDlqMessages(record)
+        assertDoesNotThrow(() ->
+                consumer.consumeOrderDlqMessages(record, acknowledgment)
         );
-
         // verify S3 attempt happened
         verify(dlqS3Service).storeToS3(record, ORDER);
         // DLQ path must not trigger normal flows
         verifyNoInteractions(notificationRepository);
         verifyNoInteractions(emailService);
+        verify(acknowledgment, never()).acknowledge();
     }
 
     /**
-     * Verifies that a payment DLQ Kafka record is persisted to S3 when
-     * the payment DLQ listener is invoked.
+     * Verifies successful handling of a payment-related Dead Letter Queue (DLQ) message.
      *
      * <p>
-     * This test validates the happy path where the DLQ listener successfully
-     * delegates the failed {@link PaymentConfirmation} record to the
-     * {@link IDlqS3Service} using {@link EventType#PAYMENT}.
+     * This test covers the <b>happy path</b> for the payment DLQ consumer.
+     * When a {@link PaymentConfirmation} record is received from the payment DLQ topic:
+     * </p>
+     *
+     * <ul>
+     *     <li>The original Kafka {@link ConsumerRecord} is persisted to S3</li>
+     *     <li>The event is categorized using {@link EventType#PAYMENT}</li>
+     *     <li>The Kafka offset is acknowledged <b>only after</b> successful persistence</li>
+     * </ul>
+     *
+     * <p>
+     * No business processing (database writes, email delivery, validation)
+     * is performed for DLQ records.
      * </p>
      *
      * <p>
-     * The listener must not throw any exception in this scenario, allowing
-     * the Kafka listener container to continue processing subsequent records.
+     * This behavior ensures:
      * </p>
+     * <ul>
+     *     <li>Failed messages are durably stored for audit or replay</li>
+     *     <li>No data loss for messages that exceeded retry limits</li>
+     *     <li>Deterministic and minimal DLQ consumer logic</li>
+     * </ul>
      */
     @Test
     void shouldStorePaymentDlqMessageToS3() throws Exception {
@@ -708,24 +757,32 @@ class NotificationConsumerImplTest {
                 new ConsumerRecord<>("payment-dlq", 0, 10L, "key1", paymentConfirmationAvro);
 
         // When (should NOT throw)
-        consumer.consumePaymentDlqMessages(record);
+        consumer.consumePaymentDlqMessages(record, acknowledgment);
 
         // Then
         verify(dlqS3Service).storeToS3(record, EventType.PAYMENT);
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
-     * Verifies that the payment DLQ listener gracefully handles failures
-     * during persistence to S3.
+     * Verifies graceful handling of failures during payment DLQ persistence to S3.
      *
      * <p>
-     * This test ensures that an {@link IOException} thrown while attempting
-     * to store a DLQ record does not propagate out of the listener method.
+     * This test simulates an {@link IOException} occurring while attempting
+     * to persist a payment DLQ record.
      * </p>
+     * <p>
+     * Expected behavior:
+     * <ul>
+     *   <li>The persistence attempt to S3 is made</li>
+     *   <li>The exception is caught and logged</li>
+     *   <li>The exception does <b>not</b> propagate out of the listener</li>
+     *   <li>The Kafka offset is <b>not acknowledged</b></li>
+     * </ul>
      *
      * <p>
-     * Swallowing the exception prevents Kafka consumer disruption while
-     * still allowing the failure to be logged and monitored.
+     * This design prevents consumer crash loops while still ensuring
+     * failed DLQ persistence is observable.
      * </p>
      */
     @Test
@@ -738,18 +795,33 @@ class NotificationConsumerImplTest {
                 .storeToS3(record, EventType.PAYMENT);
 
         // When / Then (no exception should escape)
-        assertDoesNotThrow(() -> consumer.consumePaymentDlqMessages(record));
+        assertDoesNotThrow(() -> consumer.consumePaymentDlqMessages(record, acknowledgment));
         verify(dlqS3Service).storeToS3(record, EventType.PAYMENT);
+        verify(acknowledgment, never()).acknowledge();
     }
 
     /**
-     * Verifies that an order DLQ Kafka record is persisted to S3 when
-     * the order DLQ listener is invoked.
+     * Verifies successful handling of an order-related Dead Letter Queue (DLQ) message.
      *
      * <p>
-     * This test validates the happy path where the DLQ listener successfully
-     * delegates the failed {@link OrderConfirmation} record to the
-     * {@link IDlqS3Service} using {@link EventType#ORDER}.
+     * This test validates that when an {@link OrderConfirmation} record is
+     * received from the order DLQ topic:
+     * </p>
+     *
+     * <ul>
+     *     <li>The full Kafka {@link ConsumerRecord} is persisted to S3 unchanged</li>
+     *     <li>The record is categorized under {@link EventType#ORDER}</li>
+     *     <li>The Kafka offset is acknowledged after successful persistence</li>
+     * </ul>
+     *
+     * <p>
+     * Normal order processing logic (database writes, email notifications)
+     * is intentionally skipped for DLQ records.
+     * </p>
+     *
+     * <p>
+     * This ensures safe retention of failed order events for
+     * investigation or manual replay.
      * </p>
      */
     @Test
@@ -761,20 +833,33 @@ class NotificationConsumerImplTest {
                 new ConsumerRecord<>("order-dlq", 1, 5L, "key2", orderConfirmationAvro);
 
         // When
-        consumer.consumeOrderDlqMessages(record);
+        consumer.consumeOrderDlqMessages(record, acknowledgment);
 
         // Then
         verify(dlqS3Service).storeToS3(record, EventType.ORDER);
+        verify(acknowledgment, atLeastOnce()).acknowledge();
     }
 
     /**
-     * Verifies that the order DLQ listener gracefully handles failures
-     * during persistence to S3.
+     * Verifies graceful handling of failures during order DLQ persistence to S3.
      *
      * <p>
-     * This test ensures that an {@link IOException} thrown while attempting
-     * to store a DLQ record does not propagate out of the listener method,
-     * preventing Kafka listener container disruption.
+     * This test simulates an {@link IOException} thrown while storing
+     * an order DLQ record.
+     * </p>
+     *
+     * <p>
+     * Expected behavior:
+     * </p>
+     * <ul>
+     *     <li>The S3 persistence attempt is executed</li>
+     *     <li>The exception is logged for operational visibility</li>
+     *     <li>The exception is caught and does <b>not</b> propagate beyond the Kafka listener method</li>
+     *     <li>The Kafka offset remains unacknowledged so that the record can be retried according to the listener container configuration</li>
+     * </ul>
+     *
+     * <p>
+     * This prevents Kafka listener container disruption while making the failure visible via logging and offset management, rather than by propagating the exception.
      * </p>
      */
     @Test
@@ -787,17 +872,27 @@ class NotificationConsumerImplTest {
                 .storeToS3(record, EventType.ORDER);
 
         // When / Then
-        assertDoesNotThrow(() -> consumer.consumeOrderDlqMessages(record));
+        assertDoesNotThrow(() -> consumer.consumeOrderDlqMessages(record, acknowledgment));
         verify(dlqS3Service).storeToS3(record, EventType.ORDER);
+        verify(acknowledgment, never()).acknowledge();
     }
 
     /**
-     * Constructs a valid Avro {@link PaymentConfirmation} event
-     * for use in payment consumer tests.
+     * Constructs a valid {@link PaymentConfirmation} Avro record for test usage.
      *
      * <p>
-     * The returned object satisfies all Avro schema constraints.
+     * The returned instance satisfies all required Avro schema constraints
+     * and represents a realistic payment confirmation event.
      * </p>
+     *
+     * <p>
+     * This helper method centralizes test data creation, ensuring:
+     * </p>
+     * <ul>
+     *     <li>Consistency across multiple test cases</li>
+     *     <li>Reduced duplication in test setup</li>
+     *     <li>Clear intent when constructing payment-related test data</li>
+     * </ul>
      */
     private PaymentConfirmation constructPaymentConfirmation() {
         return PaymentConfirmation.newBuilder()
@@ -813,10 +908,16 @@ class NotificationConsumerImplTest {
     }
 
     /**
-     * Constructs a valid Avro {@link CustomerResponse} record.
+     * Constructs a valid {@link CustomerResponse} Avro record for testing.
      *
      * <p>
-     * Used as a nested dependency for order confirmation events.
+     * This record is used as a nested dependency for
+     * {@link OrderConfirmation} events.
+     * </p>
+     *
+     * <p>
+     * Centralizing customer construction avoids duplication and
+     * ensures all order-related tests use consistent customer data.
      * </p>
      */
     private CustomerResponse constructCustomer() {
@@ -829,10 +930,15 @@ class NotificationConsumerImplTest {
     }
 
     /**
-     * Constructs a valid Avro {@link OrderConfirmation} event
-     * using the provided {@link CustomerResponse}.
+     * Constructs a valid {@link OrderConfirmation} Avro record using
+     * the provided {@link CustomerResponse}.
      *
-     * @param customer non-null customer record required by Avro schema
+     * <p>
+     * The returned object satisfies all Avro schema requirements and
+     * represents a successfully confirmed order event.
+     * </p>
+     *
+     * @param customer non-null customer record required by the Avro schema
      */
     private OrderConfirmation constructOrderConfirmation(final CustomerResponse customer) {
         return OrderConfirmation.newBuilder()

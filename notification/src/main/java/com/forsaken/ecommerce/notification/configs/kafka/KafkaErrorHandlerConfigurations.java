@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.notification.configs.kafka;
 import com.forsaken.ecommerce.notification.models.EventType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SerializationException;
@@ -40,28 +41,7 @@ public class KafkaErrorHandlerConfigurations {
 
     @Bean
     public DefaultErrorHandler errorHandler(final KafkaTemplate<String, Object> avroKafkaTemplate) {
-        final DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
-                avroKafkaTemplate,
-                (record, ex) -> {
-                    // choose DLQ topic based on source topic (optional)
-                    final String sourceTopic = record.topic();
-                    final EventType eventType = resolveEventType(sourceTopic);
-                    final String dlqTopic = switch (eventType) {
-                        case PAYMENT -> kafkaDlqProperties.paymentDlqTopicName();
-                        case ORDER -> kafkaDlqProperties.orderDlqTopicName();
-                    };
-                    return new TopicPartition(dlqTopic, record.partition());
-                }
-        );
-
-        // Exponential backoff: maxAttempts = dlq.maxAttempts (3) => (attempts include initial? DefaultErrorHandler will do attempts)
-        final ExponentialBackOffWithMaxRetries backOff =
-                new ExponentialBackOffWithMaxRetries(kafkaDlqProperties.maxAttempts());
-        backOff.setInitialInterval(kafkaDlqProperties.backOffInterval());
-        backOff.setMultiplier(kafkaDlqProperties.multiplier());
-        backOff.setMaxInterval(kafkaDlqProperties.maxInterval());
-
-        final DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
+        final DefaultErrorHandler handler = getDefaultErrorHandler(avroKafkaTemplate);
         handler.addNotRetryableExceptions(SerializationException.class);
         handler.setRetryListeners((record, ex, deliveryAttempt) ->
                 log.warn("Retry #{} for topic={} partition={} offset={} key={} error={}",
@@ -75,7 +55,29 @@ public class KafkaErrorHandlerConfigurations {
         return handler;
     }
 
-    private EventType resolveEventType(final String sourceTopic) {
+    private DefaultErrorHandler getDefaultErrorHandler(final KafkaTemplate<String, Object> avroKafkaTemplate) {
+        final DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                avroKafkaTemplate,
+                (record, ex) -> resolveDlqPartition(record)
+        );
+
+        // Exponential backoff: maxAttempts = dlq.maxAttempts (3) => (attempts include initial? DefaultErrorHandler will do attempts)
+        final ExponentialBackOffWithMaxRetries backOff =
+                new ExponentialBackOffWithMaxRetries(kafkaDlqProperties.maxAttempts());
+        backOff.setInitialInterval(kafkaDlqProperties.backOffInterval());
+        backOff.setMultiplier(kafkaDlqProperties.multiplier());
+        backOff.setMaxInterval(kafkaDlqProperties.maxInterval());
+
+        final DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
+        return handler;
+    }
+
+    /**
+     * Resolves event type based on source topic.
+     * <p>
+     * Package-private for test visibility.
+     */
+    EventType resolveEventType(final String sourceTopic) {
         return switch (sourceTopic) {
             case null -> throw new IllegalArgumentException(
                     "No DLQ mapping configured for source topic: null"
@@ -86,5 +88,19 @@ public class KafkaErrorHandlerConfigurations {
                     "No DLQ mapping configured for source topic: " + sourceTopic
             );
         };
+    }
+
+    /**
+     * Resolves dlq partition type based on source record.
+     * <p>
+     * Package-private for test visibility.
+     */
+    TopicPartition resolveDlqPartition(final ConsumerRecord<?, ?> record) {
+        final EventType eventType = resolveEventType(record.topic());
+        final String dlqTopic = switch (eventType) {
+            case PAYMENT -> kafkaDlqProperties.paymentDlqTopicName();
+            case ORDER -> kafkaDlqProperties.orderDlqTopicName();
+        };
+        return new TopicPartition(dlqTopic, record.partition());
     }
 }

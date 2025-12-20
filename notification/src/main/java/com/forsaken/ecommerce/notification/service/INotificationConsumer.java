@@ -3,8 +3,8 @@ package com.forsaken.ecommerce.notification.service;
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.kafka.support.Acknowledgment;
 
-import java.io.IOException;
 
 /**
  * Contract for consuming notification-related Kafka events and their
@@ -69,96 +69,221 @@ import java.io.IOException;
 public interface INotificationConsumer {
 
     /**
-     * Consumes and processes payment success notification events.
+     * Consumes payment confirmation events from the Kafka topic.
      *
      * <p>
-     * These events are emitted after a successful payment transaction.
-     * Typical responsibilities include:
+     * Payment confirmation events are published after a payment has been
+     * successfully completed and validated by the payment service.
+     * </p>
+     *
+     * <p>
+     * Typical responsibilities of this consumer include:
      * </p>
      * <ul>
-     *     <li>Validating the {@link PaymentConfirmation} payload.</li>
-     *     <li>Persisting payment notification details.</li>
-     *     <li>Triggering payment success notifications (e.g. email).</li>
+     *     <li>Extracting payment and order reference details</li>
+     *     <li>Persisting payment notification metadata</li>
+     *     <li>Triggering downstream actions such as user notifications</li>
      * </ul>
      *
-     * @param record the Kafka {@link ConsumerRecord} containing a
-     *               {@link PaymentConfirmation} event as its value
+     * <p>
+     * <b>Null record handling:</b><br>
+     * In rare scenarios (for example Kafka tombstone messages, topic compaction,
+     * or upstream producer issues), the {@link ConsumerRecord#value()} may be
+     * {@code null}.
+     * </p>
+     *
+     * <p>
+     * A {@code null} value does <b>not</b> represent a valid
+     * {@link PaymentConfirmation} domain event and is considered
+     * <b>non-recoverable</b>. Retrying or forwarding such records to a
+     * Dead Letter Queue (DLQ) provides no operational benefit.
+     * </p>
+     *
+     * <p>
+     * When a {@code null} {@link PaymentConfirmation} is encountered:
+     * </p>
+     * <ul>
+     *     <li>The condition is logged for observability and diagnostics</li>
+     *     <li>The Kafka offset is acknowledged immediately</li>
+     *     <li>Further processing is skipped to prevent infinite retry loops</li>
+     * </ul>
+     *
+     * <p>
+     * This approach ensures:
+     * </p>
+     * <ul>
+     *     <li>Stable and predictable consumer progress</li>
+     *     <li>Clean DLQ usage limited to genuine processing failures</li>
+     *     <li>Resilience against malformed or control-plane Kafka records</li>
+     * </ul>
+     *
+     * @param record         the Kafka {@link ConsumerRecord} containing the
+     *                       {@link PaymentConfirmation} event
+     * @param acknowledgment manual acknowledgment handle used to commit the offset
      */
     void consumePaymentSuccessNotifications(
-            final ConsumerRecord<String, PaymentConfirmation> record
+            final ConsumerRecord<String, PaymentConfirmation> record,
+            final Acknowledgment acknowledgment
     );
 
     /**
-     * Consumes and processes order confirmation notification events.
+     * Consumes and processes order confirmation notification events from Kafka.
      *
      * <p>
-     * These events are emitted when an order has been successfully created
-     * or confirmed. Implementations typically:
+     * Order confirmation events are published after an order has been
+     * successfully created and validated in the order service.
+     * </p>
+     *
+     * <p>
+     * Typical responsibilities of this consumer include:
      * </p>
      * <ul>
-     *     <li>Extract order and customer information.</li>
-     *     <li>Persist order notification details.</li>
-     *     <li>Trigger order confirmation notifications.</li>
+     *     <li>Extracting order and customer details from the event</li>
+     *     <li>Persisting order notification metadata</li>
+     *     <li>Triggering downstream notifications such as order confirmation emails</li>
      * </ul>
      *
-     * @param record the Kafka {@link ConsumerRecord} containing an
-     *               {@link OrderConfirmation} event as its value
+     * <p>
+     * <b>Null record handling:</b><br>
+     * In exceptional scenarios (for example Kafka tombstone messages,
+     * topic compaction, or upstream producer issues), the
+     * {@link ConsumerRecord#value()} may be {@code null}.
+     * </p>
+     *
+     * <p>
+     * A {@code null} value does <b>not</b> represent a valid
+     * {@link OrderConfirmation} domain event and is considered
+     * <b>non-recoverable</b>. Retrying or forwarding such records to a
+     * Dead Letter Queue (DLQ) provides no operational value.
+     * </p>
+     *
+     * <p>
+     * When a {@code null} {@link OrderConfirmation} is encountered:
+     * </p>
+     * <ul>
+     *     <li>The condition is logged for observability and diagnostics</li>
+     *     <li>The Kafka offset is acknowledged immediately</li>
+     *     <li>Further processing is skipped to avoid infinite retry loops</li>
+     * </ul>
+     *
+     * <p>
+     * This approach ensures:
+     * </p>
+     * <ul>
+     *     <li>Stable and predictable consumer progress</li>
+     *     <li>DLQ usage is reserved for genuine processing failures</li>
+     *     <li>Resilience against malformed or control-plane Kafka records</li>
+     * </ul>
+     *
+     * @param record         the Kafka {@link ConsumerRecord} containing the
+     *                       {@link OrderConfirmation} event
+     * @param acknowledgment manual acknowledgment handle used to commit the offset
      */
     void consumeOrderConfirmationNotifications(
-            final ConsumerRecord<String, OrderConfirmation> record
+            final ConsumerRecord<String, OrderConfirmation> record,
+            final Acknowledgment acknowledgment
     );
 
     /**
-     * Consumes payment-related messages from the Dead Letter Topic (DLQ).
+     * Consumes payment-related messages from the Kafka Dead Letter Topic (DLQ).
      *
      * <p>
-     * This method is invoked for {@link PaymentConfirmation} events that could not be
-     * processed successfully by the primary consumer after all configured retry
-     * attempts have been exhausted.
+     * This listener is invoked for {@link PaymentConfirmation} events that have
+     * permanently failed processing in the primary consumer after all configured
+     * retry attempts have been exhausted.
      * </p>
      *
      * <p>
-     * Implementations are expected to handle the failed record in a safe and
-     * idempotent manner. Typical responsibilities include:
+     * The primary responsibility of this method is to persist the failed Kafka
+     * record to durable storage (Amazon S3) for later inspection, auditing, or
+     * manual replay. Persisted data typically includes:
      * </p>
      * <ul>
-     *   <li>Persisting the failed event payload for later inspection or replay</li>
-     *   <li>Storing Kafka metadata such as topic, partition, offset, and timestamp</li>
-     *   <li>Emitting logs or metrics for monitoring and alerting</li>
+     *     <li>The original event payload</li>
+     *     <li>Kafka metadata such as topic, partition, offset, and timestamp</li>
      * </ul>
      *
      * <p>
-     * <b>Exception Handling Strategy:</b><br>
-     * Implementations <b>must not</b> throw unchecked exceptions, as these
-     * could cause repeated reprocessing of the same DLQ message. If an IOException is
-     * thrown, the Kafka listener error handler will determine whether to retry, log,
-     * or discard the message based on configured policies.
+     * <b>Acknowledgment strategy:</b><br>
+     * The Kafka offset is <b>manually acknowledged only after successful persistence
+     * to S3</b>. If persistence fails, the offset is deliberately <b>not acknowledged</b>
+     * to prevent silent loss of DLQ records.
+     * </p>
+     *
+     * <p>
+     * <b>Failure handling:</b><br>
+     * If persistence to S3 fails (for example due to transient infrastructure issues),
+     * the exception is caught and logged and is <b>not rethrown</b>. The listener does
+     * not propagate the exception to the Kafka container, avoiding crash loops while
+     * preserving visibility into the failure.
+     * </p>
+     *
+     * <p>
+     * <b>Design rationale:</b><br>
+     * DLQ records represent already-failed messages. Automatically retrying DLQ
+     * consumption often provides limited value and can lead to repeated failures.
+     * This implementation prioritizes operational stability and observability.
      * </p>
      *
      * @param record the Kafka {@link ConsumerRecord} containing the failed
-     *               {@link PaymentConfirmation} event and its associated metadata
+     *               {@link PaymentConfirmation} event
+     * @param acknowledgment manual acknowledgment handle used to commit the offset
+     *                       after successful persistence
      */
     void consumePaymentDlqMessages(
-            final ConsumerRecord<String, PaymentConfirmation> record
+            final ConsumerRecord<String, PaymentConfirmation> record,
+            final Acknowledgment acknowledgment
     );
 
     /**
-     * Consumes order-related messages from the Dead Letter Topic (DLQ).
+     * Consumes order-related messages from the Kafka Dead Letter Topic (DLQ).
      *
      * <p>
-     * This method handles order confirmation events that failed processing
-     * and were redirected to a DLQ.
+     * This listener is invoked for {@link OrderConfirmation} events that have
+     * permanently failed processing in the primary order consumer after all
+     * configured retry attempts have been exhausted.
      * </p>
      *
      * <p>
-     * Implementations should store the failed event in durable storage
-     * and make it available for manual inspection or replay.
+     * The primary responsibility of this method is to persist the failed Kafka
+     * record to durable storage (Amazon S3) so that it can be:
+     * </p>
+     * <ul>
+     *     <li>Inspected for debugging and root-cause analysis</li>
+     *     <li>Replayed or reprocessed manually at a later time</li>
+     *     <li>Audited for compliance or operational visibility</li>
+     * </ul>
+     *
+     * <p>
+     * <b>Acknowledgment strategy:</b><br>
+     * The Kafka offset is <b>manually acknowledged only after successful persistence
+     * to S3</b>. If persistence fails, the offset is deliberately <b>not acknowledged</b>
+     * to avoid silently committing the DLQ record.
      * </p>
      *
-     * @param record the Kafka {@link ConsumerRecord} containing the
-     *               failed {@link OrderConfirmation} event
+     * <p>
+     * <b>Failure handling:</b><br>
+     * If persistence to S3 fails (for example due to transient infrastructure issues),
+     * the exception is caught and logged and is <b>not rethrown</b>. The listener does
+     * not propagate the exception to the Kafka container, which prevents consumer
+     * crash loops while ensuring the failure is visible in logs and monitoring.
+     * </p>
+     *
+     * <p>
+     * <b>Design rationale:</b><br>
+     * DLQ records represent messages that have already failed normal processing.
+     * Retrying DLQ consumption automatically often provides limited value and can
+     * lead to repeated failures. This implementation prioritizes operational
+     * stability and observability over aggressive retry behavior.
+     * </p>
+     *
+     * @param record the Kafka {@link ConsumerRecord} containing the failed
+     *               {@link OrderConfirmation} event
+     * @param acknowledgment manual acknowledgment handle used to commit the offset
+     *                       after successful persistence
      */
     void consumeOrderDlqMessages(
-            final ConsumerRecord<String, OrderConfirmation> record
+            final ConsumerRecord<String, OrderConfirmation> record,
+            final Acknowledgment acknowledgment
     );
 }
