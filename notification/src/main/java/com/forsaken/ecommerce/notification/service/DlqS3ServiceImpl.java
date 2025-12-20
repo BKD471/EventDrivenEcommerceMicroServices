@@ -34,6 +34,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
 
     private final S3Client s3Client;
     private final DlqS3Properties properties;
+    // Configured for Avro payloads that may contain Java time types (e.g. Instant)
     private static final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -49,9 +50,8 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
             case PAYMENT -> properties.paymentPrefix();
             case ORDER -> properties.orderPrefix();
         };
-        String jsonPayload;
+        final String jsonPayload;
         final Object value = record.value();
-
         if (value instanceof org.apache.avro.specific.SpecificRecordBase) {
             jsonPayload = avroToJson((org.apache.avro.specific.SpecificRecordBase) value);
         } else {
@@ -94,7 +94,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
 
     @Override
     public String load(final String key) {
-        log.info("📥 Loading DLQ file from s3://{}/{}", properties.bucket(), key);
+        log.info("Loading DLQ file from s3://{}/{}", properties.bucket(), key);
         final GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(properties.bucket())
                 .key(key)
@@ -105,7 +105,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
 
     @Override
     public void delete(final String key) {
-        log.info("🗑️ Deleting DLQ record from S3: {}", key);
+        log.info("Deleting DLQ record from S3: {}", key);
         final DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
                 .bucket(properties.bucket())
                 .key(key)

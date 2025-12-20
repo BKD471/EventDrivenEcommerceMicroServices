@@ -5,6 +5,7 @@ import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
+import com.forsaken.ecommerce.notification.models.EventType;
 import com.forsaken.ecommerce.notification.models.PaymentMethod;
 import com.forsaken.ecommerce.notification.repository.INotificationRepository;
 
@@ -682,6 +683,112 @@ class NotificationConsumerImplTest {
         // DLQ path must not trigger normal flows
         verifyNoInteractions(notificationRepository);
         verifyNoInteractions(emailService);
+    }
+
+    /**
+     * Verifies that a payment DLQ Kafka record is persisted to S3 when
+     * the payment DLQ listener is invoked.
+     *
+     * <p>
+     * This test validates the happy path where the DLQ listener successfully
+     * delegates the failed {@link PaymentConfirmation} record to the
+     * {@link IDlqS3Service} using {@link EventType#PAYMENT}.
+     * </p>
+     *
+     * <p>
+     * The listener must not throw any exception in this scenario, allowing
+     * the Kafka listener container to continue processing subsequent records.
+     * </p>
+     */
+    @Test
+    void shouldStorePaymentDlqMessageToS3() throws Exception {
+        // Given
+        final PaymentConfirmation paymentConfirmationAvro = constructPaymentConfirmation();
+        final ConsumerRecord<String, PaymentConfirmation> record =
+                new ConsumerRecord<>("payment-dlq", 0, 10L, "key1", paymentConfirmationAvro);
+
+        // When (should NOT throw)
+        consumer.consumePaymentDlqMessages(record);
+
+        // Then
+        verify(dlqS3Service).storeToS3(record, EventType.PAYMENT);
+    }
+
+    /**
+     * Verifies that the payment DLQ listener gracefully handles failures
+     * during persistence to S3.
+     *
+     * <p>
+     * This test ensures that an {@link IOException} thrown while attempting
+     * to store a DLQ record does not propagate out of the listener method.
+     * </p>
+     *
+     * <p>
+     * Swallowing the exception prevents Kafka consumer disruption while
+     * still allowing the failure to be logged and monitored.
+     * </p>
+     */
+    @Test
+    void shouldNotFailWhenPaymentDlqS3PersistFails() throws Exception {
+        // Given
+        final ConsumerRecord<String, PaymentConfirmation> record =
+                new ConsumerRecord<>("payment-dlq", 0, 10L, "key1", null);
+        doThrow(new IOException("S3 down"))
+                .when(dlqS3Service)
+                .storeToS3(record, EventType.PAYMENT);
+
+        // When / Then (no exception should escape)
+        assertDoesNotThrow(() -> consumer.consumePaymentDlqMessages(record));
+        verify(dlqS3Service).storeToS3(record, EventType.PAYMENT);
+    }
+
+    /**
+     * Verifies that an order DLQ Kafka record is persisted to S3 when
+     * the order DLQ listener is invoked.
+     *
+     * <p>
+     * This test validates the happy path where the DLQ listener successfully
+     * delegates the failed {@link OrderConfirmation} record to the
+     * {@link IDlqS3Service} using {@link EventType#ORDER}.
+     * </p>
+     */
+    @Test
+    void shouldStoreOrderDlqMessageToS3() throws Exception {
+        // Given
+        final CustomerResponse customerAvro = constructCustomer();
+        final OrderConfirmation orderConfirmationAvro = constructOrderConfirmation(customerAvro);
+        final ConsumerRecord<String, OrderConfirmation> record =
+                new ConsumerRecord<>("order-dlq", 1, 5L, "key2", orderConfirmationAvro);
+
+        // When
+        consumer.consumeOrderDlqMessages(record);
+
+        // Then
+        verify(dlqS3Service).storeToS3(record, EventType.ORDER);
+    }
+
+    /**
+     * Verifies that the order DLQ listener gracefully handles failures
+     * during persistence to S3.
+     *
+     * <p>
+     * This test ensures that an {@link IOException} thrown while attempting
+     * to store a DLQ record does not propagate out of the listener method,
+     * preventing Kafka listener container disruption.
+     * </p>
+     */
+    @Test
+    void shouldNotFailWhenOrderDlqS3PersistFails() throws Exception {
+        // Given
+        final ConsumerRecord<String, OrderConfirmation> record =
+                new ConsumerRecord<>("order-dlq", 1, 5L, "key2", null);
+        doThrow(new IOException("S3 down"))
+                .when(dlqS3Service)
+                .storeToS3(record, EventType.ORDER);
+
+        // When / Then
+        assertDoesNotThrow(() -> consumer.consumeOrderDlqMessages(record));
+        verify(dlqS3Service).storeToS3(record, EventType.ORDER);
     }
 
     /**

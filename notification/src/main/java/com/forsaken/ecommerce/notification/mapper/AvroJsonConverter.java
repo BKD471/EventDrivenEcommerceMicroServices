@@ -45,7 +45,12 @@ import java.nio.charset.StandardCharsets;
  */
 public class AvroJsonConverter {
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     */
+    private AvroJsonConverter() {
+        throw new UnsupportedOperationException("Utility class cannot be instantiated");
+    }
 
     /**
      * Converts a given Avro {@link SpecificRecordBase} instance into its
@@ -74,21 +79,44 @@ public class AvroJsonConverter {
      * using the provided Avro {@link Schema}.
      *
      * <p>
-     * The JSON input must strictly conform to the given schema. Any missing
-     * fields must have default values defined in the schema, otherwise
-     * deserialization will fail.
+     * This method performs schema-aware deserialization using Apache Avro’s
+     * JSON decoder. The input JSON must strictly conform to the supplied schema.
+     * Any fields missing from the JSON must have default values defined in the
+     * schema; otherwise, deserialization will fail.
      * </p>
      *
+     * <p>
+     * The returned object type is inferred from the generic type parameter {@code T}.
+     * Callers are responsible for ensuring that the provided schema corresponds
+     * to the expected Avro specific record type.
+     * </p>
+     *
+     * <p><b>Typical use cases include:</b></p>
+     * <ul>
+     *   <li>Reconstructing Avro records from JSON stored in a DLQ or audit store</li>
+     *   <li>Replaying failed Kafka messages</li>
+     *   <li>Testing and debugging Avro-based message flows</li>
+     * </ul>
+     *
+     * <p><b>Important:</b></p>
+     * <ul>
+     *   <li>This method supports only {@link SpecificRecordBase} implementations.</li>
+     *   <li>Type mismatches between the schema and the expected record class may
+     *       result in runtime deserialization errors.</li>
+     * </ul>
+     *
+     * @param <T>    the specific Avro record type
      * @param json   the JSON representation of the Avro record
      * @param schema the Avro schema used to deserialize the JSON
      * @return the deserialized Avro specific record
-     * @throws IOException if deserialization fails or the JSON is invalid
+     * @throws IOException if deserialization fails due to invalid JSON,
+     *                     schema mismatch, or missing required fields
      */
-    public static SpecificRecordBase jsonToAvro(
+    public static <T extends SpecificRecordBase> T jsonToAvro(
             final String json,
             final Schema schema
     ) throws IOException {
-        final SpecificDatumReader<SpecificRecordBase> reader =
+        final SpecificDatumReader<T> reader =
                 new SpecificDatumReader<>(schema);
         final Decoder decoder = DecoderFactory.get().jsonDecoder(schema, json);
         return reader.read(null, decoder);

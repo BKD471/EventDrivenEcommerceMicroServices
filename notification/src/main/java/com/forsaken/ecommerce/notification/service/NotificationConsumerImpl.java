@@ -163,10 +163,20 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
-    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) throws IOException {
+    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
         log.warn("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
-        dlqS3Service.storeToS3(record, PAYMENT);
+        try {
+            dlqS3Service.storeToS3(record, PAYMENT);
+        } catch (IOException ex) {
+            log.error(
+                    "Failed to persist DLQ message to S3 for key={}, offset={}, timestamp={}",
+                    record.key(),
+                    record.offset(),
+                    getTimeStampForLogs(record),
+                    ex
+            );
+        }
     }
 
 
@@ -176,10 +186,20 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
-    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) throws IOException {
+    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
         log.warn("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
-        dlqS3Service.storeToS3(record, ORDER);
+        try {
+            dlqS3Service.storeToS3(record, ORDER);
+        } catch (IOException ex) {
+            log.error(
+                    "Failed to persist DLQ message to S3 for key={}, offset={}, timestamp={}",
+                    record.key(),
+                    record.offset(),
+                    getTimeStampForLogs(record),
+                    ex
+            );
+        }
     }
 
 
