@@ -138,12 +138,10 @@ public interface INotificationConsumer {
      *
      * @param record the Kafka {@link ConsumerRecord} containing the failed
      *               {@link PaymentConfirmation} event and its associated metadata
-     * @throws IOException if an I/O error occurs while persisting or exporting
-     *                     the failed message
      */
     void consumePaymentDlqMessages(
             final ConsumerRecord<String, PaymentConfirmation> record
-    ) throws IOException;
+    );
 
     /**
      * Consumes order-related messages from the Dead Letter Topic (DLQ).
@@ -160,10 +158,8 @@ public interface INotificationConsumer {
      *
      * @param record the Kafka {@link ConsumerRecord} containing the
      *               failed {@link OrderConfirmation} event
-     * @throws IOException if an I/O error occurs while persisting or exporting
-     *                     the failed message
      */
     void consumeOrderDlqMessages(
             final ConsumerRecord<String, OrderConfirmation> record
-    ) throws IOException;
+    );
 }
