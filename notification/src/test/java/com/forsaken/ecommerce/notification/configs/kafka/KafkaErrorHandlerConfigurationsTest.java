@@ -97,6 +97,7 @@ class KafkaErrorHandlerConfigurationsTest {
     @Test
     void shouldCreateDefaultErrorHandler() {
         // Given
+        when(kafkaProperties.bootstrapServers()).thenReturn(List.of("localhost:9092"));
         when(kafkaProperties.schemaRegistryUrl()).thenReturn("http://localhost:8081");
         when(kafkaDlqProperties.maxAttempts()).thenReturn(3);
         when(kafkaDlqProperties.backOffInterval()).thenReturn(Math.toIntExact(1_000L));
@@ -161,7 +162,7 @@ class KafkaErrorHandlerConfigurationsTest {
     @MethodSource("topicToDlqMappings")
     void shouldResolveTopicToCorrectDlq(
             final String sourceTopic,
-            final int partitions,
+            final int partition,
             final EventType expectedEventType,
             final String expectedDlqTopic
     ) {
@@ -180,7 +181,7 @@ class KafkaErrorHandlerConfigurationsTest {
         final EventType actualEventType =
                 configuration.resolveEventType(sourceTopic);
         final ConsumerRecord<String, Object> record =
-                new ConsumerRecord<>(sourceTopic, partitions, 0L, "key", "value");
+                new ConsumerRecord<>(sourceTopic, partition, 0L, "key", "value");
 
 
         // When
@@ -189,7 +190,7 @@ class KafkaErrorHandlerConfigurationsTest {
         // then
         assertEquals(expectedEventType, actualEventType);
         assertEquals(expectedDlqTopic, topicPartition.topic());
-        assertEquals(partitions, topicPartition.partition());
+        assertEquals(partition, topicPartition.partition());
     }
 
     /**
