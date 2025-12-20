@@ -253,24 +253,33 @@ public interface INotificationConsumer {
      * </p>
      *
      * <p>
-     * <b>Failure handling:</b><br>
+     * <b>Failure handling (current limitation):</b><br>
      * If persistence to S3 fails (for example due to transient infrastructure
      * issues), the exception is caught and logged, but it is <b>not</b> rethrown
      * to the Kafka listener container. In practice this means the offset will
      * still be considered acknowledged according to the listener configuration,
-     * and the DLQ message will <b>not</b> be re-delivered automatically. This
-     * behavior can lead to effective loss of the DLQ record when S3 persistence
-     * fails.
+     * and the DLQ message will <b>not</b> be re-delivered automatically. As a
+     * consequence, the failed DLQ record may be effectively lost when S3
+     * persistence fails.
      * </p>
      *
      * <p>
-     * This design currently provides:
+     * Given this behavior, the current design provides the following properties:
      * </p>
      * <ul>
      *     <li>Stable DLQ processing without crashing the listener container</li>
      *     <li>Logged visibility into S3 persistence failures</li>
-     *     <li>But <b>does not</b> guarantee at-least-once delivery semantics for DLQ records</li>
+     *     <li>But <b>does not</b> guarantee at-least-once delivery semantics for DLQ records,
+     *         and may result in effective loss of DLQ records when durable persistence fails</li>
      * </ul>
+     *
+     * <p>
+     * This lack of at-least-once handling for DLQ records is a known limitation of
+     * the current implementation. Future improvements should couple offset
+     * acknowledgment to successful durable persistence (or introduce explicit
+     * retry/compensation mechanisms) to avoid DLQ data loss and provide stronger
+     * delivery guarantees.
+     * </p>
      *
      * @param record         the Kafka {@link ConsumerRecord} containing the failed
      *                       {@link OrderConfirmation} event and its associated metadata
