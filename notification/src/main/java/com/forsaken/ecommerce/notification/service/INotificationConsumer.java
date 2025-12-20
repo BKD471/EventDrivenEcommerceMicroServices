@@ -4,6 +4,8 @@ import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+import java.io.IOException;
+
 /**
  * Contract for consuming notification-related Kafka events and their
  * corresponding Dead Letter Queue (DLQ) messages.
@@ -110,22 +112,34 @@ public interface INotificationConsumer {
      * Consumes payment-related messages from the Dead Letter Topic (DLQ).
      *
      * <p>
-     * This method is invoked for payment events that could not be processed
-     * successfully after exhausting all retry attempts.
+     * This method is invoked for {@link PaymentConfirmation} events that could not be
+     * processed successfully by the primary consumer after all configured retry
+     * attempts have been exhausted.
      * </p>
      *
      * <p>
-     * Implementations are expected to persist the failed record
-     * (along with metadata such as topic, partition, and offset)
-     * for later analysis or replay.
+     * Implementations are expected to handle the failed record in a safe and
+     * idempotent manner. Typical responsibilities include:
+     * </p>
+     * <ul>
+     *   <li>Persisting the failed event payload for later inspection or replay</li>
+     *   <li>Storing Kafka metadata such as topic, partition, offset, and timestamp</li>
+     *   <li>Emitting logs or metrics for monitoring and alerting</li>
+     * </ul>
+     *
+     * <p>
+     * This consumer <b>must not</b> throw unchecked exceptions that could cause
+     * repeated reprocessing of the same DLQ message unless explicitly desired.
      * </p>
      *
-     * @param record the Kafka {@link ConsumerRecord} containing the
-     *               failed {@link PaymentConfirmation} event
+     * @param record the Kafka {@link ConsumerRecord} containing the failed
+     *               {@link PaymentConfirmation} event and its associated metadata
+     * @throws IOException if an I/O error occurs while persisting or exporting
+     *                     the failed message
      */
     void consumePaymentDlqMessages(
             final ConsumerRecord<String, PaymentConfirmation> record
-    );
+    ) throws IOException;
 
     /**
      * Consumes order-related messages from the Dead Letter Topic (DLQ).
@@ -142,8 +156,10 @@ public interface INotificationConsumer {
      *
      * @param record the Kafka {@link ConsumerRecord} containing the
      *               failed {@link OrderConfirmation} event
+     * @throws IOException if an I/O error occurs while persisting or exporting
+     *                     the failed message
      */
     void consumeOrderDlqMessages(
             final ConsumerRecord<String, OrderConfirmation> record
-    );
+    ) throws IOException;
 }

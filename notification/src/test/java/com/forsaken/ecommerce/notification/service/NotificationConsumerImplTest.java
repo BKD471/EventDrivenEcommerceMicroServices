@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -507,7 +508,7 @@ class NotificationConsumerImplTest {
      * </p>
      */
     @Test
-    void paymentConsumeDlq_shouldStoreRecordInS3() {
+    void paymentConsumeDlq_shouldStoreRecordInS3() throws IOException {
         // given
         final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
@@ -552,7 +553,7 @@ class NotificationConsumerImplTest {
      * </ul>
      */
     @Test
-    void orderConsumeDlq_shouldStoreRecordInS3() {
+    void orderConsumeDlq_shouldStoreRecordInS3() throws IOException {
         // given
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
@@ -603,7 +604,7 @@ class NotificationConsumerImplTest {
      * </ul>
      */
     @Test
-    void paymentConsumeDlq_shouldRethrowExceptionWhenS3Fails() {
+    void paymentConsumeDlq_shouldRethrowExceptionWhenS3Fails() throws IOException {
         // given
         final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
@@ -655,7 +656,7 @@ class NotificationConsumerImplTest {
      * </ul>
      */
     @Test
-    void orderConsumeDlq_shouldRethrowExceptionWhenS3Fails() {
+    void orderConsumeDlq_shouldRethrowExceptionWhenS3Fails() throws IOException {
         // given
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);

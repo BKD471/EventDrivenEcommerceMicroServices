@@ -14,6 +14,7 @@ import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -162,7 +163,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
-    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
+    public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) throws IOException {
         log.warn("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         dlqS3Service.storeToS3(record, PAYMENT);
@@ -175,7 +176,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
-    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
+    public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) throws IOException {
         log.warn("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
         dlqS3Service.storeToS3(record, ORDER);

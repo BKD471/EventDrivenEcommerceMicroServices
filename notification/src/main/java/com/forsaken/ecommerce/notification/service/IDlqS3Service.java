@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.notification.service;
 import com.forsaken.ecommerce.notification.models.EventType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -75,12 +76,12 @@ public interface IDlqS3Service {
      * @param record    the Kafka {@link ConsumerRecord} that failed processing
      * @param eventType a logical event type used to determine the S3 prefix
      *                  (e.g. {@code payment}, {@code order})
-     * @throws RuntimeException if the record cannot be serialized or
+     * @throws IOException if the record cannot be serialized or
      *                          the S3 upload fails
      */
     void storeToS3(
             final ConsumerRecord<String, ?> record, final EventType eventType
-    );
+    ) throws IOException;
 
     /**
      * Lists all S3 object keys stored under the given prefix.
