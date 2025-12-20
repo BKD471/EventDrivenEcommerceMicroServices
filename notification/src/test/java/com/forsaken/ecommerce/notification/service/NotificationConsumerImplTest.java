@@ -860,13 +860,12 @@ class NotificationConsumerImplTest {
      * <ul>
      *     <li>The S3 persistence attempt is executed</li>
      *     <li>The exception is logged for operational visibility</li>
-     *     <li>The exception does <b>not</b> escape the Kafka listener</li>
-     *     <li>The Kafka offset remains unacknowledged</li>
+     *     <li>The exception is caught and does <b>not</b> propagate beyond the Kafka listener method</li>
+     *     <li>The Kafka offset remains unacknowledged so that the record can be retried according to the listener container configuration</li>
      * </ul>
      *
      * <p>
-     * This prevents Kafka listener container disruption while ensuring
-     * that DLQ persistence failures are not silently ignored.
+     * This prevents Kafka listener container disruption while making the failure visible via logging and offset management, rather than by propagating the exception.
      * </p>
      */
     @Test
