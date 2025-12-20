@@ -188,16 +188,21 @@ public interface INotificationConsumer {
      *
      * <p>
      * <b>Acknowledgment strategy:</b><br>
-     * Offsets are acknowledged <b>only after</b> the DLQ record has been successfully
-     * persisted to S3. This ensures that DLQ messages are not lost silently.
+     * Offsets are typically acknowledged according to the configured Kafka listener
+     * container strategy after the listener method completes. In the current
+     * reference implementation, this completion occurs even if S3 persistence fails,
+     * which means the offset may still be acknowledged despite a persistence error.
      * </p>
      *
      * <p>
      * <b>Failure handling:</b><br>
      * If persistence to S3 fails (for example due to transient infrastructure issues),
-     * the exception is caught and logged. The offset is <b>not acknowledged</b> in
-     * this case, allowing Kafka to re-deliver the DLQ message according to the
-     * consumer configuration.
+     * the exception is caught, logged, and <b>not rethrown</b>. Because the exception
+     * is swallowed and not propagated to the Kafka container, the listener will
+     * generally treat the record as successfully processed and may acknowledge the
+     * offset, preventing automatic re-delivery. Implementations that require Kafka
+     * retries must instead rethrow the exception so that the container can apply
+     * its configured retry and error-handling mechanisms.
      * </p>
      *
      * <p>
