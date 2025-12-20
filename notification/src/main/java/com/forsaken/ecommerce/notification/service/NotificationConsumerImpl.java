@@ -14,6 +14,7 @@ import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -165,7 +166,18 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     public void consumePaymentDlqMessages(final ConsumerRecord<String, PaymentConfirmation> record) {
         log.warn("Payment DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
-        dlqS3Service.storeToS3(record, PAYMENT);
+        try {
+            dlqS3Service.storeToS3(record, PAYMENT);
+        } catch (IOException ex) {
+            log.error(
+                    "Failed to persist Payment DLQ message to S3 for key={}, offset={}, partition={}, timestamp={}",
+                    record.key(),
+                    record.offset(),
+                    record.partition(),
+                    getTimeStampForLogs(record),
+                    ex
+            );
+        }
     }
 
 
@@ -178,7 +190,18 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     public void consumeOrderDlqMessages(final ConsumerRecord<String, OrderConfirmation> record) {
         log.warn("Order DLQ EVENT RECEIVED for key={}, partition={}, offset={}, timestamp={}",
                 record.key(), record.partition(), record.offset(), getTimeStampForLogs(record));
-        dlqS3Service.storeToS3(record, ORDER);
+        try {
+            dlqS3Service.storeToS3(record, ORDER);
+        } catch (IOException ex) {
+            log.error(
+                    "Failed to persist Order DLQ message to S3 for key={}, offset={}, partition={}, timestamp={}",
+                    record.key(),
+                    record.offset(),
+                    record.partition(),
+                    getTimeStampForLogs(record),
+                    ex
+            );
+        }
     }
 
 
