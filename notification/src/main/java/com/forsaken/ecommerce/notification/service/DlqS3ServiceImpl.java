@@ -79,16 +79,27 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
 
     @Override
     public List<String> listKeys(final String prefix) {
-        log.info("Listing DLQ event into S3 for prefix={}", prefix);
+        log.info("Listing DLQ events from S3 for prefix={}", prefix);
+
         final List<String> keysList = new ArrayList<>();
-        final ListObjectsV2Request listObjectsV2Request = ListObjectsV2Request.builder()
-                .bucket(properties.bucket())
-                .prefix(prefix)
-                .build();
-        final ListObjectsV2Response listObjectsV2Response = s3Client.listObjectsV2(listObjectsV2Request);
-        if (listObjectsV2Response.contents() == null) return keysList;
-        listObjectsV2Response.contents().forEach(obj -> keysList.add(obj.key()));
-        log.info("Found DLQ event into S3 for prefix={}", prefix);
+        String continuationToken = null;
+        do {
+             ListObjectsV2Request.Builder requestBuilder =
+                    ListObjectsV2Request.builder()
+                            .bucket(properties.bucket())
+                            .prefix(prefix);
+            if (continuationToken != null) requestBuilder = requestBuilder.continuationToken(continuationToken);
+            final ListObjectsV2Response response = s3Client.listObjectsV2(requestBuilder.build());
+            if (response.contents() != null) {
+                response.contents()
+                        .forEach(obj -> keysList.add(obj.key()));
+            }
+            continuationToken = response.isTruncated()
+                    ? response.nextContinuationToken()
+                    : null;
+        } while (continuationToken != null);
+
+        log.info("Found {} DLQ event(s) in S3 for prefix={}", keysList.size(), prefix);
         return keysList;
     }
 

@@ -115,7 +115,7 @@ class DlqS3ServiceImplTest {
      */
     @ParameterizedTest
     @MethodSource("eventTypeProvider")
-    void shouldStoreAvroRecordToS3_forPaymentAndOrder(
+    void shouldStoreAvroRecordToS3ForPaymentAndOrder(
             EventType eventType,
             String expectedPrefix,
             String topic
@@ -234,14 +234,31 @@ class DlqS3ServiceImplTest {
     }
 
     /**
-     * Verifies that all S3 object keys under a given prefix are returned
-     * when matching DLQ records exist.
+     * Verifies that all S3 object keys are returned when a single page of
+     * results exists for a given DLQ prefix.
+     *
+     * <p>
+     * This test is parameterized to validate identical behavior for
+     * multiple DLQ prefixes (for example, payment and order DLQs).
+     * </p>
+     *
+     * <p>
+     * Scenario covered:
+     * </p>
+     * <ul>
+     *   <li>S3 returns a non-truncated {@code ListObjectsV2Response}</li>
+     *   <li>All object keys are contained in a single response page</li>
+     * </ul>
+     *
+     * @param prefix the S3 prefix under which DLQ records are stored
      */
-    @Test
-    void shouldReturnKeysWhenObjectsExist() {
+    @ParameterizedTest
+    @MethodSource("prefixProvider")
+    void shouldReturnKeysWhenSinglePageExists(final String prefix) {
         // Given
         final ListObjectsV2Response response =
                 ListObjectsV2Response.builder()
+                        .isTruncated(false)
                         .contents(
                                 List.of(
                                         S3Object.builder().key("k1").build(),
@@ -252,31 +269,118 @@ class DlqS3ServiceImplTest {
         when(s3Client.listObjectsV2(
                 ListObjectsV2Request.builder()
                         .bucket(BUCKET)
-                        .prefix(PAYMENT_PREFIX)
+                        .prefix(prefix)
                         .build()
         )).thenReturn(response);
 
         // When
-        final List<String> keys = service.listKeys(PAYMENT_PREFIX);
+        final List<String> keys = service.listKeys(prefix);
 
         // Then
-        assertEquals(2, keys.size());
-        assertTrue(keys.contains("k1"));
-        assertTrue(keys.contains("k2"));
+        assertEquals(List.of("k1", "k2"), keys);
     }
 
     /**
-     * Verifies that an empty list is returned when no DLQ records
-     * exist under the given S3 prefix.
+     * Verifies that all S3 object keys are returned correctly when the
+     * results span multiple pages.
+     *
+     * <p>
+     * This test simulates S3 pagination by returning:
+     * </p>
+     * <ul>
+     *   <li>A first response marked as truncated with a continuation token</li>
+     *   <li>A second response containing the remaining objects</li>
+     * </ul>
+     *
+     * <p>
+     * The test is parameterized to ensure pagination logic behaves
+     * consistently across different DLQ prefixes (payment, order, etc.).
+     * </p>
+     *
+     * @param prefix the S3 prefix under which DLQ records are stored
      */
-    @Test
-    void shouldReturnEmptyListWhenNoObjectsFound() {
-        // Given
-        when(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
-                .thenReturn(ListObjectsV2Response.builder().build());
+    @ParameterizedTest
+    @MethodSource("prefixProvider")
+    void shouldReturnKeysAcrossMultiplePages(final String prefix) {
+        final ListObjectsV2Response firstPage =
+                ListObjectsV2Response.builder()
+                        .isTruncated(true)
+                        .nextContinuationToken("token-1")
+                        .contents(
+                                List.of(
+                                        S3Object.builder().key("k1").build()
+                                )
+                        )
+                        .build();
+        final ListObjectsV2Response secondPage =
+                ListObjectsV2Response.builder()
+                        .isTruncated(false)
+                        .contents(
+                                List.of(
+                                        S3Object.builder().key("k2").build(),
+                                        S3Object.builder().key("k3").build()
+                                )
+                        )
+                        .build();
+        when(s3Client.listObjectsV2(
+                ListObjectsV2Request.builder()
+                        .bucket(BUCKET)
+                        .prefix(prefix)
+                        .build()
+        )).thenReturn(firstPage);
+        when(s3Client.listObjectsV2(
+                ListObjectsV2Request.builder()
+                        .bucket(BUCKET)
+                        .prefix(prefix)
+                        .continuationToken("token-1")
+                        .build()
+        )).thenReturn(secondPage);
 
         // When
-        final List<String> keys = service.listKeys(PAYMENT_PREFIX);
+        final List<String> keys = service.listKeys(prefix);
+
+        // Then
+        assertEquals(List.of("k1", "k2", "k3"), keys);
+    }
+
+    /**
+     * Verifies that an empty list is returned when no S3 objects exist
+     * under the given DLQ prefix.
+     *
+     * <p>
+     * This test ensures that:
+     * </p>
+     * <ul>
+     *   <li>No {@code NullPointerException} occurs when S3 returns no contents</li>
+     *   <li>An empty collection is returned instead of {@code null}</li>
+     * </ul>
+     *
+     * <p>
+     * The test is parameterized to validate behavior consistently for
+     * all supported DLQ prefixes.
+     * </p>
+     *
+     * @param prefix the S3 prefix under which DLQ records are stored
+     */
+    @ParameterizedTest
+    @MethodSource("prefixProvider")
+    void shouldReturnEmptyListWhenNoObjectsExist(final String prefix) {
+        // Given
+        final ListObjectsV2Response response =
+                ListObjectsV2Response.builder()
+                        .isTruncated(false)
+                        .contents(List.of())
+                        .build();
+
+        when(s3Client.listObjectsV2(
+                ListObjectsV2Request.builder()
+                        .bucket(BUCKET)
+                        .prefix(prefix)
+                        .build()
+        )).thenReturn(response);
+
+        // When
+        final List<String> keys = service.listKeys(prefix);
 
         // Then
         assertTrue(keys.isEmpty());
@@ -365,5 +469,29 @@ class DlqS3ServiceImplTest {
         // Then
         assertThrows(RuntimeException.class,
                 () -> service.delete("key"));
+    }
+
+    /**
+     * Provides S3 prefixes used for parameterized DLQ listing tests.
+     *
+     * <p>
+     * Each argument represents a logical DLQ category stored under a
+     * distinct S3 prefix (for example, payment-related and order-related
+     * DLQ records).
+     * </p>
+     *
+     * <p>
+     * This method enables reuse of the same test logic across multiple
+     * DLQ types, ensuring consistent behavior regardless of the
+     * underlying event category.
+     * </p>
+     *
+     * @return a stream of S3 prefixes used in DLQ-related parameterized tests
+     */
+    private static Stream<Arguments> prefixProvider() {
+        return Stream.of(
+                Arguments.of(PAYMENT_PREFIX),
+                Arguments.of(ORDER_PREFIX)
+        );
     }
 }
