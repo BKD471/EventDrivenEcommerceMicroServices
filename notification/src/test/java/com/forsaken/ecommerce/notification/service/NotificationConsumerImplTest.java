@@ -586,7 +586,7 @@ class NotificationConsumerImplTest {
      * </p>
      * <ul>
      *     <li>The original Kafka {@link ConsumerRecord} is persisted verbatim</li>
-     *     <li>The record is categorized using {@link EventType#PAYMENT}</li>
+     *     <li>The record is categorized using {@link EventType#ORDER}</li>
      *     <li>The offset is acknowledged only after successful persistence</li>
      * </ul>
      */
