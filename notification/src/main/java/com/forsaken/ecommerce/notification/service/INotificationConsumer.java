@@ -196,7 +196,7 @@ public interface INotificationConsumer {
      * <p>
      * The primary responsibility of this method is to persist the failed Kafka
      * record to durable storage (Amazon S3) for later inspection, auditing, or
-     * manual replay. The persisted data typically includes:
+     * manual replay. Persisted data typically includes:
      * </p>
      * <ul>
      *     <li>The original event payload</li>
@@ -207,30 +207,28 @@ public interface INotificationConsumer {
      * <b>Acknowledgment strategy:</b><br>
      * The Kafka offset is <b>manually acknowledged only after successful persistence
      * to S3</b>. If persistence fails, the offset is deliberately <b>not acknowledged</b>
-     * to ensure the failure remains visible and is not silently committed.
+     * to prevent silent loss of DLQ records.
      * </p>
      *
      * <p>
      * <b>Failure handling:</b><br>
      * If persistence to S3 fails (for example due to transient infrastructure issues),
      * the exception is caught and logged and is <b>not rethrown</b>. The listener does
-     * not propagate the exception to the Kafka container and does not acknowledge the
-     * offset. This prevents consumer crash loops while preserving operational
-     * visibility of the failure.
+     * not propagate the exception to the Kafka container, avoiding crash loops while
+     * preserving visibility into the failure.
      * </p>
      *
      * <p>
      * <b>Design rationale:</b><br>
-     * DLQ records represent already-failed messages. Retrying DLQ consumption
-     * automatically often provides little value and can lead to repeated failures
-     * and consumer instability. This implementation favors stability and observability
-     * over aggressive retry behavior.
+     * DLQ records represent already-failed messages. Automatically retrying DLQ
+     * consumption often provides limited value and can lead to repeated failures.
+     * This implementation prioritizes operational stability and observability.
      * </p>
      *
-     * @param record         the Kafka {@link ConsumerRecord} containing the failed
-     *                       {@link PaymentConfirmation} event and its associated metadata
-     * @param acknowledgment manual acknowledgment handle used to commit the offset after
-     *                       successful persistence
+     * @param record the Kafka {@link ConsumerRecord} containing the failed
+     *               {@link PaymentConfirmation} event
+     * @param acknowledgment manual acknowledgment handle used to commit the offset
+     *                       after successful persistence
      */
     void consumePaymentDlqMessages(
             final ConsumerRecord<String, PaymentConfirmation> record,
@@ -260,53 +258,29 @@ public interface INotificationConsumer {
      * <b>Acknowledgment strategy:</b><br>
      * The Kafka offset is <b>manually acknowledged only after successful persistence
      * to S3</b>. If persistence fails, the offset is deliberately <b>not acknowledged</b>
-     * to prevent the DLQ record from being silently committed.
+     * to avoid silently committing the DLQ record.
      * </p>
      *
      * <p>
      * <b>Failure handling:</b><br>
      * If persistence to S3 fails (for example due to transient infrastructure issues),
      * the exception is caught and logged and is <b>not rethrown</b>. The listener does
-     * not propagate the exception to the Kafka container and does not acknowledge the
-     * offset. This avoids consumer crash loops while preserving visibility into the
-     * failure.
-     * <b>Failure handling (current limitation):</b><br>
-     * If persistence to S3 fails (for example due to transient infrastructure
-     * issues), the exception is caught and logged, but it is <b>not</b> rethrown
-     * to the Kafka listener container. In practice this means the offset will
-     * still be considered acknowledged according to the listener configuration,
-     * and the DLQ message will <b>not</b> be re-delivered automatically. As a
-     * consequence, the failed DLQ record may be effectively lost when S3
-     * persistence fails.
+     * not propagate the exception to the Kafka container, which prevents consumer
+     * crash loops while ensuring the failure is visible in logs and monitoring.
      * </p>
      *
      * <p>
      * <b>Design rationale:</b><br>
      * DLQ records represent messages that have already failed normal processing.
-     * Automatically retrying DLQ consumption often provides limited value and can
+     * Retrying DLQ consumption automatically often provides limited value and can
      * lead to repeated failures. This implementation prioritizes operational
      * stability and observability over aggressive retry behavior.
-     * Given this behavior, the current design provides the following properties:
-     * </p>
-     * <ul>
-     *     <li>Stable DLQ processing without crashing the listener container</li>
-     *     <li>Logged visibility into S3 persistence failures</li>
-     *     <li>But <b>does not</b> guarantee at-least-once delivery semantics for DLQ records,
-     *         and may result in effective loss of DLQ records when durable persistence fails</li>
-     * </ul>
-     *
-     * <p>
-     * This lack of at-least-once handling for DLQ records is a known limitation of
-     * the current implementation. Future improvements should couple offset
-     * acknowledgment to successful durable persistence (or introduce explicit
-     * retry/compensation mechanisms) to avoid DLQ data loss and provide stronger
-     * delivery guarantees.
      * </p>
      *
-     * @param record         the Kafka {@link ConsumerRecord} containing the failed
-     *                       {@link OrderConfirmation} event and its associated metadata
-     * @param acknowledgment manual acknowledgment handle used to commit the offset after
-     *                       successful persistence
+     * @param record the Kafka {@link ConsumerRecord} containing the failed
+     *               {@link OrderConfirmation} event
+     * @param acknowledgment manual acknowledgment handle used to commit the offset
+     *                       after successful persistence
      */
     void consumeOrderDlqMessages(
             final ConsumerRecord<String, OrderConfirmation> record,
