@@ -45,7 +45,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
             final ConsumerRecord<String, ?> record,
             final EventType eventType
     ) throws IOException {
-        log.info("📦 Storing DLQ event into S3 for topic={}, offset={}", record.topic(), record.offset());
+        log.info("Storing DLQ event into S3 for topic={}, offset={}", record.topic(), record.offset());
 
         final String prefix = switch (eventType) {
             case PAYMENT -> properties.paymentPrefix();

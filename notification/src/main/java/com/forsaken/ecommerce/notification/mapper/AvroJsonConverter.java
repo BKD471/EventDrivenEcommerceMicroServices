@@ -1,6 +1,5 @@
 package com.forsaken.ecommerce.notification.mapper;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
@@ -66,12 +65,13 @@ public class AvroJsonConverter {
      * @throws IOException if serialization fails
      */
     public static String avroToJson(final SpecificRecordBase avro) throws IOException {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        final Encoder jsonEncoder = EncoderFactory.get().jsonEncoder(avro.getSchema(), byteArrayOutputStream);
-        final DatumWriter<SpecificRecordBase> specificRecordBaseDatumWriter = new SpecificDatumWriter<>(avro.getSchema());
-        specificRecordBaseDatumWriter.write(avro, jsonEncoder);
-        jsonEncoder.flush();
-        return byteArrayOutputStream.toString(StandardCharsets.UTF_8);
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+            final Encoder jsonEncoder = EncoderFactory.get().jsonEncoder(avro.getSchema(), byteArrayOutputStream);
+            final DatumWriter<SpecificRecordBase> specificRecordBaseDatumWriter = new SpecificDatumWriter<>(avro.getSchema());
+            specificRecordBaseDatumWriter.write(avro, jsonEncoder);
+            jsonEncoder.flush();
+            return byteArrayOutputStream.toString(StandardCharsets.UTF_8);
+        }
     }
 
     /**
