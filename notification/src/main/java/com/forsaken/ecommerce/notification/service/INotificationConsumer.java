@@ -128,8 +128,12 @@ public interface INotificationConsumer {
      * </ul>
      *
      * <p>
-     * This consumer <b>must not</b> throw unchecked exceptions that could cause
-     * repeated reprocessing of the same DLQ message unless explicitly desired.
+     * <b>Exception Handling Strategy:</b><br>
+     * This method declares {@link IOException} to signal I/O failures during persistence
+     * operations. Implementations <b>must not</b> throw unchecked exceptions, as these
+     * could cause repeated reprocessing of the same DLQ message. If an IOException is
+     * thrown, the Kafka listener error handler will determine whether to retry, log,
+     * or discard the message based on configured policies.
      * </p>
      *
      * @param record the Kafka {@link ConsumerRecord} containing the failed
@@ -152,6 +156,15 @@ public interface INotificationConsumer {
      * <p>
      * Implementations should store the failed event in durable storage
      * and make it available for manual inspection or replay.
+     * </p>
+     *
+     * <p>
+     * <b>Exception Handling Strategy:</b><br>
+     * This method declares {@link IOException} to signal I/O failures during persistence
+     * operations. Implementations <b>must not</b> throw unchecked exceptions, as these
+     * could cause repeated reprocessing of the same DLQ message. If an IOException is
+     * thrown, the Kafka listener error handler will determine whether to retry, log,
+     * or discard the message based on configured policies.
      * </p>
      *
      * @param record the Kafka {@link ConsumerRecord} containing the
