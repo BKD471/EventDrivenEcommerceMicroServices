@@ -262,7 +262,7 @@ class KafkaErrorHandlerConfigurationsTest {
     }
 
     /**
-     * Verifies that a {@link IllegalArgumentException} is thrown when
+     * Verifies that an {@link IllegalArgumentException} is thrown when
      * a null source topic is provided.
      *
      * <p>
