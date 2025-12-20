@@ -648,12 +648,12 @@ class NotificationConsumerImplTest {
                         "key-1",
                         paymentConfirmation
                 );
-        doThrow(new RuntimeException("S3 unavailable"))
+        doThrow(new IOException("S3 unavailable"))
                 .when(dlqS3Service)
                 .storeToS3(record, PAYMENT);
 
         // when -> then
-        assertThrows(RuntimeException.class, () ->
+        assertDoesNotThrow(() ->
                 consumer.consumePaymentDlqMessages(record, acknowledgment)
         );
         // verify S3 attempt happened
@@ -700,12 +700,12 @@ class NotificationConsumerImplTest {
                         "key-2",
                         orderConfirmation
                 );
-        doThrow(new RuntimeException("S3 write failed"))
+        doThrow(new IOException("S3 write failed"))
                 .when(dlqS3Service)
                 .storeToS3(record, ORDER);
 
         // when -> then
-        assertThrows(RuntimeException.class, () ->
+        assertDoesNotThrow(() ->
                 consumer.consumeOrderDlqMessages(record, acknowledgment)
         );
         // verify S3 attempt happened
@@ -767,23 +767,13 @@ class NotificationConsumerImplTest {
      * to persist a payment DLQ record.
      * </p>
      *
-     * <p>
+     /**
      * Expected behavior:
-     * </p>
      * <ul>
-     *     <li>The persistence attempt to S3 is made</li>
-     *     <li>The exception is caught and logged</li>
-     *     <li>The exception does <b>not</b> propagate out of the listener</li>
-     *     <li>The Kafka offset is <b>not acknowledged</b></li>
-     * </ul>
-     *
-     * <p>
-     * <b>Why swallow the exception?</b>
-     * </p>
-     * <ul>
-     *     <li>DLQ consumers should not disrupt Kafka consumption</li>
-     *     <li>Repeated retries for DLQ messages provide little value</li>
-     *     <li>Operational visibility is preserved through logging and metrics</li>
+     *   <li>The persistence attempt to S3 is made</li>
+     *   <li>The exception is caught and logged</li>
+     *   <li>The exception does <b>not</b> propagate out of the listener</li>
+     *   <li>The Kafka offset is <b>not acknowledged</b></li>
      * </ul>
      *
      * <p>

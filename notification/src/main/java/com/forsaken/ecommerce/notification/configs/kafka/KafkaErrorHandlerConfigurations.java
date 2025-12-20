@@ -72,6 +72,11 @@ public class KafkaErrorHandlerConfigurations {
         return handler;
     }
 
+    /**
+     * Resolves event type based on source topic.
+     * <p>
+     * Package-private for test visibility.
+     */
     EventType resolveEventType(final String sourceTopic) {
         return switch (sourceTopic) {
             case null -> throw new IllegalArgumentException(
@@ -85,6 +90,11 @@ public class KafkaErrorHandlerConfigurations {
         };
     }
 
+    /**
+     * Resolves dlq partition type based on source record.
+     * <p>
+     * Package-private for test visibility.
+     */
     TopicPartition resolveDlqPartition(final ConsumerRecord<?, ?> record) {
         final EventType eventType = resolveEventType(record.topic());
         final String dlqTopic = switch (eventType) {
