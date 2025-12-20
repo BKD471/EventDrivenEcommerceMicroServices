@@ -36,7 +36,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
     private final S3Client s3Client;
     private final DlqS3Properties properties;
     // Configured for Avro payloads that may contain Java time types (e.g. Instant)
-    private static final ObjectMapper mapper = new ObjectMapper()
+    private final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
@@ -63,7 +63,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
         wrapper.put("topic", record.topic());
         wrapper.put("key", record.key());
         wrapper.put("timestamp", record.timestamp());
-        wrapper.put("valueJson", mapper.readValue(jsonPayload, Object.class));
+        wrapper.put("valueJson", jsonPayload);
 
         final String finalJson = mapper.writeValueAsString(wrapper);
         final String s3Key = prefix + "/" + UUID.randomUUID() + ".json";
@@ -84,7 +84,7 @@ public class DlqS3ServiceImpl implements IDlqS3Service {
         final List<String> keysList = new ArrayList<>();
         String continuationToken = null;
         do {
-             ListObjectsV2Request.Builder requestBuilder =
+            ListObjectsV2Request.Builder requestBuilder =
                     ListObjectsV2Request.builder()
                             .bucket(properties.bucket())
                             .prefix(prefix);

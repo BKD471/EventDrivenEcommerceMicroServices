@@ -170,9 +170,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             dlqS3Service.storeToS3(record, PAYMENT);
         } catch (IOException ex) {
             log.error(
-                    "Failed to persist DLQ message to S3 for key={}, offset={}, timestamp={}",
+                    "Failed to persist Payment DLQ message to S3 for key={}, offset={}, partition={}, timestamp={}",
                     record.key(),
                     record.offset(),
+                    record.partition(),
                     getTimeStampForLogs(record),
                     ex
             );
@@ -193,9 +194,10 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             dlqS3Service.storeToS3(record, ORDER);
         } catch (IOException ex) {
             log.error(
-                    "Failed to persist DLQ message to S3 for key={}, offset={}, timestamp={}",
+                    "Failed to persist Order DLQ message to S3 for key={}, offset={}, partition={}, timestamp={}",
                     record.key(),
                     record.offset(),
+                    record.partition(),
                     getTimeStampForLogs(record),
                     ex
             );
