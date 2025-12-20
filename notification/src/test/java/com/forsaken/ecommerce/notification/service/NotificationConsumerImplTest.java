@@ -595,7 +595,6 @@ class NotificationConsumerImplTest {
         // given
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
-
         final ConsumerRecord<String, OrderConfirmation> record =
                 new ConsumerRecord<>(
                         "order-dlq-topic",
@@ -614,11 +613,12 @@ class NotificationConsumerImplTest {
     }
 
     /**
-     * Verifies fail-fast behavior when DLQ persistence to S3 fails.
+     * Verifies fail-safe behavior when DLQ persistence to S3 fails.
      *
      * <p>
-     * DLQ messages represent already-failed records and must never
-     * be silently dropped.
+     * DLQ messages represent records that have already failed normal processing.
+     * DLQ consumers must be resilient and should not fail-fast, as rethrowing
+     * exceptions would lead to repeated retries and consumer crash loops.
      * </p>
      *
      * <p>
@@ -626,18 +626,20 @@ class NotificationConsumerImplTest {
      * </p>
      * <ul>
      *     <li>The S3 persistence attempt is made</li>
-     *     <li>The exception is propagated</li>
-     *     <li>The Kafka offset is not acknowledged</li>
+     *     <li>The exception is caught and logged</li>
+     *     <li>The exception does <b>not</b> propagate out of the listener</li>
+     *     <li>The Kafka offset is <b>not acknowledged</b></li>
      *     <li>No normal processing logic is triggered</li>
      * </ul>
      *
      * <p>
-     * This guarantees visibility of DLQ persistence failures and
-     * prevents silent data loss.
+     * This design preserves operational visibility of DLQ persistence failures
+     * through logging while preventing Kafka consumer disruption and infinite
+     * retry loops.
      * </p>
      */
     @Test
-    void paymentConsumeDlqShouldRethrowExceptionWhenS3Fails() throws IOException {
+    void paymentConsumeDlqShouldNotThrowExceptionWhenS3Fails() throws IOException {
         // given
         final PaymentConfirmation paymentConfirmation = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
@@ -665,11 +667,12 @@ class NotificationConsumerImplTest {
     }
 
     /**
-     * Verifies fail-fast behavior when DLQ persistence to S3 fails.
+     * Verifies fail-safe behavior when DLQ persistence to S3 fails.
      *
      * <p>
-     * DLQ messages represent already-failed records and must never
-     * be silently dropped.
+     * DLQ messages represent already-failed records. DLQ consumers must be
+     * resilient and must <b>not</b> fail-fast, as repeated retries provide
+     * little value and can cause consumer crash loops.
      * </p>
      *
      * <p>
@@ -677,18 +680,20 @@ class NotificationConsumerImplTest {
      * </p>
      * <ul>
      *     <li>The S3 persistence attempt is made</li>
-     *     <li>The exception is propagated</li>
-     *     <li>The Kafka offset is not acknowledged</li>
+     *     <li>The exception is caught and logged</li>
+     *     <li>The exception does <b>not</b> propagate out of the listener</li>
+     *     <li>The Kafka offset is <b>not acknowledged</b></li>
      *     <li>No normal processing logic is triggered</li>
      * </ul>
      *
      * <p>
-     * This guarantees visibility of DLQ persistence failures and
-     * prevents silent data loss.
+     * This design prevents Kafka consumer disruption while preserving
+     * operational visibility through logs and metrics, ensuring that
+     * failed DLQ persistence remains observable without crashing the consumer.
      * </p>
      */
     @Test
-    void orderConsumeDlqShouldRethrowExceptionWhenS3Fails() throws IOException {
+    void orderConsumeDlqShouldNotThrowExceptionWhenS3Fails() throws IOException {
         // given
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderConfirmation = constructOrderConfirmation(customer);
@@ -766,8 +771,7 @@ class NotificationConsumerImplTest {
      * This test simulates an {@link IOException} occurring while attempting
      * to persist a payment DLQ record.
      * </p>
-     *
-     /**
+     * <p>
      * Expected behavior:
      * <ul>
      *   <li>The persistence attempt to S3 is made</li>
