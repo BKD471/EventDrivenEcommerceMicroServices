@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.notification.configs.kafka;
 
 import com.forsaken.ecommerce.notification.models.EventType;
 import nl.altindag.log.LogCaptor;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +17,6 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -62,6 +62,9 @@ class KafkaErrorHandlerConfigurationsTest {
     @Mock
     private KafkaDlqProperties kafkaDlqProperties;
 
+    @Mock
+    private KafkaTemplate<String, SpecificRecordBase> dlqKafkaTemplate;
+
     private KafkaErrorHandlerConfigurations configuration;
 
     @BeforeEach
@@ -71,46 +74,22 @@ class KafkaErrorHandlerConfigurationsTest {
     }
 
     /**
-     * Verifies that an Avro-based {@link KafkaTemplate} can be created
-     * when the required Kafka and Schema Registry properties are provided.
-     */
-    @Test
-    void shouldCreateAvroKafkaTemplate() {
-        // Given
-        when(kafkaProperties.bootstrapServers())
-                .thenReturn(List.of("localhost:9092"));
-        when(kafkaProperties.schemaRegistryUrl())
-                .thenReturn("http://localhost:8081");
-
-        // When
-        final KafkaTemplate<String, Object> template =
-                configuration.avroKafkaTemplate();
-
-        // Then
-        assertNotNull(template);
-    }
-
-    /**
      * Verifies that a {@link DefaultErrorHandler} is successfully created
      * with the configured retry and backoff settings.
      */
     @Test
     void shouldCreateDefaultErrorHandler() {
-        // Given
-        when(kafkaProperties.bootstrapServers()).thenReturn(List.of("localhost:9092"));
-        when(kafkaProperties.schemaRegistryUrl()).thenReturn("http://localhost:8081");
-        when(kafkaDlqProperties.maxAttempts()).thenReturn(3);
-        when(kafkaDlqProperties.backOffInterval()).thenReturn(Math.toIntExact(1_000L));
+        // given
+        when(kafkaDlqProperties.maxRetries()).thenReturn(Math.toIntExact(3L));
+        when(kafkaDlqProperties.backOffInterval()).thenReturn(Math.toIntExact(1000L));
         when(kafkaDlqProperties.multiplier()).thenReturn(2.0);
-        when(kafkaDlqProperties.maxInterval()).thenReturn(Math.toIntExact(10_000L));
+        when(kafkaDlqProperties.maxInterval()).thenReturn(Math.toIntExact(10000L));
 
-        // When
-        final KafkaTemplate<String, Object> template =
-                configuration.avroKafkaTemplate();
+        // when
         final DefaultErrorHandler handler =
-                configuration.errorHandler(template);
+                configuration.errorHandler(dlqKafkaTemplate);
 
-        // Then
+        // then
         assertNotNull(handler);
     }
 
@@ -177,7 +156,6 @@ class KafkaErrorHandlerConfigurationsTest {
                 when(kafkaDlqProperties.orderDlqTopicName()).thenReturn("order-dlq");
             }
         }
-
         final EventType actualEventType =
                 configuration.resolveEventType(sourceTopic);
         final ConsumerRecord<String, Object> record =
@@ -233,12 +211,11 @@ class KafkaErrorHandlerConfigurationsTest {
     @MethodSource("topicMappings")
     void shouldInvokeRetryListenerAndLogRetryAttempt(final String topicName) {
         // given
-        when(kafkaDlqProperties.maxAttempts()).thenReturn(2);
+        when(kafkaDlqProperties.maxRetries()).thenReturn(2);
         when(kafkaDlqProperties.backOffInterval()).thenReturn(Math.toIntExact(100L));
         when(kafkaDlqProperties.multiplier()).thenReturn(2.0);
         when(kafkaDlqProperties.maxInterval()).thenReturn(Math.toIntExact(1_000L));
-
-        final KafkaTemplate<String, Object> template = mock(KafkaTemplate.class);
+        final KafkaTemplate<String, SpecificRecordBase> template = mock(KafkaTemplate.class);
         final DefaultErrorHandler handler = configuration.errorHandler(template);
         final LogCaptor logCaptor = LogCaptor.forClass(KafkaErrorHandlerConfigurations.class);
         final ConsumerRecord<String, Object> record =

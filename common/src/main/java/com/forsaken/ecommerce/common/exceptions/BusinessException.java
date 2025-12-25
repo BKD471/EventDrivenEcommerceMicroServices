@@ -8,15 +8,27 @@ import lombok.Getter;
 @Getter
 public class BusinessException extends Exception {
 
-    private final String message;
     private final String methodName;
+
+    public BusinessException(final String message) {
+        super(message);
+        this.methodName = null;
+    }
 
     public BusinessException(
             final String message,
             final String methodName
     ) {
         super(String.format("%s in %s", message, methodName));
-        this.message = message;
+        this.methodName = methodName;
+    }
+
+    public BusinessException(
+            final String message,
+            final String methodName,
+            final Throwable cause
+    ) {
+        super(String.format("%s in %s", message, methodName), cause);
         this.methodName = methodName;
     }
 }

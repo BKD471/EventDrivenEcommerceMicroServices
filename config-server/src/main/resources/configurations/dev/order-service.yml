@@ -32,6 +32,11 @@ application:
     payment-url: http://localhost:8222/api/v1/payments
     product-url: http://localhost:8222/api/v1/products
 
+rest:
+  client:
+    connectTimeout: 2s
+    readTimeout: 5s
+
 aws:
   secretsmanager:
     dbSecretName: OrderServiceSecrets

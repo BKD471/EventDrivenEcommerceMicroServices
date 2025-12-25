@@ -11,6 +11,8 @@ spring:
       paymentGroupId: paymentGroup
       orderTopicName: order-topic
       orderGroupId: orderGroup
+      maxPollIntervalMs: 900000
+      maxPollRecords: 1
       bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
       offSetReset: earliest
       keyDeSerializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -23,7 +25,7 @@ spring:
       groupId: notification-dlq
       partitions: 10
       replicas: 3
-      maxAttempts: 3
+      maxRetries: 3
       backOffInterval: 2000
       multiplier: 2.0
       maxInterval: 15000

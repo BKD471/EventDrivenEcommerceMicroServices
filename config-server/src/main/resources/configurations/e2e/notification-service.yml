@@ -23,7 +23,7 @@ spring:
       groupId: notification-dlq
       partitions: 10
       replicas: 3
-      maxAttempts: 3
+      maxRetries: 3
       backOffInterval: 2000
       multiplier: 2.0
       maxInterval: 15000

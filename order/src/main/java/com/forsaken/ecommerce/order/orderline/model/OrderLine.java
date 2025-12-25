@@ -34,6 +34,10 @@ public class OrderLine {
     )
     private Integer id;
 
+    /**
+     * Owning side of the relationship.
+     * Order controls lifecycle via cascade + orphanRemoval.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
@@ -43,6 +47,10 @@ public class OrderLine {
 
     @Column(nullable = false)
     private double quantity;
+
+    public void setOrder(final Order order) {
+        this.order = order;
+    }
 
     public OrderLineResponse toOrderLineResponse() {
         return OrderLineResponse.builder()

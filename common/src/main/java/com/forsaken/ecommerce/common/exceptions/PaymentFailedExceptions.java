@@ -7,14 +7,27 @@ import lombok.Getter;
 @Getter
 public class PaymentFailedExceptions extends Exception {
 
-    private final String message;
     private final String methodName;
 
-    public PaymentFailedExceptions(final String message,
-                                   final String methodName
+    public PaymentFailedExceptions(final String message) {
+        super(message);
+        this.methodName = null;
+    }
+
+    public PaymentFailedExceptions(
+            final String message,
+            final String methodName
     ) {
         super(String.format("%s in %s", message, methodName));
-        this.message = message;
+        this.methodName = methodName;
+    }
+
+    public PaymentFailedExceptions(
+            final String message,
+            final String methodName,
+            final Throwable cause
+    ) {
+        super(String.format("%s in %s", message, methodName), cause);
         this.methodName = methodName;
     }
 }

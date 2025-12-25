@@ -22,7 +22,7 @@ public record KafkaDlqProperties(
 
         @Min(1)
         @Max(100)
-        Integer maxAttempts,
+        Integer maxRetries,
 
         @Min(1)
         @Max(100)

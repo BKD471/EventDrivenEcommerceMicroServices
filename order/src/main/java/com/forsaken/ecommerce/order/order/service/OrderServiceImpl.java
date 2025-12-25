@@ -25,6 +25,7 @@ import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -45,26 +46,34 @@ public class OrderServiceImpl implements IOrderService {
     private final IPaymentService paymentService;
     private final IOrderProducer orderProducer;
 
+    @Transactional(
+            rollbackFor = {
+                    CustomerNotFoundExceptions.class,
+                    BusinessException.class,
+                    PaymentFailedExceptions.class,
+                    ProductNotFoundExceptions.class
+            }
+    )
     @Override
     public Integer createOrder(final OrderRequest request)
-            throws ExecutionException, InterruptedException, CustomerNotFoundExceptions, BusinessException, PaymentFailedExceptions, ProductNotFoundExceptions {
+            throws CustomerNotFoundExceptions, BusinessException,
+            PaymentFailedExceptions, ProductNotFoundExceptions {
         log.info("Creating Order Request: {}", request);
         final var fetchedCustomer = customerService.getCustomer(request.customerId());
         final var fetchedPurchasedProducts = productService.purchaseProducts(request.products());
         CompletableFuture.allOf(fetchedCustomer, fetchedPurchasedProducts).join();
 
-        final var customer = fetchedCustomer.get();
-        final var purchasedProducts = fetchedPurchasedProducts.get();
+        final var customer = fetchedCustomer.join();
+        final var purchasedProducts = fetchedPurchasedProducts.join();
         final Order order = request.toOrder();
-        final List<OrderLine> orderLines = request.products().stream()
-                .map(p -> OrderLine.builder()
-                        .order(order)
-                        .productId(p.productId())
-                        .quantity(p.quantity())
-                        .build()
-                )
-                .toList();
-        order.getOrderLines().addAll(orderLines);
+        request.products().forEach(p -> {
+            OrderLine orderLine = OrderLine.builder()
+                    .productId(p.productId())
+                    .quantity(p.quantity())
+                    .build();
+
+            order.addOrderLine(orderLine);
+        });
         final Order savedOrder = orderRepository.save(order);
 
         final PaymentRequest paymentRequest = PaymentRequest.builder()

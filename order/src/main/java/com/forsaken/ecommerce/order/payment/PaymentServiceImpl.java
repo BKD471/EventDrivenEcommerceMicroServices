@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.order.payment;
 
 import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -23,12 +24,33 @@ public class PaymentServiceImpl implements IPaymentService {
     public CompletableFuture<Integer> pay(final PaymentRequest request) throws PaymentFailedExceptions {
         log.info("Payment request: {}", request);
         try {
-            final ApiResponse<Integer> response = paymentClient.requestOrderPayment(request);
-            return CompletableFuture.completedFuture(response.data());
-        } catch (feign.FeignException.NotFound ex) {
+            final ApiResponse<Integer> paymentResponse = paymentClient.requestOrderPayment(request);
+            if (null == paymentResponse || null == paymentResponse.data()) {
+                throw new PaymentFailedExceptions(
+                        "Payment Failed:: An error occurred while processing the payment",
+                        "pay(final PaymentRequest request) in " + className
+                );
+            }
+            return CompletableFuture.completedFuture(paymentResponse.data());
+        } catch (FeignException.NotFound ex) {
             throw new PaymentFailedExceptions(
-                    "Payment Failed:: An error occurred while processing the payment",
-                    "pay(final PaymentRequest request) in " + className
+                    "Payment Failed: Payment service endpoint not found",
+                    "pay(final PaymentRequest request) in " + className,
+                    ex
+            );
+
+        } catch (FeignException.BadRequest ex) {
+            throw new PaymentFailedExceptions(
+                    "Payment Failed: Invalid payment request",
+                    "pay(final PaymentRequest request) in " + className,
+                    ex
+            );
+
+        } catch (FeignException ex) {
+            throw new PaymentFailedExceptions(
+                    "Payment Failed: Payment service error (status=" + ex.status() + ")",
+                    "pay(final PaymentRequest request) in " + className,
+                    ex
             );
         }
     }
