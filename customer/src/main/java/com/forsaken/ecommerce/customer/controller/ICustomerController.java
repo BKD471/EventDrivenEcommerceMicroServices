@@ -116,7 +116,7 @@ public interface ICustomerController {
      *         {@link CustomerResponse} object representing the customer's details
      * @throws CustomerNotFoundExceptions if no customer is found for the given ID
      */
-    @GetMapping("/{customer-id}")
+    @GetMapping("/id/{customer-id}")
     ResponseEntity<ApiResponse<CustomerResponse>> findById(
             @PathVariable("customer-id") @NotBlank final String customerId
     ) throws CustomerNotFoundExceptions;
@@ -132,7 +132,7 @@ public interface ICustomerController {
      *         {@link CustomerResponse} with the customer's details
      * @throws CustomerNotFoundExceptions if no customer exists for the given email
      */
-    @GetMapping("/{customer-email}")
+    @GetMapping("/email/{customer-email}")
     ResponseEntity<ApiResponse<CustomerResponse>> findByEmail(
             @PathVariable("customer-email") @NotBlank final String customerEmail
     ) throws CustomerNotFoundExceptions;

@@ -2,6 +2,8 @@ package com.forsaken.ecommerce.order.order.service;
 
 import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
+import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
+import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 
@@ -61,7 +63,7 @@ public interface IOrderService {
      * @throws InterruptedException       if the thread is interrupted during execution.
      */
     Integer createOrder(final OrderRequest request) throws ExecutionException, InterruptedException,
-            CustomerNotFoundExceptions, BusinessException;
+            CustomerNotFoundExceptions, BusinessException, PaymentFailedExceptions, ProductNotFoundExceptions;
 
     /**
      * Retrieves all orders available in the system.

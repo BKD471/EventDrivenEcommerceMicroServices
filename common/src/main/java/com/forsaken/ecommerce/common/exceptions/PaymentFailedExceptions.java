@@ -1,21 +1,20 @@
 package com.forsaken.ecommerce.common.exceptions;
 
-
 import lombok.Builder;
 import lombok.Getter;
 
 @Builder
 @Getter
-public class CustomerNotFoundExceptions extends Exception {
+public class PaymentFailedExceptions extends Exception {
 
     private final String methodName;
 
-    public CustomerNotFoundExceptions(final String message) {
+    public PaymentFailedExceptions(final String message) {
         super(message);
         this.methodName = null;
     }
 
-    public CustomerNotFoundExceptions(
+    public PaymentFailedExceptions(
             final String message,
             final String methodName
     ) {
@@ -23,7 +22,7 @@ public class CustomerNotFoundExceptions extends Exception {
         this.methodName = methodName;
     }
 
-    public CustomerNotFoundExceptions(
+    public PaymentFailedExceptions(
             final String message,
             final String methodName,
             final Throwable cause

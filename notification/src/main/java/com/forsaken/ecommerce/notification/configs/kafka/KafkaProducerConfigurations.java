@@ -40,7 +40,6 @@ public class KafkaProducerConfigurations {
         config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
         config.put("schema.registry.url", kafkaProperties.schemaRegistryUrl());
-        config.put("specific.avro.reader", true);
         return new DefaultKafkaProducerFactory<>(config);
     }
 

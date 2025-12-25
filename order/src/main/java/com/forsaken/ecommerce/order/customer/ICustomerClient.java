@@ -1,5 +1,6 @@
 package com.forsaken.ecommerce.order.customer;
 
+import com.forsaken.ecommerce.common.responses.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,6 +50,6 @@ public interface ICustomerClient {
      * @return an {@link Optional} containing the customer details if found,
      * otherwise an empty Optional
      */
-    @GetMapping("/{customer-id}")
-    Optional<CustomerResponse> findCustomerById(@PathVariable("customer-id") String customerId);
+    @GetMapping("/id/{customer-id}")
+    ApiResponse<CustomerResponse> findCustomerById(@PathVariable("customer-id") String customerId);
 }

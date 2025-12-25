@@ -1,9 +1,44 @@
 server:
   port: 8070
 
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    producer:
+      topicName: order-topic
+      partitions: 10
+      replicationFactor: 3
+      minInSyncReplicas: 2
+      ack: all
+      retries: 5
+      compressionType: gzip
+      retryBackOffMs: 200
+      isUncleanElection: false
+      maxPollIntervalMs: 900000
+      maxPollRecords: 1
+      bootstrapServers: localhost:9092,localhost:9093,localhost:9094
+      keySerializer: org.apache.kafka.common.serialization.StringSerializer
+      valueSerializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      schemaRegistryUrl: "http://127.0.0.1:8081"
 
+application:
+  config:
+    customer-url: http://localhost:8222/api/v1/customers
+    payment-url: http://localhost:8222/api/v1/payments
+    product-url: http://localhost:8222/api/v1/products
 
+rest:
+  client:
+    connectTimeout: 2s
+    readTimeout: 5s
 
-
-
-
+aws:
+  secretsmanager:
+    dbSecretName: OrderServiceSecrets

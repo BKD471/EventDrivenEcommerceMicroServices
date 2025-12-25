@@ -1,6 +1,6 @@
 package com.forsaken.ecommerce.order.customer;
 
-import org.springframework.scheduling.annotation.Async;
+import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -62,6 +62,6 @@ public interface ICustomerService {
      * @return a {@link CompletableFuture} containing an {@link Optional}
      * with the customer data, or empty if not found
      */
-    @Async("appTaskExecutor")
-    CompletableFuture<Optional<CustomerResponse>> getCustomer(final String customerId);
+
+    CompletableFuture<CustomerResponse> getCustomer(final String customerId) throws CustomerNotFoundExceptions;
 }

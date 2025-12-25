@@ -1,7 +1,7 @@
 package com.forsaken.ecommerce.order.product;
 
 import com.forsaken.ecommerce.common.exceptions.BusinessException;
-import org.springframework.scheduling.annotation.Async;
+import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -80,6 +80,5 @@ public interface IProductService {
      * @return a {@link CompletableFuture} that resolves to a list of purchase responses
      * @throws BusinessException if any business validation or rule check fails
      */
-    @Async("appTaskExecutor")
-    CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody) throws BusinessException;
+    CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody) throws BusinessException, ProductNotFoundExceptions;
 }

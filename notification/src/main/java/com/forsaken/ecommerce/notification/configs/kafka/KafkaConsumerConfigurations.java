@@ -22,6 +22,13 @@ import java.util.AbstractMap;
 import java.util.Map;
 
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
 
 @Configuration
@@ -114,49 +121,42 @@ public class KafkaConsumerConfigurations {
 
     private Map<String, Object> constructConsumerFactory(final String groupId) {
         return Map.ofEntries(
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                                kafkaProperties.bootstrapServers()
-                        ),
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.GROUP_ID_CONFIG,
-                                groupId
-                        ),
+                new AbstractMap.SimpleEntry<>(
+                        BOOTSTRAP_SERVERS_CONFIG,
+                        kafkaProperties.bootstrapServers()
+                ),
+                new AbstractMap.SimpleEntry<>(
+                        ConsumerConfig.GROUP_ID_CONFIG,
+                        groupId
+                ),
                 new AbstractMap.SimpleEntry<>(
                         SCHEMA_REGISTRY_URL_CONFIG,
                         kafkaProperties.schemaRegistryUrl()
                 ),
                 new AbstractMap.SimpleEntry<>(
+                        MAX_POLL_INTERVAL_MS_CONFIG,
+                        Math.toIntExact(kafkaProperties.maxPollIntervalMs().toMillis())
+                ),
+                new AbstractMap.SimpleEntry<>(
+                        MAX_POLL_RECORDS_CONFIG,
+                        kafkaProperties.maxPollRecords()
+                ),
+                new AbstractMap.SimpleEntry<>(
                         "specific.avro.reader",
                         true
                 ),
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-                                kafkaProperties.offSetReset()
-                        ),
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                                kafkaProperties.keyDeSerializer()
-                        ),
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                                kafkaProperties.valueDeSerializer()
-                        ),
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.RETRY_BACKOFF_MS_CONFIG,
-                                kafkaDlqProperties.backOffInterval()
-                        ),
-                new AbstractMap.SimpleEntry<>
-                        (
-                                ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG,
-                                kafkaDlqProperties.maxInterval()
-                        )
+                new AbstractMap.SimpleEntry<>(
+                        AUTO_OFFSET_RESET_CONFIG,
+                        kafkaProperties.offSetReset()
+                ),
+                new AbstractMap.SimpleEntry<>(
+                        KEY_DESERIALIZER_CLASS_CONFIG,
+                        kafkaProperties.keyDeSerializer()
+                ),
+                new AbstractMap.SimpleEntry<>(
+                        VALUE_DESERIALIZER_CLASS_CONFIG,
+                        kafkaProperties.valueDeSerializer()
+                )
         );
     }
 }

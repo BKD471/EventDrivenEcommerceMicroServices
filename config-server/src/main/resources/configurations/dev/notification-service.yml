@@ -11,6 +11,8 @@ spring:
       paymentGroupId: paymentGroup
       orderTopicName: order-topic
       orderGroupId: orderGroup
+      maxPollIntervalMs: 900000
+      maxPollRecords: 1
       bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
       offSetReset: earliest
       keyDeSerializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -23,7 +25,7 @@ spring:
       groupId: notification-dlq
       partitions: 10
       replicas: 3
-      maxAttempts: 3
+      maxRetries: 3
       backOffInterval: 2000
       multiplier: 2.0
       maxInterval: 15000
@@ -33,8 +35,8 @@ spring:
   mail:
     host: localhost
     port: 1025
-    username: ${EMAIL_USERNAME:}
-    password: ${EMAIL_PASSWORD:}
+    username: ${EMAIL_USERNAME:admin}
+    password: ${EMAIL_PASSWORD:admin}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
@@ -47,12 +49,12 @@ invoice:
   downloadUrl: http://localhost:8222/api/v1
   senderEmailAddress: noreply@forsaken-ecommerce.com
   jasperTemplatePath: reports/invoice_template.jrxml
-  companyLogoPath: reports/accenture-logo.png
-  userLogoPath: reports/icon-user.png
-  emailLogoPath: reports/icon-email.png
-  amountLogoPath: reports/icon-amount.png
-  paymentLogoPath: reports/icon-payment.png
-  calendarLogoPath: reports/icon-calendar.png
+  companyLogoPath: /reports/accenture-logo.png
+  userLogoPath: /reports/icon-user.png
+  emailLogoPath: /reports/icon-email.png
+  amountLogoPath: /reports/icon-amount.png
+  paymentLogoPath: /reports/icon-payment.png
+  calendarLogoPath: /reports/icon-calendar.png
 
 aws:
   secretsmanager:
