@@ -46,12 +46,12 @@ invoice:
   downloadUrl: http://localhost:8222/api/v1
   senderEmailAddress: noreply@forsaken-ecommerce.com
   jasperTemplatePath: reports/invoice_template.jrxml
-  companyLogoPath: reports/accenture-logo.png
-  userLogoPath: reports/icon-user.png
-  emailLogoPath: reports/icon-email.png
-  amountLogoPath: reports/icon-amount.png
-  paymentLogoPath: reports/icon-payment.png
-  calendarLogoPath: reports/icon-calendar.png
+  companyLogoPath: /reports/accenture-logo.png
+  userLogoPath: /reports/icon-user.png
+  emailLogoPath: /reports/icon-email.png
+  amountLogoPath: /reports/icon-amount.png
+  paymentLogoPath: /reports/icon-payment.png
+  calendarLogoPath: /reports/icon-calendar.png
 
 aws:
   secretsmanager:
