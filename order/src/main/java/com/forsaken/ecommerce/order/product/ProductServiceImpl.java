@@ -52,8 +52,8 @@ public class ProductServiceImpl implements IProductService {
                 responseType
         );
 
-        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null
-                || response.getBody().data() == null || response.getStatusCode().isError()) {
+        if (response.getBody() == null || response.getBody().data() == null
+                || response.getStatusCode().isError()) {
             log.error("Product request failed: {}", response.getBody());
             throw new ProductNotFoundExceptions(
                     "An error occurred while processing the products purchase: " + response.getStatusCode(),

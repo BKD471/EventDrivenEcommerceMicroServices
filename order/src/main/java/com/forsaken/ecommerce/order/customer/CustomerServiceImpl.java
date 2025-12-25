@@ -3,7 +3,6 @@ package com.forsaken.ecommerce.order.customer;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
-import com.forsaken.ecommerce.order.order.service.OrderServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -18,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 public class CustomerServiceImpl implements ICustomerService {
 
     private final ICustomerClient customerClient;
-    private final Class<?> className = OrderServiceImpl.class;
+    private final Class<?> className = CustomerServiceImpl.class;
 
     @Override
     @Async("appTaskExecutor")

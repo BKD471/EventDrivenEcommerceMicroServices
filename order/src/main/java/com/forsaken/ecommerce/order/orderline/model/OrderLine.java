@@ -22,14 +22,14 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @NoArgsConstructor
-@Table(name = "customer_line")
+@Table(name = "customer_order_line")
 public class OrderLine {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "customer_line_seq")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "customer_order_line_seq")
     @SequenceGenerator(
-            name = "customer_line_seq",
-            sequenceName = "customer_line_seq",
+            name = "customer_order_line_seq",
+            sequenceName = "customer_order_line_seq",
             allocationSize = 1
     )
     private Integer id;
