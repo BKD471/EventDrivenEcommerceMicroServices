@@ -2,6 +2,8 @@ package com.forsaken.ecommerce.order.order.controller;
 
 import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
+import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
+import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
@@ -22,7 +24,9 @@ public class OrderControllerImpl implements IOrderController {
     private final IOrderService orderService;
 
     @Override
-    public ResponseEntity<ApiResponse<Integer>> createOrder(final OrderRequest request) throws ExecutionException, InterruptedException, CustomerNotFoundExceptions, BusinessException {
+    public ResponseEntity<ApiResponse<Integer>> createOrder(final OrderRequest request)
+            throws ExecutionException, InterruptedException, CustomerNotFoundExceptions,
+            BusinessException, PaymentFailedExceptions, ProductNotFoundExceptions {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
                         ApiResponse.<Integer>builder()

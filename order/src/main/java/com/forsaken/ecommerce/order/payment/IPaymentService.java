@@ -1,5 +1,7 @@
 package com.forsaken.ecommerce.order.payment;
 
+import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
+
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -61,5 +63,5 @@ public interface IPaymentService {
      *                payment method, and other required metadata; must not be null
      * @return a {@link CompletableFuture} resolving to the unique payment ID upon success
      */
-    CompletableFuture<Integer> pay(final PaymentRequest request);
+    CompletableFuture<Integer> pay(final PaymentRequest request) throws PaymentFailedExceptions;
 }

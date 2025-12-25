@@ -1,5 +1,6 @@
 package com.forsaken.ecommerce.order.payment;
 
+import com.forsaken.ecommerce.common.responses.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,5 +52,5 @@ public interface IPaymentClient {
      *                              (e.g., validation failure, insufficient funds, server error)
      */
     @PostMapping
-    Integer requestOrderPayment(@RequestBody final PaymentRequest request);
+    ApiResponse<Integer> requestOrderPayment(@RequestBody final PaymentRequest request);
 }

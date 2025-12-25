@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.KafkaDlqProperties;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
@@ -40,8 +41,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     private final KafkaProperties kafkaProperties;
 
     @KafkaListener(
-            topics = "#{@kafkaProperties.paymentTopicName()}",
-            groupId = "#{@kafkaProperties.paymentGroupId()}",
+            topics = "${spring.kafka.consumer.paymentTopicName}",
+            groupId = "${spring.kafka.consumer.paymentGroupId}",
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
@@ -107,8 +108,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "#{@kafkaProperties.orderTopicName()}",
-            groupId = "#{@kafkaProperties.orderGroupId()}",
+            topics = "${spring.kafka.consumer.orderTopicName}",
+            groupId = "${spring.kafka.consumer.orderGroupId}",
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override
@@ -169,8 +170,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "#{@dlqProperties.paymentDlqTopicName()}",
-            groupId = "#{@dlqProperties.groupId()}",
+            topics = "${spring.kafka.dlq.paymentDlqTopicName}",
+            groupId = "${spring.kafka.dlq.groupId}",
             containerFactory = "paymentKafkaListenerContainerFactory"
     )
     @Override
@@ -198,8 +199,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
 
 
     @KafkaListener(
-            topics = "#{@dlqProperties.orderDlqTopicName()}",
-            groupId = "#{@dlqProperties.groupId()}",
+            topics = "${spring.kafka.dlq.orderDlqTopicName}",
+            groupId = "${spring.kafka.dlq.groupId}",
             containerFactory = "orderKafkaListenerContainerFactory"
     )
     @Override

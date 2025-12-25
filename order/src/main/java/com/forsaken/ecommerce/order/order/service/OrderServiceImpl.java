@@ -4,6 +4,8 @@ import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
+import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
+import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.order.customer.CustomerResponse;
 import com.forsaken.ecommerce.order.customer.ICustomerService;
 import com.forsaken.ecommerce.order.kafka.IOrderProducer;
@@ -11,12 +13,10 @@ import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 import com.forsaken.ecommerce.order.order.model.Order;
 import com.forsaken.ecommerce.order.order.repository.IOrderRepository;
-import com.forsaken.ecommerce.order.orderline.dto.OrderLineRequest;
-import com.forsaken.ecommerce.order.orderline.service.IOrderLineService;
+import com.forsaken.ecommerce.order.orderline.model.OrderLine;
 import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentRequest;
 import com.forsaken.ecommerce.order.product.IProductService;
-import com.forsaken.ecommerce.order.product.PurchaseRequest;
 import com.forsaken.ecommerce.order.product.PurchaseResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -40,44 +40,39 @@ import java.util.stream.Collectors;
 public class OrderServiceImpl implements IOrderService {
 
     private final IOrderRepository orderRepository;
-    private final IOrderLineService orderLineService;
     private final ICustomerService customerService;
     private final IProductService productService;
     private final IPaymentService paymentService;
     private final IOrderProducer orderProducer;
-    private final Class<?> className = OrderServiceImpl.class;
 
     @Override
-    public Integer createOrder(final OrderRequest request) throws ExecutionException, InterruptedException, CustomerNotFoundExceptions, BusinessException {
+    public Integer createOrder(final OrderRequest request)
+            throws ExecutionException, InterruptedException, CustomerNotFoundExceptions, BusinessException, PaymentFailedExceptions, ProductNotFoundExceptions {
         log.info("Creating Order Request: {}", request);
         final var fetchedCustomer = customerService.getCustomer(request.customerId());
         final var fetchedPurchasedProducts = productService.purchaseProducts(request.products());
         CompletableFuture.allOf(fetchedCustomer, fetchedPurchasedProducts).join();
 
-        final var customer = fetchedCustomer.get()
-                .orElseThrow(() -> new CustomerNotFoundExceptions(
-                                "Cannot create order:: No customer exists with the provided ID",
-                                "createOrder(final OrderRequest request) in " + className
-                        )
-                );
+        final var customer = fetchedCustomer.get();
         final var purchasedProducts = fetchedPurchasedProducts.get();
-        final Order order = this.orderRepository.save(request.toOrder());
-        for (final PurchaseRequest purchaseRequest : request.products()) {
-            orderLineService.saveOrderLine(
-                    OrderLineRequest.builder()
-                            .id(null)
-                            .orderId(order.getId())
-                            .productId(purchaseRequest.productId())
-                            .quantity(purchaseRequest.quantity())
-                            .build()
-            );
-        }
+        final Order order = request.toOrder();
+        final List<OrderLine> orderLines = request.products().stream()
+                .map(p -> OrderLine.builder()
+                        .order(order)
+                        .productId(p.productId())
+                        .quantity(p.quantity())
+                        .build()
+                )
+                .toList();
+        order.getOrderLines().addAll(orderLines);
+        final Order savedOrder = orderRepository.save(order);
 
         final PaymentRequest paymentRequest = PaymentRequest.builder()
                 .amount(request.amount())
                 .paymentMethod(request.paymentMethod())
-                .orderId(order.getId())
-                .orderReference(order.getReference())
+                .orderId(savedOrder.getId())
+                .orderReference(savedOrder.getReference())
+                .customer(customer)
                 .build();
         paymentService.pay(paymentRequest);
         log.info("Sent Payment");
@@ -93,7 +88,7 @@ public class OrderServiceImpl implements IOrderService {
         log.info("Created Order Confirmation: {}", orderConfirmation);
         orderProducer.sendOrderConfirmation(orderConfirmation);
         log.info("Sent Order Confirmation");
-        return order.getId();
+        return savedOrder.getId();
     }
 
     @Override

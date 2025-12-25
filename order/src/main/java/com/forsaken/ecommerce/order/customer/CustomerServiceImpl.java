@@ -1,24 +1,37 @@
 package com.forsaken.ecommerce.order.customer;
 
 
+import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
+import com.forsaken.ecommerce.common.responses.ApiResponse;
+import com.forsaken.ecommerce.order.order.service.OrderServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 
-@Component
+@Service
 @RequiredArgsConstructor
 @Slf4j
 public class CustomerServiceImpl implements ICustomerService {
 
     private final ICustomerClient customerClient;
+    private final Class<?> className = OrderServiceImpl.class;
 
     @Override
-    public CompletableFuture<Optional<CustomerResponse>> getCustomer(final String customerId) {
+    @Async("appTaskExecutor")
+    public CompletableFuture<CustomerResponse> getCustomer(final String customerId) throws CustomerNotFoundExceptions {
         log.info("Get Customer by ID: {}", customerId);
-        return CompletableFuture.completedFuture(customerClient.findCustomerById(customerId));
+        try{
+            final ApiResponse<CustomerResponse> response = customerClient.findCustomerById(customerId);
+            return CompletableFuture.completedFuture(response.data());
+        } catch (feign.FeignException.NotFound ex) {
+            throw new CustomerNotFoundExceptions(
+                    "Cannot create order:: No customer exists with the provided ID",
+                    "createOrder(final OrderRequest request) in " + className
+            );
+        }
     }
 }
