@@ -25,17 +25,17 @@ public class OrderLineServiceImpl implements IOrderLineService {
             final int size
     ) {
         log.info("Find all Order Lines By Order Reference: {}", orderReference);
-        final int finalPage = Math.max(page - 1, 0);
-        final int finalSize = Math.max(size, 1);
-        final Pageable pageable = PageRequest.of(finalPage, finalSize);
+        final int pageIndex = page - 1;
+        final int pageSize = size;
+        final Pageable pageable = PageRequest.of(pageIndex, pageSize);
         final Page<OrderLineResponse> orderLinePage =
                 orderLineRepository
                         .findAllByOrder_Reference(orderReference, pageable)
                         .map(OrderLine::toOrderLineResponse);
         return PagedResponse.<OrderLineResponse>builder()
                 .content(orderLinePage.getContent())
-                .page(finalPage + 1)
-                .size(finalSize)
+                .page(page)
+                .size(pageSize)
                 .totalElements(orderLinePage.getTotalElements())
                 .totalPages(orderLinePage.getTotalPages())
                 .build();
