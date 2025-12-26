@@ -1,13 +1,12 @@
 package com.forsaken.ecommerce.order.product;
 
 
-import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.order.configs.client_configurations.product.ProductClientProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -28,14 +27,13 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 @Slf4j
 public class ProductServiceImpl implements IProductService {
 
-    @Value("${application.config.product-url}")
-    private String productUrl;
-    private final RestTemplate restTemplate;
+    private final RestTemplate productRestTemplate;
+    private final ProductClientProperties productClientProperties;
     private final Class<?> className = ProductServiceImpl.class;
 
     @Async("appTaskExecutor")
     @Override
-    public CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody) throws BusinessException, ProductNotFoundExceptions {
+    public CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody) {
         log.info("Product request received: {}", requestBody);
         final HttpHeaders headers = new HttpHeaders();
         headers.set(CONTENT_TYPE, APPLICATION_JSON_VALUE);
@@ -45,21 +43,36 @@ public class ProductServiceImpl implements IProductService {
         final ParameterizedTypeReference<ApiResponse<PagedResponse<PurchaseResponse>>>
                 responseType = new ParameterizedTypeReference<>() {
         };
-        final ResponseEntity<ApiResponse<PagedResponse<PurchaseResponse>>> response = restTemplate.exchange(
-                productUrl + "/purchase",
-                POST,
-                requestEntity,
-                responseType
-        );
+        try {
+            final ResponseEntity<ApiResponse<PagedResponse<PurchaseResponse>>> response = productRestTemplate.exchange(
+                    productClientProperties.url() + "/purchase",
+                    POST,
+                    requestEntity,
+                    responseType
+            );
 
-        if (response.getBody() == null || response.getBody().data() == null
-                || response.getStatusCode().isError()) {
-            log.error("Product request failed: {}", response.getBody());
-            throw new ProductNotFoundExceptions(
-                    "An error occurred while processing the products purchase: " + response.getStatusCode(),
-                    "purchaseProducts(final List<PurchaseRequest> requestBody) in " + className
+            if (response.getBody() == null
+                    || response.getBody().data() == null
+                    || response.getStatusCode().isError()) {
+                log.error("Product service returned invalid response, status={}", response.getStatusCode());
+                return CompletableFuture.failedFuture(
+                        new ProductNotFoundExceptions(
+                                "Product service returned invalid response: "
+                                        + response.getStatusCode(),
+                                "purchaseProducts(List<PurchaseRequest>) in " + className
+                        )
+                );
+            }
+            return CompletableFuture.completedFuture(response.getBody().data().content());
+        } catch (Exception ex) {
+            log.error("Product service call failed", ex);
+            return CompletableFuture.failedFuture(
+                    new ProductNotFoundExceptions(
+                            "Failed to call product service",
+                            "purchaseProducts(List<PurchaseRequest>) in " + className,
+                            ex
+                    )
             );
         }
-        return CompletableFuture.completedFuture(response.getBody().data().content());
     }
 }

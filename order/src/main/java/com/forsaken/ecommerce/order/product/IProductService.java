@@ -80,5 +80,6 @@ public interface IProductService {
      * @return a {@link CompletableFuture} that resolves to a list of purchase responses
      * @throws BusinessException if any business validation or rule check fails
      */
-    CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody) throws BusinessException, ProductNotFoundExceptions;
+    CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody)
+            throws BusinessException, ProductNotFoundExceptions;
 }

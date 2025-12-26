@@ -30,14 +30,18 @@ spring:
 
 application:
   config:
-    customer-url: http://localhost:8222/api/v1/customers
-    payment-url: http://localhost:8222/api/v1/payments
-    product-url: http://localhost:8222/api/v1/products
-
-rest:
-  client:
-    connectTimeout: 2s
-    readTimeout: 5s
+    payment:
+      url: http://localhost:8222/api/v1/payments
+      connect-timeout: 2s
+      read-timeout: 5s
+    customer:
+      url: http://localhost:8222/api/v1/customers
+      connect-timeout: 2s
+      read-timeout: 5s
+    product:
+      url: http://localhost:8222/api/v1/products
+      connect-timeout: 2s
+      read-timeout: 5s
 
 aws:
   secretsmanager:

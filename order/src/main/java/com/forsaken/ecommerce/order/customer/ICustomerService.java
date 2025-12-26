@@ -63,5 +63,6 @@ public interface ICustomerService {
      * with the customer data, or empty if not found
      */
 
-    CompletableFuture<CustomerResponse> getCustomer(final String customerId) throws CustomerNotFoundExceptions;
+    CompletableFuture<CustomerResponse> getCustomer(final String customerId)
+            throws CustomerNotFoundExceptions;
 }

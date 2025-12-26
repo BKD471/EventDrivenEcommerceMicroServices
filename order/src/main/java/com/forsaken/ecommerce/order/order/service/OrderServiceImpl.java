@@ -32,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,7 +61,23 @@ public class OrderServiceImpl implements IOrderService {
         log.info("Creating Order Request: {}", request);
         final var fetchedCustomer = customerService.getCustomer(request.customerId());
         final var fetchedPurchasedProducts = productService.purchaseProducts(request.products());
-        CompletableFuture.allOf(fetchedCustomer, fetchedPurchasedProducts).join();
+        try {
+            CompletableFuture.allOf(
+                    fetchedCustomer,
+                    fetchedPurchasedProducts
+            ).join();
+        } catch (CompletionException ex) {
+            if (ex.getCause() instanceof CustomerNotFoundExceptions e) {
+                throw e;
+            }
+            if (ex.getCause() instanceof ProductNotFoundExceptions e) {
+                throw e;
+            }
+            if (ex.getCause() instanceof BusinessException e) {
+                throw e;
+            }
+            throw ex;
+        }
 
         final var customer = fetchedCustomer.join();
         final var purchasedProducts = fetchedPurchasedProducts.join();
