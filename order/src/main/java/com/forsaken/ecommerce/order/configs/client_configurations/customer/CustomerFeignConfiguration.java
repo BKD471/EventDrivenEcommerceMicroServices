@@ -4,6 +4,7 @@ import com.forsaken.ecommerce.order.customer.ICustomerClient;
 import feign.Feign;
 import feign.Request;
 import feign.Target;
+import feign.codec.ErrorDecoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,19 +16,19 @@ public class CustomerFeignConfiguration {
     private final CustomerClientProperties props;
 
     @Bean
-    public Feign.Builder feignBuilder() {
-        return Feign.builder()
-                .options(new Request.Options(
-                        Math.toIntExact(props.connectTimeout().toMillis()),
-                        Math.toIntExact(props.readTimeout().toMillis())
-                ));
+    public Request.Options customerRequestOptions() {
+        return new Request.Options(
+                Math.toIntExact(props.connectTimeout().toMillis()),
+                Math.toIntExact(props.readTimeout().toMillis())
+        );
     }
 
+    /**
+     * Maps HTTP errors from Customer service
+     * to domain-specific exceptions.
+     */
     @Bean
-    public Target<?> paymentTarget() {
-        return new Target.HardCodedTarget<>(
-                ICustomerClient.class,
-                props.url()
-        );
+    public ErrorDecoder customerErrorDecoder() {
+        return new CustomerFeignErrorDecoder();
     }
 }

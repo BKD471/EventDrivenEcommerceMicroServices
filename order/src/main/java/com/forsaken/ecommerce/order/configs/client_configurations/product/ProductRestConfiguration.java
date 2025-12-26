@@ -31,7 +31,6 @@ public class ProductRestConfiguration {
                         )
                 )
                 .build();
-
         final CloseableHttpClient httpClient = HttpClients.custom()
                 .setDefaultRequestConfig(requestConfig)
                 .build();

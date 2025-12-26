@@ -1,9 +1,8 @@
 package com.forsaken.ecommerce.order.configs.client_configurations.payment;
 
-import com.forsaken.ecommerce.order.payment.IPaymentClient;
 import feign.Feign;
 import feign.Request;
-import feign.Target;
+import feign.codec.ErrorDecoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,19 +14,19 @@ public class PaymentFeignConfiguration {
     private final PaymentClientProperties props;
 
     @Bean
-    public Feign.Builder feignBuilder() {
-        return Feign.builder()
-                .options(new Request.Options(
-                        Math.toIntExact(props.connectTimeout().toMillis()),
-                        Math.toIntExact(props.readTimeout().toMillis())
-                ));
+    public Request.Options paymentRequestOptions() {
+        return new Request.Options(
+                Math.toIntExact(props.connectTimeout().toMillis()),
+                Math.toIntExact(props.readTimeout().toMillis())
+        );
     }
 
+    /**
+     * Optional: Custom error decoder for mapping HTTP errors
+     * to domain-specific exceptions.
+     */
     @Bean
-    public Target<?> paymentTarget() {
-        return new Target.HardCodedTarget<>(
-                IPaymentClient.class,
-                props.url()
-        );
+    public ErrorDecoder paymentErrorDecoder() {
+        return new PaymentFeignErrorDecoder();
     }
 }

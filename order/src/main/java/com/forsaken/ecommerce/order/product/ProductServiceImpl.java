@@ -1,7 +1,9 @@
 package com.forsaken.ecommerce.order.product;
 
 
+import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
+import com.forsaken.ecommerce.common.exceptions.ProductServiceException;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.client_configurations.product.ProductClientProperties;
@@ -13,6 +15,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -64,10 +68,28 @@ public class ProductServiceImpl implements IProductService {
                 );
             }
             return CompletableFuture.completedFuture(response.getBody().data().content());
+        } catch (HttpClientErrorException.NotFound ex) {
+            return CompletableFuture.failedFuture(
+                    new ProductNotFoundExceptions("Product not found",
+                            "purchaseProducts(List<PurchaseRequest>) in " + className,
+                            ex)
+            );
+        } catch (HttpClientErrorException ex) {
+            return CompletableFuture.failedFuture(
+                    new BusinessException("Invalid product request",
+                            "purchaseProducts(List<PurchaseRequest>) in " + className,
+                            ex)
+            );
+        } catch (ResourceAccessException ex) {
+            return CompletableFuture.failedFuture(
+                    new ProductServiceException("Product service timeout",
+                            "purchaseProducts(List<PurchaseRequest>) in " + className,
+                            ex)
+            );
         } catch (Exception ex) {
             log.error("Product service call failed", ex);
             return CompletableFuture.failedFuture(
-                    new ProductNotFoundExceptions(
+                    new ProductServiceException(
                             "Failed to call product service",
                             "purchaseProducts(List<PurchaseRequest>) in " + className,
                             ex

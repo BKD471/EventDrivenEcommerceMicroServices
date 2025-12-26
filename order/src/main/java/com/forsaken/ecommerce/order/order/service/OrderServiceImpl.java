@@ -67,15 +67,17 @@ public class OrderServiceImpl implements IOrderService {
                     fetchedPurchasedProducts
             ).join();
         } catch (CompletionException ex) {
-            if (ex.getCause() instanceof CustomerNotFoundExceptions e) {
-                throw e;
-            }
-            if (ex.getCause() instanceof ProductNotFoundExceptions e) {
-                throw e;
-            }
-            if (ex.getCause() instanceof BusinessException e) {
-                throw e;
-            }
+            final Throwable cause = ex.getCause();
+
+            if (cause instanceof CustomerNotFoundExceptions e) throw e;
+            if (cause instanceof ProductNotFoundExceptions e) throw e;
+            if (cause instanceof BusinessException e) throw e;
+
+            log.error(
+                    "Unexpected async failure during order creation. Cause type={}",
+                    (cause != null ? cause.getClass().getName() : "null"),
+                    ex
+            );
             throw ex;
         }
 
