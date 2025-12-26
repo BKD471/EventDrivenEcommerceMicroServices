@@ -35,7 +35,7 @@ public interface OrderLineRepository extends JpaRepository<OrderLine, Integer> {
      * </pre>
      *
      * @param orderReference the reference of the order whose line items should be fetched;
-     *                       may be {@code null}, but in such case an empty list will
+     *                       may be {@code null}, but in such case an empty page will
      *                       be returned or a validation exception may occur depending
      *                       on your service-layer validation.
      * @return a paginated result containing order lines belonging to the specified order;
