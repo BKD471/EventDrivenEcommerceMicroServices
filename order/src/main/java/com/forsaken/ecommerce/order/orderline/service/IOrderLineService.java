@@ -26,8 +26,10 @@ public interface IOrderLineService {
      *
      * <p><b>Error Handling:</b></p>
      * <ul>
-     *     <li>Validation errors (e.g., invalid pagination parameters) should
-     *         be handled at the service or controller layer.</li>
+     *     <li>Validation errors (e.g., invalid pagination parameters) are
+     *         enforced at the controller boundary (for example, via
+     *         validation annotations such as {@code @Min(1)}), and the
+     *         service assumes that its inputs have already been validated.</li>
      *     <li>Business rules may optionally enforce order existence checks
      *         depending on application requirements.</li>
      * </ul>
