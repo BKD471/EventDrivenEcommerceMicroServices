@@ -70,8 +70,8 @@ class OrderLineRepositoryTest {
         final Order order = constructOrder("ORD-123");
         entityManager.persist(order);
 
-        final OrderLine orderLineOne = constructOrderLine(order,101,2);
-        final OrderLine orderLineTwo = constructOrderLine(order,102,1);
+        final OrderLine orderLineOne = constructOrderLine(order, 101, 2);
+        final OrderLine orderLineTwo = constructOrderLine(order, 102, 1);
 
         entityManager.persist(orderLineOne);
         entityManager.persist(orderLineTwo);
@@ -96,9 +96,9 @@ class OrderLineRepositoryTest {
      * readability and reduce duplication.
      * </p>
      *
-     * @param order the owning {@link Order}; must not be {@code null}
+     * @param order     the owning {@link Order}; must not be {@code null}
      * @param productId the product identifier associated with the order line
-     * @param quantity the quantity of the product ordered
+     * @param quantity  the quantity of the product ordered
      * @return a fully initialized {@link OrderLine} instance
      */
     private OrderLine constructOrderLine(

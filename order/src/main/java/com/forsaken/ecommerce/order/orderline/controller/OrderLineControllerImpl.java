@@ -26,8 +26,8 @@ public class OrderLineControllerImpl implements IOrderLineController {
                 .body(
                         ApiResponse.<PagedResponse<OrderLineResponse>>builder()
                                 .status(ApiResponse.Status.SUCCESS)
-                                .data(orderLineService.findAllByOrderReference(orderReference,page,size))
-                                .message("Order Details Of Order Reference:: "+orderReference)
+                                .data(orderLineService.findAllByOrderReference(orderReference, page, size))
+                                .message("Order Details Of Order Reference:: " + orderReference)
                                 .build()
                 );
     }

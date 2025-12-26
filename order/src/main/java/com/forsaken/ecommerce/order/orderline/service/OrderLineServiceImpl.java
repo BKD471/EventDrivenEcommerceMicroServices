@@ -24,7 +24,7 @@ public class OrderLineServiceImpl implements IOrderLineService {
             final int page,
             final int size
     ) {
-        log.info("Find all Order Lines By Order Id: {}", orderReference);
+        log.info("Find all Order Lines By Order Reference: {}", orderReference);
         final int finalPage = Math.max(page - 1, 0);
         final int finalSize = Math.max(size, 1);
         final Pageable pageable = PageRequest.of(finalPage, finalSize);

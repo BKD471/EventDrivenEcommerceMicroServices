@@ -34,11 +34,11 @@ public interface OrderLineRepository extends JpaRepository<OrderLine, Integer> {
      * WHERE ol.order.id = :orderId
      * </pre>
      *
-     * @param orderReference the ID of the order whose line items should be fetched;
+     * @param orderReference the reference of the order whose line items should be fetched;
      *                       may be {@code null}, but in such case an empty list will
      *                       be returned or a validation exception may occur depending
      *                       on your service-layer validation.
-     * @return a list of order lines belonging to the specified order;
+     * @return a paginated result containing order lines belonging to the specified order;
      * never {@code null}, but may be empty.
      */
     Page<OrderLine> findAllByOrder_Reference(
