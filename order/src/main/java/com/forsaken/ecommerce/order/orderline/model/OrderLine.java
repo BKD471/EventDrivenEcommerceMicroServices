@@ -16,10 +16,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @AllArgsConstructor
 @Builder
 @Getter
+@Setter
 @Entity
 @NoArgsConstructor
 @Table(name = "customer_order_line")

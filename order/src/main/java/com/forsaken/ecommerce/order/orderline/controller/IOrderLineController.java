@@ -1,51 +1,70 @@
 package com.forsaken.ecommerce.order.orderline.controller;
 
 import com.forsaken.ecommerce.common.responses.ApiResponse;
+import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.orderline.dto.OrderLineResponse;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-
-import java.util.List;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * REST controller interface for managing Order Line resources.
  *
- * <p>This controller exposes operations to retrieve order line items
- * associated with a specific Order. It is mapped under the base path
+ * <p>This controller exposes read-only operations to retrieve order line
+ * items associated with a specific Order. It is mapped under the base path
  * <b>/api/v1/order-lines</b>.</p>
+ *
+ * <p>All retrieval operations support pagination to ensure scalability
+ * and prevent excessive data transfer for large orders.</p>
  */
 @RequestMapping("/api/v1/order-lines")
 @Validated
 public interface IOrderLineController {
 
     /**
-     * Retrieves all Order Line items for the given Order ID.
+     * Retrieves paginated Order Line items for the given Order reference.
      *
-     * <p>This endpoint returns a list of {@link OrderLineResponse}
-     * objects representing individual items belonging to the specified order.
-     * The caller must provide a valid <code>orderId</code> path variable.
-     * If the order does not exist or contains no items, an empty list is returned
-     * within the API response wrapper.</p>
+     * <p>This endpoint returns a paginated list of {@link OrderLineResponse}
+     * objects representing individual line items belonging to the specified
+     * order reference.</p>
      *
-     * @param orderId the unique identifier of the Order whose line items should be fetched;
-     *                must not be {@code null}
-     * @return a {@link ResponseEntity} containing an {@link ApiResponse} wrapping
-     * the list of {@link OrderLineResponse}
+     * <p>Pagination is applied at the database level to ensure efficient
+     * retrieval. Page numbering is <b>1-based</b> for API consumers.</p>
+     *
+     * <p><b>Pagination Parameters:</b></p>
+     * <ul>
+     *     <li>{@code page} – Page number to retrieve (1-based, default = 1)</li>
+     *     <li>{@code size} – Number of records per page (default = 3)</li>
+     * </ul>
+     *
+     * <p>If the order exists but contains no line items, an empty page
+     * is returned with valid pagination metadata.</p>
+     *
+     * @param orderReference the unique reference of the Order whose line
+     *                       items should be fetched; must not be blank
+     * @param page the page number to retrieve (1-based index)
+     * @param size the number of records per page
+     *
+     * @return a {@link ResponseEntity} containing an {@link ApiResponse}
+     * wrapping a {@link PagedResponse} of {@link OrderLineResponse}
      *
      * <p><b>Possible Responses:</b></p>
      * <ul>
-     *     <li><b>200 OK</b> – Successfully retrieved order line items.</li>
-     *     <li><b>400 Bad Request</b> – Invalid order ID supplied.</li>
+     *     <li><b>200 OK</b> – Successfully retrieved paginated order line items.</li>
+     *     <li><b>400 Bad Request</b> – Invalid pagination parameters or order reference.</li>
      *     <li><b>404 Not Found</b> – Order not found in the system.</li>
      *     <li><b>500 Internal Server Error</b> – Unexpected server failure.</li>
      * </ul>
      */
-    @GetMapping("/order/{order-id}")
-    ResponseEntity<ApiResponse<List<OrderLineResponse>>> findByOrderId(
-            @NotNull @PathVariable("order-id") final Integer orderId
+    @GetMapping("/order/{order-ref}")
+    ResponseEntity<ApiResponse<PagedResponse<OrderLineResponse>>> findByOrderReference(
+            @PathVariable("order-ref") @NotBlank final String orderReference,
+            @RequestParam(name = "page", defaultValue = "1") @Min(1) final int page,
+            @RequestParam(name = "size", defaultValue = "3") @Min(1) final int size
     );
 }
