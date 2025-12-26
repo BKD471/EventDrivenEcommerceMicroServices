@@ -1,6 +1,5 @@
 package com.forsaken.ecommerce.order.configs.client_configurations.customer;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.validator.constraints.time.DurationMax;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -35,10 +34,10 @@ public record CustomerClientProperties(
                     "application.config.customer.readTimeout must be positive"
             );
         }
+        validateScheme(url);
     }
 
-    @PostConstruct
-    void validateScheme() {
+    private static void validateScheme(final URI url) {
         final String scheme = url.getScheme();
         if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
             throw new IllegalArgumentException(

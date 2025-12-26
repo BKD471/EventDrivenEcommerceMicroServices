@@ -1,9 +1,6 @@
 package com.forsaken.ecommerce.order.configs.client_configurations.customer;
 
-import com.forsaken.ecommerce.order.customer.ICustomerClient;
-import feign.Feign;
 import feign.Request;
-import feign.Target;
 import feign.codec.ErrorDecoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;

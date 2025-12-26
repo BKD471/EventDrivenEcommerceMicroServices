@@ -43,7 +43,6 @@ public class ProductServiceImpl implements IProductService {
         headers.set(CONTENT_TYPE, APPLICATION_JSON_VALUE);
 
         final HttpEntity<List<PurchaseRequest>> requestEntity = new HttpEntity<>(requestBody, headers);
-
         final ParameterizedTypeReference<ApiResponse<PagedResponse<PurchaseResponse>>>
                 responseType = new ParameterizedTypeReference<>() {
         };
@@ -69,28 +68,43 @@ public class ProductServiceImpl implements IProductService {
             }
             return CompletableFuture.completedFuture(response.getBody().data().content());
         } catch (HttpClientErrorException.NotFound ex) {
+            log.error(
+                    "Product not found while calling product service. method=purchaseProducts, status={}, responseBody={}",
+                    ex.getStatusCode(),
+                    ex.getResponseBodyAsString(),
+                    ex
+            );
             return CompletableFuture.failedFuture(
                     new ProductNotFoundExceptions("Product not found",
                             "purchaseProducts(List<PurchaseRequest>) in " + className,
                             ex)
             );
         } catch (HttpClientErrorException ex) {
+            log.error(
+                    "Client error while calling product service. method=purchaseProducts, status={}, responseBody={}",
+                    ex.getStatusCode(),
+                    ex.getResponseBodyAsString(),
+                    ex
+            );
             return CompletableFuture.failedFuture(
                     new BusinessException("Invalid product request",
                             "purchaseProducts(List<PurchaseRequest>) in " + className,
                             ex)
             );
         } catch (ResourceAccessException ex) {
-            return CompletableFuture.failedFuture(
-                    new ProductServiceException("Product service timeout",
-                            "purchaseProducts(List<PurchaseRequest>) in " + className,
-                            ex)
-            );
-        } catch (Exception ex) {
-            log.error("Product service call failed", ex);
+            log.error("Product service timeout while calling purchaseProducts", ex);
             return CompletableFuture.failedFuture(
                     new ProductServiceException(
-                            "Failed to call product service",
+                            "Product service timeout",
+                            "purchaseProducts(List<PurchaseRequest>) in " + className,
+                            ex
+                    )
+            );
+        } catch (Exception ex) {
+            log.error("Unexpected error while calling product service", ex);
+            return CompletableFuture.failedFuture(
+                    new ProductServiceException(
+                            "Product service call failed",
                             "purchaseProducts(List<PurchaseRequest>) in " + className,
                             ex
                     )

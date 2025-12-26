@@ -46,12 +46,8 @@ spring:
         config:
           payment-service:
             url: ${application.config.payment.url}
-            connect-timeout: 5000
-            read-timeout: 5000
           customer-service:
             url: ${application.config.customer.url}
-            connect-timeout: 5000
-            read-timeout: 5000
 
 aws:
   secretsmanager:

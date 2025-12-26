@@ -15,27 +15,23 @@ import org.springframework.web.client.RestTemplate;
 @RequiredArgsConstructor
 public class ProductRestConfiguration {
 
-    private final ProductClientProperties productClientProperties;
+    private final ProductClientProperties props;
 
-    @Bean
-    public RestTemplate productRestTemplate() {
+    @Bean(destroyMethod = "close")
+    public CloseableHttpClient productHttpClient() {
         final RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(
-                        Timeout.ofMilliseconds(
-                                productClientProperties.connectTimeout().toMillis()
-                        )
-                )
-                .setResponseTimeout(
-                        Timeout.ofMilliseconds(
-                                productClientProperties.readTimeout().toMillis()
-                        )
-                )
+                .setConnectTimeout(Timeout.ofDays(Math.toIntExact(props.connectTimeout().toMillis())))
+                .setResponseTimeout(Timeout.ofDays(Math.toIntExact(props.readTimeout().toMillis())))
                 .build();
-        final CloseableHttpClient httpClient = HttpClients.custom()
+        return HttpClients.custom()
                 .setDefaultRequestConfig(requestConfig)
                 .build();
+    }
+
+    @Bean
+    public RestTemplate productRestTemplate(final CloseableHttpClient productHttpClient) {
         final HttpComponentsClientHttpRequestFactory factory =
-                new HttpComponentsClientHttpRequestFactory(httpClient);
+                new HttpComponentsClientHttpRequestFactory(productHttpClient);
         return new RestTemplate(factory);
     }
 }

@@ -30,6 +30,12 @@ public class PaymentServiceImpl implements IPaymentService {
             }
             return paymentResponse.data();
         } catch (FeignException.NotFound ex) {
+            log.warn(
+                    "Payment service endpoint not found. method=pay, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
+                    ex
+            );
             throw new PaymentFailedExceptions(
                     "Payment Failed: Payment service endpoint not found",
                     "pay(final PaymentRequest request) in " + CLASS,
@@ -37,6 +43,12 @@ public class PaymentServiceImpl implements IPaymentService {
             );
 
         } catch (FeignException.BadRequest ex) {
+            log.error(
+                    "Invalid payment request sent to payment service. method=pay, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
+                    ex
+            );
             throw new PaymentFailedExceptions(
                     "Payment Failed: Invalid payment request",
                     "pay(final PaymentRequest request) in " + CLASS,
@@ -44,12 +56,19 @@ public class PaymentServiceImpl implements IPaymentService {
             );
 
         } catch (FeignException ex) {
+            log.error(
+                    "Payment service call failed. method=pay, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
+                    ex
+            );
             throw new PaymentFailedExceptions(
                     "Payment Failed: Payment service error (status=" + ex.status() + ")",
                     "pay(final PaymentRequest request) in " + CLASS,
                     ex
             );
         } catch (Exception ex) {
+            log.error("Unexpected error while processing payment. method=pay", ex);
             throw new PaymentFailedExceptions(
                     "Unexpected error while processing payment",
                     "pay(PaymentRequest) in " + CLASS,

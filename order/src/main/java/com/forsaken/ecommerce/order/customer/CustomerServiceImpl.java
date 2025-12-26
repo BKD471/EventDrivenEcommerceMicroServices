@@ -35,6 +35,12 @@ public class CustomerServiceImpl implements ICustomerService {
             }
             return CompletableFuture.completedFuture(customerResponse.data());
         } catch (feign.FeignException.NotFound ex) {
+            log.warn(
+                    "Customer not found while calling customer service. method=getCustomer, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
+                    ex
+            );
             return CompletableFuture.failedFuture(
                     new CustomerNotFoundExceptions(
                             "No customer exists with the provided ID",
@@ -42,8 +48,13 @@ public class CustomerServiceImpl implements ICustomerService {
                             ex
                     )
             );
-
         } catch (feign.FeignException ex) {
+            log.error(
+                    "Customer service call failed. method=getCustomer, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
+                    ex
+            );
             return CompletableFuture.failedFuture(
                     new CustomerNotFoundExceptions(
                             "Customer service error (status=" + ex.status() + ")",
@@ -52,6 +63,10 @@ public class CustomerServiceImpl implements ICustomerService {
                     )
             );
         } catch (Exception ex) {
+            log.error(
+                    "Unexpected error while calling customer service. method=getCustomer",
+                    ex
+            );
             return CompletableFuture.failedFuture(
                     new CustomerNotFoundExceptions(
                             "Unexpected error while calling customer service",

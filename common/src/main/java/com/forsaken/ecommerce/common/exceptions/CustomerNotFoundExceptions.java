@@ -1,10 +1,8 @@
 package com.forsaken.ecommerce.common.exceptions;
 
 
-import lombok.Builder;
 import lombok.Getter;
 
-@Builder
 @Getter
 public class CustomerNotFoundExceptions extends Exception {
 

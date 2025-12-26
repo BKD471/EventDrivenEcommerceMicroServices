@@ -1,6 +1,5 @@
 package com.forsaken.ecommerce.order.configs.client_configurations.payment;
 
-import feign.Feign;
 import feign.Request;
 import feign.codec.ErrorDecoder;
 import lombok.RequiredArgsConstructor;
