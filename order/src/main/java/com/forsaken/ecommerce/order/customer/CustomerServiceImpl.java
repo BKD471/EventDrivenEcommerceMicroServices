@@ -16,34 +16,63 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class CustomerServiceImpl implements ICustomerService {
 
+    private static final Class<?> CLASS = CustomerServiceImpl.class;
     private final ICustomerClient customerClient;
-    private final Class<?> className = CustomerServiceImpl.class;
 
     @Override
     @Async("appTaskExecutor")
-    public CompletableFuture<CustomerResponse> getCustomer(final String customerId) throws CustomerNotFoundExceptions {
+    public CompletableFuture<CustomerResponse> getCustomer(final String customerId) {
         log.info("Get Customer by ID: {}", customerId);
         try {
             final ApiResponse<CustomerResponse> customerResponse = customerClient.findCustomerById(customerId);
             if (null == customerResponse || null == customerResponse.data()) {
-                throw new CustomerNotFoundExceptions(
-                        "Cannot create order:: Customer data is missing in the response",
-                        "getCustomer(final String customerId) in " + className
+                return CompletableFuture.failedFuture(
+                        new CustomerNotFoundExceptions(
+                                "Customer data missing in response",
+                                "getCustomer(String) in " + CLASS
+                        )
                 );
             }
             return CompletableFuture.completedFuture(customerResponse.data());
         } catch (feign.FeignException.NotFound ex) {
-            throw new CustomerNotFoundExceptions(
-                    "Cannot create order:: No customer exists with the provided ID",
-                    "getCustomer(final String customerId) in " + className,
+            log.warn(
+                    "Customer not found while calling customer service. method=getCustomer, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
                     ex
             );
-
+            return CompletableFuture.failedFuture(
+                    new CustomerNotFoundExceptions(
+                            "No customer exists with the provided ID",
+                            "getCustomer(String) in " + CLASS,
+                            ex
+                    )
+            );
         } catch (feign.FeignException ex) {
-            throw new CustomerNotFoundExceptions(
-                    "Cannot create order:: Customer service error (status=" + ex.status() + ")",
-                    "getCustomer(final String customerId) in " + className,
+            log.error(
+                    "Customer service call failed. method=getCustomer, status={}, responseBody={}",
+                    ex.status(),
+                    ex.contentUTF8(),
                     ex
+            );
+            return CompletableFuture.failedFuture(
+                    new CustomerNotFoundExceptions(
+                            "Customer service error (status=" + ex.status() + ")",
+                            "getCustomer(String) in " + CLASS,
+                            ex
+                    )
+            );
+        } catch (Exception ex) {
+            log.error(
+                    "Unexpected error while calling customer service. method=getCustomer",
+                    ex
+            );
+            return CompletableFuture.failedFuture(
+                    new CustomerNotFoundExceptions(
+                            "Unexpected error while calling customer service",
+                            "getCustomer(String) in " + CLASS,
+                            ex
+                    )
             );
         }
     }

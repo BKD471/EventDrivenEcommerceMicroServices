@@ -5,6 +5,7 @@ import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * Service interface for handling product purchase operations.
@@ -48,37 +49,19 @@ import java.util.concurrent.CompletableFuture;
 public interface IProductService {
 
     /**
-     * Processes a batch of product purchase requests asynchronously.
-     * <p>
-     * This method validates the incoming purchase requests, checks product
-     * availability, calculates pricing if necessary, and returns a list of
-     * {@link PurchaseResponse} objects representing the outcome of each
-     * purchase operation.
-     * </p>
+     * Purchases products asynchronously.
      *
-     * <p><b>Behavior:</b></p>
+     * <p>Exceptions are propagated via the returned {@link CompletableFuture}:
      * <ul>
-     *     <li>Runs asynchronously using the defined executor {@code appTaskExecutor}.</li>
-     *     <li>
-     *         Completes successfully with a list of {@link PurchaseResponse}
-     *         objects when processing is successful.
-     *     </li>
-     *     <li>
-     *         Completes exceptionally if any business rule fails or a system error occurs.
-     *     </li>
+     *   <li>{@link BusinessException} – if business validation fails</li>
+     *   <li>{@link ProductNotFoundExceptions} – if a referenced product does not exist</li>
      * </ul>
      *
-     * <p><b>Error Handling:</b></p>
+     * Callers must handle failures by:
      * <ul>
-     *     <li>Throws {@link BusinessException} for domain-specific failures such as
-     *         insufficient stock, invalid request data, or pricing rule violations.</li>
-     *     <li>Runtime exceptions will also cause the returned {@code CompletableFuture}
-     *         to complete exceptionally.</li>
+     *   <li>calling {@code future.join()} and catching {@link CompletionException}</li>
+     *   <li>or using {@code exceptionally()}, {@code handle()}, etc.</li>
      * </ul>
-     *
-     * @param requestBody a list of purchase requests; must not be null or empty
-     * @return a {@link CompletableFuture} that resolves to a list of purchase responses
-     * @throws BusinessException if any business validation or rule check fails
      */
-    CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody) throws BusinessException, ProductNotFoundExceptions;
+    CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody);
 }

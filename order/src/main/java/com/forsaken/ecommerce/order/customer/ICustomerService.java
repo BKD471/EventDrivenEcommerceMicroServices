@@ -2,7 +2,6 @@ package com.forsaken.ecommerce.order.customer;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -40,28 +39,24 @@ public interface ICustomerService {
 
     /**
      * Retrieves customer details by their unique ID in an asynchronous manner.
-     * <p>
-     * This method delegates execution to the {@code appTaskExecutor} and returns
-     * immediately with a {@link CompletableFuture}. The future completes with:
-     * </p>
      *
+     * <p>The returned {@link CompletableFuture} completes with:</p>
      * <ul>
-     *     <li>An {@link Optional} containing the {@link CustomerResponse}
-     *         if the customer is found.</li>
-     *     <li>An empty {@link Optional} if the customer does not exist.</li>
+     *     <li>{@link CustomerResponse} if the customer is found</li>
+     *     <li>Completes exceptionally with {@link CustomerNotFoundExceptions}
+     *         if the customer does not exist</li>
      * </ul>
      *
      * <p><b>Error Handling:</b></p>
      * <ul>
-     *     <li>If an exception occurs during the async call, the future completes
-     *         exceptionally.</li>
-     *     <li>Callers can use {@code future.exceptionally(...)} to handle errors.</li>
+     *     <li>Exceptions are propagated via the returned {@link CompletableFuture}</li>
+     *     <li>Callers must handle failures using {@code exceptionally()},
+     *         {@code handle()}, or by catching {@link java.util.concurrent.CompletionException}
+     *         when calling {@code join()}</li>
      * </ul>
      *
      * @param customerId the unique identifier of the customer to retrieve; must not be null
-     * @return a {@link CompletableFuture} containing an {@link Optional}
-     * with the customer data, or empty if not found
+     * @return a {@link CompletableFuture} that completes with the customer data
      */
-
-    CompletableFuture<CustomerResponse> getCustomer(final String customerId) throws CustomerNotFoundExceptions;
+    CompletableFuture<CustomerResponse> getCustomer(final String customerId);
 }

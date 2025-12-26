@@ -1,6 +1,21 @@
 server:
   port: 8070
 
+application:
+  config:
+    payment:
+      url: http://localhost:8222/api/v1/payments
+      connect-timeout: 5s
+      read-timeout: 10s
+    customer:
+      url: http://localhost:8222/api/v1/customers
+      connect-timeout: 5s
+      read-timeout: 10s
+    product:
+      url: http://localhost:8222/api/v1/products
+      connect-timeout: 5s
+      read-timeout: 10s
+
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
@@ -25,17 +40,14 @@ spring:
       keySerializer: org.apache.kafka.common.serialization.StringSerializer
       valueSerializer: io.confluent.kafka.serializers.KafkaAvroSerializer
       schemaRegistryUrl: "http://127.0.0.1:8081"
-
-application:
-  config:
-    customer-url: http://localhost:8222/api/v1/customers
-    payment-url: http://localhost:8222/api/v1/payments
-    product-url: http://localhost:8222/api/v1/products
-
-rest:
-  client:
-    connectTimeout: 2s
-    readTimeout: 5s
+  cloud:
+    openfeign:
+      client:
+        config:
+          payment-service:
+            url: ${application.config.payment.url}
+          customer-service:
+            url: ${application.config.customer.url}
 
 aws:
   secretsmanager:

@@ -32,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,7 +61,25 @@ public class OrderServiceImpl implements IOrderService {
         log.info("Creating Order Request: {}", request);
         final var fetchedCustomer = customerService.getCustomer(request.customerId());
         final var fetchedPurchasedProducts = productService.purchaseProducts(request.products());
-        CompletableFuture.allOf(fetchedCustomer, fetchedPurchasedProducts).join();
+        try {
+            CompletableFuture.allOf(
+                    fetchedCustomer,
+                    fetchedPurchasedProducts
+            ).join();
+        } catch (CompletionException ex) {
+            final Throwable cause = ex.getCause();
+
+            if (cause instanceof CustomerNotFoundExceptions e) throw e;
+            if (cause instanceof ProductNotFoundExceptions e) throw e;
+            if (cause instanceof BusinessException e) throw e;
+
+            log.error(
+                    "Unexpected async failure during order creation. Cause type={}",
+                    (cause != null ? cause.getClass().getName() : "null"),
+                    ex
+            );
+            throw ex;
+        }
 
         final var customer = fetchedCustomer.join();
         final var purchasedProducts = fetchedPurchasedProducts.join();

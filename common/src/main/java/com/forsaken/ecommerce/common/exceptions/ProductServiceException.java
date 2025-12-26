@@ -3,16 +3,16 @@ package com.forsaken.ecommerce.common.exceptions;
 import lombok.Getter;
 
 @Getter
-public class PaymentFailedExceptions extends Exception {
+public class ProductServiceException extends Exception {
 
     private final String methodName;
 
-    public PaymentFailedExceptions(final String message) {
+    public ProductServiceException(final String message) {
         super(message);
         this.methodName = null;
     }
 
-    public PaymentFailedExceptions(
+    public ProductServiceException(
             final String message,
             final String methodName
     ) {
@@ -20,7 +20,7 @@ public class PaymentFailedExceptions extends Exception {
         this.methodName = methodName;
     }
 
-    public PaymentFailedExceptions(
+    public ProductServiceException(
             final String message,
             final String methodName,
             final Throwable cause
