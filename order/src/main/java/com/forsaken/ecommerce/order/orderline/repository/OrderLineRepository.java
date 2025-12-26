@@ -1,9 +1,9 @@
 package com.forsaken.ecommerce.order.orderline.repository;
 
 import com.forsaken.ecommerce.order.orderline.model.OrderLine;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.util.List;
 
 /**
  * Repository interface for performing CRUD and query operations
@@ -34,13 +34,15 @@ public interface OrderLineRepository extends JpaRepository<OrderLine, Integer> {
      * WHERE ol.order.id = :orderId
      * </pre>
      *
-     * @param orderId the ID of the order whose line items should be fetched;
-     *                may be {@code null}, but in such case an empty list will
-     *                be returned or a validation exception may occur depending
-     *                on your service-layer validation.
-     *
-     * @return a list of order lines belonging to the specified order;
-     *         never {@code null}, but may be empty.
+     * @param orderReference the reference of the order whose line items should be fetched;
+     *                       may be {@code null}, but in such case an empty page will
+     *                       be returned or a validation exception may occur depending
+     *                       on your service-layer validation.
+     * @return a paginated result containing order lines belonging to the specified order;
+     * never {@code null}, but may be empty.
      */
-    List<OrderLine> findAllByOrderId(final Integer orderId);
+    Page<OrderLine> findAllByOrder_Reference(
+            final String orderReference,
+            final Pageable pageable
+    );
 }
