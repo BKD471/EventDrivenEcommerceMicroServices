@@ -36,13 +36,16 @@ public interface IOrderLineService {
      *
      * @param orderReference the unique reference of the Order whose line
      *                       items are to be retrieved; must not be blank
-     * @param page the page number to retrieve (1-based index)
-     * @param size the number of records per page
-     *
+     * @param page           the page number to retrieve (1-based index)
+     * @param size           the number of records per page
      * @return a {@link PagedResponse} containing {@link OrderLineResponse}
      * objects and pagination metadata
      *
-     * @throws IllegalArgumentException if pagination parameters are invalid
+     * <p>
+     * Invalid pagination parameters are defensively normalized by the service.
+     * Page numbers less than {@code 1} default to {@code 1}, and page sizes less
+     * than {@code 1} default to {@code 1}.
+     * </p>
      */
     PagedResponse<OrderLineResponse> findAllByOrderReference(
             final String orderReference,

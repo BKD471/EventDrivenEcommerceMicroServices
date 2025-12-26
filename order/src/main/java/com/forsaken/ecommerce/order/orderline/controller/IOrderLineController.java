@@ -64,7 +64,7 @@ public interface IOrderLineController {
     @GetMapping("/order/{order-ref}")
     ResponseEntity<ApiResponse<PagedResponse<OrderLineResponse>>> findByOrderReference(
             @PathVariable("order-ref") @NotBlank final String orderReference,
-            @RequestParam(name = "page", defaultValue = "1") @Min(1) final int page,
-            @RequestParam(name = "size", defaultValue = "3") @Min(1) final int size
+            @RequestParam(name = "page", defaultValue = "1") final int page,
+            @RequestParam(name = "size", defaultValue = "3") final int size
     );
 }
