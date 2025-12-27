@@ -18,7 +18,7 @@ public record OrderProperties(
         @Max(100)
         int defaultPageSize,
 
-        @Min(1)
+        @Min(0)
         @Max(1_000)
         int defaultPageNumber
 ) {
