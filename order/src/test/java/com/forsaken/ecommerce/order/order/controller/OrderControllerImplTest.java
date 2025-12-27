@@ -65,7 +65,7 @@ class OrderControllerImplTest {
     @Test
     void shouldCreateOrderSuccessfully() throws Exception {
         // given
-        final OrderRequest request = constructOrderRequest(1,"Cust-123");
+        final OrderRequest request = constructOrderRequest(1, "Cust-123");
         final Integer orderId = 1001;
         when(orderService.createOrder(request)).thenReturn(orderId);
 
