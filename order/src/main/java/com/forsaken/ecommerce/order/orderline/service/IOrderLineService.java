@@ -49,7 +49,7 @@ public interface IOrderLineService {
      */
     PagedResponse<OrderLineResponse> findAllByOrderReference(
             final String orderReference,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     );
 }

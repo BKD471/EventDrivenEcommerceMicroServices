@@ -1,6 +1,8 @@
 package com.forsaken.ecommerce.order.order.repository;
 
 import com.forsaken.ecommerce.order.order.model.Order;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
@@ -34,13 +36,13 @@ public interface IOrderRepository extends JpaRepository<Order, Integer> {
      *                   Spring Data may throw an error depending on null handling.
      * @param toDate     the end of the date range (inclusive); if {@code null},
      *                   Spring Data may throw an error depending on null handling.
-     *
      * @return a list of all matching {@link Order} entities; never {@code null}
-     *         (but may be empty).
+     * (but may be empty).
      */
-    List<Order> findAllByCustomerIdAndCreatedDateBetween(
+    Page<Order> findAllByCustomerIdAndCreatedDateBetween(
             final String customerId,
             final LocalDateTime fromDate,
-            final LocalDateTime toDate
+            final LocalDateTime toDate,
+            final Pageable pageable
     );
 }

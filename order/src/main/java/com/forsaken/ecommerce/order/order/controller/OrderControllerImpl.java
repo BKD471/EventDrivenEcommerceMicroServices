@@ -5,6 +5,7 @@ import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
+import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 import com.forsaken.ecommerce.order.order.service.IOrderService;
@@ -14,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 @RestController
@@ -38,28 +38,33 @@ public class OrderControllerImpl implements IOrderController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> findAll() {
+    public ResponseEntity<ApiResponse<PagedResponse<OrderResponse>>> findAll(
+            final Integer page,
+            final Integer size
+    ) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
-                        ApiResponse.<List<OrderResponse>>builder()
+                        ApiResponse.<PagedResponse<OrderResponse>>builder()
                                 .status(ApiResponse.Status.SUCCESS)
-                                .data(orderService.findAllOrders())
+                                .data(orderService.findAllOrders(page, size))
                                 .message("Find All Orders.")
                                 .build()
                 );
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> findAllOrdersByCustomerId(
+    public ResponseEntity<ApiResponse<PagedResponse<OrderResponse>>> findAllOrdersByCustomerId(
             final String customerId,
             final LocalDateTime fromDate,
-            final LocalDateTime toDate
+            final LocalDateTime toDate,
+            final Integer page,
+            final Integer size
     ) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
-                        ApiResponse.<List<OrderResponse>>builder()
+                        ApiResponse.<PagedResponse<OrderResponse>>builder()
                                 .status(ApiResponse.Status.SUCCESS)
-                                .data(orderService.findAllOrdersByCustomerId(customerId, fromDate, toDate))
+                                .data(orderService.findAllOrdersByCustomerId(customerId, fromDate, toDate, page, size))
                                 .message("Find All Orders By Customer Id.")
                                 .build()
                 );

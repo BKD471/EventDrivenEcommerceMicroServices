@@ -6,6 +6,8 @@ import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
+import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.customer.CustomerResponse;
 import com.forsaken.ecommerce.order.customer.ICustomerService;
 import com.forsaken.ecommerce.order.kafka.IOrderProducer;
@@ -24,16 +26,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +49,7 @@ public class OrderServiceImpl implements IOrderService {
     private final IProductService productService;
     private final IPaymentService paymentService;
     private final IOrderProducer orderProducer;
+    private final OrderProperties orderProperties;
 
     @Transactional(
             rollbackFor = {
@@ -119,12 +124,28 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
-    public List<OrderResponse> findAllOrders() {
-        log.info("Finding All Orders");
-        return this.orderRepository.findAll()
-                .stream()
-                .map(Order::fromOrder)
-                .collect(Collectors.toList());
+    public PagedResponse<OrderResponse> findAllOrders(final Integer page, final Integer size) {
+        log.info("Finding all orders | page={}, size={}", page, size);
+        final int finalPage = page != null
+                ? Math.max(page - 1, 0)
+                : orderProperties.defaultPageNumber();
+        final int finalSize = size != null
+                ? Math.min(Math.max(size, 1), orderProperties.maxPageSize())
+                : orderProperties.defaultPageSize();
+        final Pageable pageable = PageRequest.of(
+                finalPage,
+                finalSize,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+        final Page<Order> ordersPage = orderRepository.findAll(pageable);
+        return new PagedResponse<>(
+                ordersPage.stream().map(Order::fromOrder).toList(),
+                ordersPage.getNumber() + 1,
+                ordersPage.getSize(),
+                ordersPage.getTotalElements(),
+                ordersPage.getTotalPages(),
+                ordersPage.isLast()
+        );
     }
 
     @Override
@@ -138,14 +159,43 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
-    public List<OrderResponse> findAllOrdersByCustomerId(
+    public PagedResponse<OrderResponse> findAllOrdersByCustomerId(
             final String customerId,
             final LocalDateTime fromDate,
-            final LocalDateTime toDate
+            final LocalDateTime toDate,
+            final Integer page,
+            final Integer size
     ) {
         log.info("Finding All Orders By Customer: {}", customerId);
-        return orderRepository.findAllByCustomerIdAndCreatedDateBetween(customerId, fromDate, toDate)
-                .stream().map(Order::fromOrder).toList();
+        final int finalPage = page != null
+                ? Math.max(page - 1, 0)
+                : orderProperties.defaultPageNumber();
+        final int finalSize = size != null
+                ? Math.min(Math.max(size, 1), orderProperties.maxPageSize())
+                : orderProperties.defaultPageSize();
+
+        final LocalDateTime finalToDate = toDate != null
+                ? toDate
+                : LocalDateTime.now();
+        final LocalDateTime finalFromDate = fromDate != null
+                ? fromDate
+                : finalToDate.minusMonths(6);
+
+        final Pageable pageable = PageRequest.of(
+                finalPage,
+                finalSize,
+                Sort.by(Sort.Direction.DESC, "createdDate"));
+        final Page<Order> orderPage =
+                orderRepository.findAllByCustomerIdAndCreatedDateBetween(customerId, finalFromDate, finalToDate, pageable);
+
+        return PagedResponse.<OrderResponse>builder()
+                .content(orderPage.getContent().stream().map(Order::fromOrder).toList())
+                .page(finalPage + 1)
+                .size(finalSize)
+                .totalElements(orderPage.getTotalElements())
+                .totalPages(orderPage.getTotalPages())
+                .isLastPage(orderPage.isLast())
+                .build();
     }
 
     private ByteBuffer convertBigDecimalToBytes(final BigDecimal value) {

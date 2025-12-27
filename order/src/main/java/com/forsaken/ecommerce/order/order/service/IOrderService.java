@@ -4,11 +4,12 @@ import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
+import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -66,12 +67,40 @@ public interface IOrderService {
             CustomerNotFoundExceptions, BusinessException, PaymentFailedExceptions, ProductNotFoundExceptions;
 
     /**
-     * Retrieves all orders available in the system.
+     * Retrieves a paginated list of all orders available in the system.
      *
-     * @return a list of {@link OrderResponse} containing summary or detailed
-     * information for each order.
+     * <p>
+     * This operation supports optional pagination parameters. When {@code page} or
+     * {@code size} are {@code null}, the service applies default pagination values
+     * configured via {@link OrderProperties}.
+     * </p>
+     *
+     * <p>
+     * Pagination semantics:
+     * </p>
+     * <ul>
+     *   <li>Page numbering is <b>1-based</b> from the API consumer’s perspective.</li>
+     *   <li>Internally, pagination is translated to a zero-based {@link org.springframework.data.domain.Pageable}.</li>
+     *   <li>The result set is ordered by creation time in descending order.</li>
+     * </ul>
+     *
+     * <p>
+     * The returned {@link PagedResponse} includes pagination metadata such as
+     * total elements, total pages, and whether the current page is the last page.
+     * </p>
+     *
+     * @param page the page number to retrieve (1-based); may be {@code null} to
+     *             use the default page number.
+     * @param size the number of records per page; may be {@code null} to
+     *             use the default page size.
+     *
+     * @return a {@link PagedResponse} containing {@link OrderResponse} items and
+     *         associated pagination metadata.
      */
-    List<OrderResponse> findAllOrders();
+    PagedResponse<OrderResponse> findAllOrders(
+            final Integer page,
+            final Integer size
+    );
 
     /**
      * Finds a single order using its unique identifier.
@@ -83,21 +112,50 @@ public interface IOrderService {
     OrderResponse findById(final Integer id);
 
     /**
-     * Retrieves all orders associated with a specific customer.
-     * Optional date filters may be applied to restrict results to a time range.
+     * Retrieves a paginated list of orders associated with a specific customer.
+     *
+     * <p>
+     * The result set may be optionally filtered by an order creation date range.
+     * When date parameters are not provided, no date-based filtering is applied.
+     * </p>
+     *
+     * <p>
+     * Pagination behavior:
+     * </p>
+     * <ul>
+     *   <li>Pagination parameters {@code page} and {@code size} are optional.</li>
+     *   <li>When {@code page} or {@code size} are {@code null}, default values
+     *       configured via {@link OrderProperties} are applied.</li>
+     *   <li>Page numbering is <b>1-based</b> from the API consumer’s perspective
+     *       and translated internally to a zero-based index.</li>
+     *   <li>Results are ordered by creation time in descending order.</li>
+     * </ul>
+     *
+     * <p>
+     * The returned {@link PagedResponse} includes both the order data and pagination
+     * metadata such as total elements, total pages, and whether the current page is
+     * the last page.
+     * </p>
      *
      * @param customerId the unique identifier of the customer whose orders
-     *                   should be fetched.
-     * @param fromDate   (optional) start of the creation date range filter;
-     *                   may be {@code null}.
-     * @param toDate     (optional) end of the creation date range filter;
-     *                   may be {@code null}.
-     * @return a list of {@link OrderResponse} belonging to the specified customer,
-     * optionally filtered by date.
+     *                   should be retrieved; must not be {@code null} or blank.
+     * @param fromDate   the start of the order creation date range filter
+     *                   (inclusive); may be {@code null}.
+     * @param toDate     the end of the order creation date range filter
+     *                   (inclusive); may be {@code null}.
+     * @param page       the page number to retrieve (1-based); may be {@code null}
+     *                   to use the configured default page number.
+     * @param size       the number of records per page; may be {@code null}
+     *                   to use the configured default page size.
+     *
+     * @return a {@link PagedResponse} containing {@link OrderResponse} items
+     *         belonging to the specified customer along with pagination metadata.
      */
-    List<OrderResponse> findAllOrdersByCustomerId(
+    PagedResponse<OrderResponse> findAllOrdersByCustomerId(
             final String customerId,
             final LocalDateTime fromDate,
-            final LocalDateTime toDate
+            final LocalDateTime toDate,
+            final Integer page,
+            final Integer size
     );
 }
