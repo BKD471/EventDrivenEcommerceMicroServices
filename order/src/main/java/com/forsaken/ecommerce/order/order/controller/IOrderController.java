@@ -169,7 +169,7 @@ public interface IOrderController {
      * @return a {@link ResponseEntity} containing an {@link ApiResponse} that wraps
      *         a {@link PagedResponse} of {@link OrderResponse} objects.
      */
-    @GetMapping("/{customerId}")
+    @GetMapping("/customer/{customerId}")
     ResponseEntity<ApiResponse<PagedResponse<OrderResponse>>> findAllOrdersByCustomerId(
             @PathVariable("customerId") @NotBlank final String customerId,
 
