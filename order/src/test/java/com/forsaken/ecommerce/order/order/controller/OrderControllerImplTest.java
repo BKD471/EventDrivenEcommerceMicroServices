@@ -90,8 +90,8 @@ class OrderControllerImplTest {
     @Test
     void shouldReturnAllOrders() {
         // given
-        final Integer page = 1;
-        final Integer size = 10;
+        final int page = 1;
+        final int size = 10;
         final OrderResponse order1 = constructOrderRequest(1,"Cust-123").toOrder().fromOrder();
         final OrderResponse order2 = constructOrderRequest(2,"Cust-456").toOrder().fromOrder();
         final PagedResponse<OrderResponse> pagedResponse =
