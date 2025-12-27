@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.order.orderline.service;
 
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.orderline.dto.OrderLineResponse;
 import com.forsaken.ecommerce.order.orderline.model.OrderLine;
 import com.forsaken.ecommerce.order.orderline.repository.OrderLineRepository;
@@ -17,27 +18,33 @@ import org.springframework.stereotype.Service;
 public class OrderLineServiceImpl implements IOrderLineService {
 
     private final OrderLineRepository orderLineRepository;
+    private final OrderProperties orderProperties;
 
     @Override
     public PagedResponse<OrderLineResponse> findAllByOrderReference(
             final String orderReference,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     ) {
         log.info("Find all Order Lines By Order Reference: {}", orderReference);
-        final int pageIndex = page - 1;
-        final int pageSize = size;
-        final Pageable pageable = PageRequest.of(pageIndex, pageSize);
+        final int finalPage = page != null
+                ? Math.max(page - 1, 0)
+                : orderProperties.defaultPageNumber();
+        final int finalSize = size != null
+                ? Math.min(Math.max(size, 1), orderProperties.maxPageSize())
+                : orderProperties.defaultPageSize();
+        final Pageable pageable = PageRequest.of(finalPage, finalSize);
         final Page<OrderLineResponse> orderLinePage =
                 orderLineRepository
                         .findAllByOrder_Reference(orderReference, pageable)
                         .map(OrderLine::toOrderLineResponse);
         return PagedResponse.<OrderLineResponse>builder()
                 .content(orderLinePage.getContent())
-                .page(page)
-                .size(pageSize)
+                .page(finalPage + 1)
+                .size(finalSize)
                 .totalElements(orderLinePage.getTotalElements())
                 .totalPages(orderLinePage.getTotalPages())
+                .isLastPage(orderLinePage.isLast())
                 .build();
     }
 }

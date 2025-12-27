@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.order.orderline.service;
 
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.orderline.dto.OrderLineResponse;
 import com.forsaken.ecommerce.order.orderline.model.OrderLine;
 import com.forsaken.ecommerce.order.orderline.repository.OrderLineRepository;
@@ -58,6 +59,9 @@ class OrderLineServiceImplTest {
     @Mock
     private OrderLineRepository orderLineRepository;
 
+    @Mock
+    private OrderProperties properties;
+
     @InjectMocks
     private OrderLineServiceImpl orderLineService;
 
@@ -85,8 +89,8 @@ class OrderLineServiceImplTest {
     void shouldReturnPagedOrderLinesForValidInput() {
         // given
         final String orderReference = "ORD-123";
-        final int page = 1;
-        final int size = 10;
+        final Integer page = 1;
+        final Integer size = 10;
         final Pageable expectedPageable = PageRequest.of(0, 10);
         final OrderLine orderLineOne = mock(OrderLine.class);
         final OrderLine orderLineTwo = mock(OrderLine.class);
@@ -94,6 +98,7 @@ class OrderLineServiceImplTest {
         final OrderLineResponse orderLineResponseTwo = mock(OrderLineResponse.class);
         when(orderLineOne.toOrderLineResponse()).thenReturn(orderLineResponseOne);
         when(orderLineTwo.toOrderLineResponse()).thenReturn(orderLineResponseTwo);
+        when(properties.maxPageSize()).thenReturn(50);
         final Page<OrderLine> orderLinePage =
                 new PageImpl<>(List.of(orderLineOne, orderLineTwo), expectedPageable, 2);
         when(orderLineRepository.findAllByOrder_Reference(orderReference, expectedPageable))
@@ -102,6 +107,66 @@ class OrderLineServiceImplTest {
         // when
         final PagedResponse<OrderLineResponse> result =
                 orderLineService.findAllByOrderReference(orderReference, page, size);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.content()).containsExactly(orderLineResponseOne, orderLineResponseTwo);
+        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.size()).isEqualTo(10);
+        assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(result.totalPages()).isEqualTo(1);
+        verify(orderLineRepository, times(1))
+                .findAllByOrder_Reference(orderReference, expectedPageable);
+        verifyNoMoreInteractions(orderLineRepository);
+    }
+
+    /**
+     * Verifies that {@link OrderLineServiceImpl#findAllByOrderReference(String, Integer, Integer)}
+     * correctly applies default pagination values when the {@code page} and {@code size}
+     * request parameters are {@code null}.
+     *
+     * <p>
+     * Scenario covered:
+     * </p>
+     * <ul>
+     *   <li>No pagination parameters are provided by the client.</li>
+     *   <li>The service falls back to values configured in {@link OrderProperties}.</li>
+     *   <li>The repository is invoked with a zero-based {@link Pageable} constructed
+     *       using the default page size and page number.</li>
+     * </ul>
+     *
+     * <p>
+     * Expected behavior:
+     * </p>
+     * <ul>
+     *   <li>Default page number is treated as page {@code 1} in the API response.</li>
+     *   <li>Default page size is applied.</li>
+     *   <li>Returned {@link PagedResponse} contains mapped {@link OrderLineResponse}
+     *       objects.</li>
+     *   <li>Total elements and total pages are correctly populated.</li>
+     * </ul>
+     */
+    @Test
+    void shouldReturnPagedOrderLinesWhenPageAndSizeAreNull() {
+        // given
+        final String orderReference = "ORD-123";
+        final Pageable expectedPageable = PageRequest.of(0, 10);
+        final OrderLine orderLineOne = mock(OrderLine.class);
+        final OrderLine orderLineTwo = mock(OrderLine.class);
+        final OrderLineResponse orderLineResponseOne = mock(OrderLineResponse.class);
+        final OrderLineResponse orderLineResponseTwo = mock(OrderLineResponse.class);
+        when(orderLineOne.toOrderLineResponse()).thenReturn(orderLineResponseOne);
+        when(orderLineTwo.toOrderLineResponse()).thenReturn(orderLineResponseTwo);
+        when(properties.defaultPageSize()).thenReturn(10);
+        when(properties.defaultPageNumber()).thenReturn(0);
+        final Page<OrderLine> orderLinePage =
+                new PageImpl<>(List.of(orderLineOne, orderLineTwo), expectedPageable, 2);
+        when(orderLineRepository.findAllByOrder_Reference(orderReference, expectedPageable))
+                .thenReturn(orderLinePage);
+
+        // when
+        final PagedResponse<OrderLineResponse> result =
+                orderLineService.findAllByOrderReference(orderReference, null, null);
 
         // then
         assertThat(result).isNotNull();
@@ -129,6 +194,7 @@ class OrderLineServiceImplTest {
     void shouldDefaultPageToOneWhenPageIsZero() {
         // given
         final Pageable expectedPageable = PageRequest.of(0, 5);
+        when(properties.maxPageSize()).thenReturn(50);
         when(orderLineRepository.findAllByOrder_Reference(any(), any()))
                 .thenReturn(Page.empty(expectedPageable));
 
@@ -156,6 +222,7 @@ class OrderLineServiceImplTest {
     void shouldDefaultSizeToOneWhenSizeIsZero() {
         // given
         final Pageable expectedPageable = PageRequest.of(0, 1);
+        when(properties.maxPageSize()).thenReturn(50);
         when(orderLineRepository.findAllByOrder_Reference(any(), any()))
                 .thenReturn(Page.empty(expectedPageable));
 
@@ -192,6 +259,7 @@ class OrderLineServiceImplTest {
     void shouldReturnEmptyPageWhenNoOrderLinesExist() {
         // given
         final Pageable pageable = PageRequest.of(0, 10);
+        when(properties.maxPageSize()).thenReturn(50);
         when(orderLineRepository.findAllByOrder_Reference(any(), any()))
                 .thenReturn(Page.empty(pageable));
 

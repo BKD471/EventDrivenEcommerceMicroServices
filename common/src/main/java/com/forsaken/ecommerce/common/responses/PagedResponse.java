@@ -22,7 +22,10 @@ public record PagedResponse<T>(
         long totalElements,
 
         @JsonProperty("totalPages")
-        int totalPages
+        int totalPages,
+
+        @JsonProperty("isLastPage")
+        boolean isLastPage
 ) {
 
 }

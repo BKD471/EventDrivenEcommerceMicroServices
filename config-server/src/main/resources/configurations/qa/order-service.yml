@@ -52,3 +52,9 @@ spring:
 aws:
   secretsmanager:
     dbSecretName: OrderServiceSecrets
+
+general:
+  configurations:
+    maxPageSize: 50
+    defaultPageSize: 5
+    defaultPageNumber: 0
