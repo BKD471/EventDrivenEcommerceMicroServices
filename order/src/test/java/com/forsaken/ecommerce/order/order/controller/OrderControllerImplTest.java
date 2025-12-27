@@ -92,8 +92,8 @@ class OrderControllerImplTest {
         // given
         final int page = 1;
         final int size = 10;
-        final OrderResponse order1 = constructOrderRequest(1,"Cust-123").toOrder().fromOrder();
-        final OrderResponse order2 = constructOrderRequest(2,"Cust-456").toOrder().fromOrder();
+        final OrderResponse order1 = constructOrderRequest(1, "Cust-123").toOrder().fromOrder();
+        final OrderResponse order2 = constructOrderRequest(2, "Cust-456").toOrder().fromOrder();
         final PagedResponse<OrderResponse> pagedResponse =
                 new PagedResponse<>(
                         List.of(order1, order2),
@@ -127,11 +127,11 @@ class OrderControllerImplTest {
     void shouldReturnOrdersByCustomerId() {
         // given
         final String customerId = "CUST-1";
-        final Integer page = 1;
-        final Integer size = 5;
+        final int page = 1;
+        final int size = 5;
         final LocalDateTime fromDate = LocalDateTime.now().minusDays(10);
         final LocalDateTime toDate = LocalDateTime.now();
-        final OrderResponse order = constructOrderRequest(1,"Cust-123").toOrder().fromOrder();
+        final OrderResponse order = constructOrderRequest(1, "Cust-123").toOrder().fromOrder();
         final PagedResponse<OrderResponse> pagedResponse =
                 new PagedResponse<>(
                         List.of(order),
@@ -167,8 +167,9 @@ class OrderControllerImplTest {
     @Test
     void shouldReturnOrderById() {
         // given
-        final Integer orderId = 10;
-        final OrderResponse orderResponse = constructOrderRequest(1,"Cust-123").toOrder().fromOrder();;
+        final int orderId = 10;
+        final OrderResponse orderResponse = constructOrderRequest(1, "Cust-123").toOrder().fromOrder();
+        ;
         when(orderService.findById(orderId)).thenReturn(orderResponse);
 
         // when
