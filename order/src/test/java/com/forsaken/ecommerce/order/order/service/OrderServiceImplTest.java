@@ -148,8 +148,6 @@ class OrderServiceImplTest {
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.failedFuture(
                         new CustomerNotFoundExceptions("not found")));
-
-        // 👇 IMPORTANT: this must NOT be null
         when(productService.purchaseProducts(List.of()))
                 .thenReturn(CompletableFuture.completedFuture(List.of()));
 
