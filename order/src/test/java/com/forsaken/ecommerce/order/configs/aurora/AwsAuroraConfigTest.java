@@ -5,19 +5,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
-import software.amazon.awssdk.services.secretsmanager.SecretsManagerClientBuilder;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -32,16 +29,12 @@ import static org.mockito.Mockito.when;
  * <b>Testing strategy:</b>
  * </p>
  * <ul>
- * <li>Uses Mockito (including static mocking) to intercept
- * {@link SecretsManagerClient#builder()} and control the behavior
- * of the AWS Secrets Manager client.</li>
- * <li>Mocks {@link SecretsManagerProperties} to supply configuration values.</li>
+ *   <li>Uses Mockito to mock {@link SecretsManagerClient} and
+ *       {@link SecretsManagerProperties}.</li>
+ *   <li>Uses a real {@link ObjectMapper} to validate actual JSON deserialization.</li>
+ *   <li>Directly instantiates {@link AwsAuroraConfig} to keep tests fast and deterministic.</li>
  * </ul>
- * <p>
- * Static mocking is required because {@link AwsAuroraConfig} creates the
- * {@link SecretsManagerClient} internally using its static builder API,
- * rather than receiving it via dependency injection.
- * </p>
+ *
  * <p>
  * These tests do <strong>not</strong> verify {@code @Bean} creation via Spring.
  * They focus strictly on the logic of loading and parsing database credentials
@@ -53,6 +46,9 @@ class AwsAuroraConfigTest {
 
     @Mock
     private SecretsManagerProperties secretsManagerProperties;
+
+    @Mock
+    private SecretsManagerClient secretsManagerClient;
 
     private ObjectMapper objectMapper;
 
@@ -70,7 +66,7 @@ class AwsAuroraConfigTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         awsAuroraConfig =
-                new AwsAuroraConfig(secretsManagerProperties, objectMapper);
+                new AwsAuroraConfig(secretsManagerProperties, secretsManagerClient, objectMapper);
     }
 
     /**
@@ -90,43 +86,35 @@ class AwsAuroraConfigTest {
     @Test
     void shouldLoadAwsDbCredentialsSuccessfully() throws Exception {
         // given
-        when(secretsManagerProperties.dbSecretName()).thenReturn("order-db-secret");
-        when(secretsManagerProperties.region()).thenReturn("ap-south-1");
+        when(secretsManagerProperties.dbSecretName())
+                .thenReturn("aurora/db/credentials");
         final String secretJson = """
                 {
-                  "postgres_username": "order_user",
-                  "postgres_password": "secret123",
-                  "postgres_host": "order-db.cluster.amazonaws.com",
+                  "postgres_username": "db_user",
+                  "postgres_password": "db_password",
+                  "postgres_host": "aurora.cluster.amazonaws.com",
                   "port": "5432",
-                  "dbname": "orderdb"
+                  "dbname": "order_db"
                 }
                 """;
-        final SecretsManagerClient secretsManagerClient = mock(SecretsManagerClient.class);
-        final SecretsManagerClientBuilder clientBuilder = mock(SecretsManagerClientBuilder.class);
         final GetSecretValueResponse response = GetSecretValueResponse.builder()
                 .secretString(secretJson)
                 .build();
         when(secretsManagerClient.getSecretValue(any(GetSecretValueRequest.class)))
                 .thenReturn(response);
-        when(clientBuilder.region(any(Region.class))).thenReturn(clientBuilder);
-        when(clientBuilder.build()).thenReturn(secretsManagerClient);
 
-        try (final MockedStatic<SecretsManagerClient> mockedStatic =
-                     Mockito.mockStatic(SecretsManagerClient.class)) {
-            mockedStatic.when(SecretsManagerClient::builder)
-                    .thenReturn(clientBuilder);
+        // when
+        final AwsDbCredentials credentials = awsAuroraConfig.awsDbCredentials();
 
-            // when
-            final AwsDbCredentials credentials = awsAuroraConfig.awsDbCredentials();
-
-            // then
-            assertThat(credentials).isNotNull();
-            assertThat(credentials.userName()).isEqualTo("order_user");
-            assertThat(credentials.password()).isEqualTo("secret123");
-            assertThat(credentials.host()).isEqualTo("order-db.cluster.amazonaws.com");
-            assertThat(credentials.port()).isEqualTo("5432");
-            assertThat(credentials.dbName()).isEqualTo("orderdb");
-        }
+        // then
+        assertThat(credentials).isNotNull();
+        assertThat(credentials.userName()).isEqualTo("db_user");
+        assertThat(credentials.password()).isEqualTo("db_password");
+        assertThat(credentials.host()).isEqualTo("aurora.cluster.amazonaws.com");
+        assertThat(credentials.port()).isEqualTo("5432");
+        assertThat(credentials.dbName()).isEqualTo("order_db");
+        verify(secretsManagerClient, times(1))
+                .getSecretValue(any(GetSecretValueRequest.class));
     }
 
     /**
@@ -148,26 +136,14 @@ class AwsAuroraConfigTest {
         // given
         when(secretsManagerProperties.dbSecretName())
                 .thenReturn("aurora/db/credentials");
-        when(secretsManagerProperties.region())
-                .thenReturn("ap-south-1");
-        final SecretsManagerClient secretsManagerClient = mock(SecretsManagerClient.class);
-        final SecretsManagerClientBuilder clientBuilder = mock(SecretsManagerClientBuilder.class);
-        when(clientBuilder.region(any(Region.class))).thenReturn(clientBuilder);
-        when(clientBuilder.build()).thenReturn(secretsManagerClient);
         when(secretsManagerClient.getSecretValue(any(GetSecretValueRequest.class)))
                 .thenThrow(new RuntimeException("AWS down"));
 
-        try (final MockedStatic<SecretsManagerClient> mockedStatic =
-                     Mockito.mockStatic(SecretsManagerClient.class)) {
-            mockedStatic.when(SecretsManagerClient::builder)
-                    .thenReturn(clientBuilder);
-
-            // when / then
-            assertThatThrownBy(() -> awsAuroraConfig.awsDbCredentials())
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessageContaining("Failed to load AWS credentials from Secrets Manager")
-                    .hasRootCauseMessage("AWS down");
-        }
+        // when / then
+        assertThatThrownBy(() -> awsAuroraConfig.awsDbCredentials())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to load AWS credentials from Secrets Manager")
+                .hasRootCauseMessage("AWS down");
     }
 
     /**
@@ -185,30 +161,16 @@ class AwsAuroraConfigTest {
         // given
         when(secretsManagerProperties.dbSecretName())
                 .thenReturn("aurora/db/credentials");
-        when(secretsManagerProperties.region())
-                .thenReturn("ap-south-1");
-
         final String invalidJson = "{ this-is-not-valid-json }";
-        final SecretsManagerClient secretsManagerClient = mock(SecretsManagerClient.class);
-        final SecretsManagerClientBuilder clientBuilder = mock(SecretsManagerClientBuilder.class);
         final GetSecretValueResponse response = GetSecretValueResponse.builder()
                 .secretString(invalidJson)
                 .build();
         when(secretsManagerClient.getSecretValue(any(GetSecretValueRequest.class)))
                 .thenReturn(response);
-        when(clientBuilder.region(any(Region.class))).thenReturn(clientBuilder);
-        when(clientBuilder.build()).thenReturn(secretsManagerClient);
 
-        try (final MockedStatic<SecretsManagerClient> mockedStatic =
-                     Mockito.mockStatic(SecretsManagerClient.class)) {
-
-            mockedStatic.when(SecretsManagerClient::builder)
-                    .thenReturn(clientBuilder);
-
-            // when / then
-            assertThatThrownBy(() -> awsAuroraConfig.awsDbCredentials())
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessageContaining("Failed to load AWS credentials from Secrets Manager");
-        }
+        // when / then
+        assertThatThrownBy(() -> awsAuroraConfig.awsDbCredentials())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to load AWS credentials from Secrets Manager");
     }
 }
