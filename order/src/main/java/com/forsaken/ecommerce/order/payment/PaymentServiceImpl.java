@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import static feign.FeignException.NotFound;
+import static feign.FeignException.BadRequest;
 
 @Component
 @RequiredArgsConstructor
@@ -29,7 +31,7 @@ public class PaymentServiceImpl implements IPaymentService {
                 );
             }
             return paymentResponse.data();
-        } catch (FeignException.NotFound ex) {
+        } catch (NotFound ex) {
             log.warn(
                     "Payment service endpoint not found. method=pay, status={}, responseBody={}",
                     ex.status(),
@@ -42,7 +44,7 @@ public class PaymentServiceImpl implements IPaymentService {
                     ex
             );
 
-        } catch (FeignException.BadRequest ex) {
+        } catch (BadRequest ex) {
             log.error(
                     "Invalid payment request sent to payment service. method=pay, status={}, responseBody={}",
                     ex.status(),

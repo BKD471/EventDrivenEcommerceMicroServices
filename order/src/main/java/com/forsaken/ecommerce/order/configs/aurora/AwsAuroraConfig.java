@@ -16,35 +16,37 @@ import java.util.Map;
 public class AwsAuroraConfig {
 
     private final SecretsManagerProperties secretsManagerProperties;
+    private final SecretsManagerClient secretsManagerClient;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public AwsDbCredentials awsDbCredentials() {
         final String secretName = secretsManagerProperties.dbSecretName();
         final Region region = Region.AP_SOUTH_1;
 
-        final SecretsManagerClient client = SecretsManagerClient.builder()
-                .region(region)
-                .build();
-        final GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder()
-                .secretId(secretName)
-                .build();
-        final GetSecretValueResponse getSecretValueResponse =
-                client.getSecretValue(getSecretValueRequest);
-
         try {
-            final ObjectMapper mapper = new ObjectMapper();
+            final GetSecretValueResponse getSecretValueResponse =
+                    secretsManagerClient.getSecretValue(GetSecretValueRequest.builder()
+                            .secretId(secretName)
+                            .build());
             final Map<String, String> secrets =
-                    mapper.readValue(getSecretValueResponse.secretString(), Map.class);
-            final AwsDbCredentials awsDbCredentials = AwsDbCredentials.builder()
+                    objectMapper.readValue(getSecretValueResponse.secretString(), Map.class);
+            return AwsDbCredentials.builder()
                     .userName(secrets.get("postgress_username"))
                     .password(secrets.get("postgress_password"))
                     .host(secrets.get("postgress_host"))
                     .port(secrets.get("port"))
                     .dbName(secrets.get("dbname"))
                     .build();
-            return awsDbCredentials;
         } catch (Exception e) {
             throw new RuntimeException("Failed to load AWS credentials from Secrets Manager", e);
         }
+    }
+
+    @Bean
+    public SecretsManagerClient secretsManagerClient() {
+        return SecretsManagerClient.builder()
+                .region(Region.AP_SOUTH_1)
+                .build();
     }
 }

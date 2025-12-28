@@ -1,4 +1,4 @@
-package com.forsaken.ecommerce.order.kafka;
+package com.forsaken.ecommerce.order.order.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 

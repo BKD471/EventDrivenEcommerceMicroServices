@@ -5,7 +5,6 @@ import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.customer.CustomerResponse;
 import com.forsaken.ecommerce.order.customer.ICustomerService;
-import com.forsaken.ecommerce.order.kafka.IOrderProducer;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 import com.forsaken.ecommerce.order.order.model.Order;
