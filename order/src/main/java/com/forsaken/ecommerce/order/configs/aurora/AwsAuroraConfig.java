@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
@@ -39,12 +38,5 @@ public class AwsAuroraConfig {
         } catch (Exception e) {
             throw new RuntimeException("Failed to load AWS credentials from Secrets Manager", e);
         }
-    }
-
-    @Bean
-    public SecretsManagerClient secretsManagerClient() {
-        return SecretsManagerClient.builder()
-                .region(Region.of(secretsManagerProperties.region()))
-                .build();
     }
 }
