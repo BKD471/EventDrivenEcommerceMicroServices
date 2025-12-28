@@ -177,7 +177,7 @@ class ProductControllerImplTest {
         final List<ProductPurchaseRequest> req = List.of(productPurchaseRequest);
         final int page = 0, size = 10;
         final PagedResponse<ProductPurchaseResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10, 1, 1);
+                new PagedResponse<>(List.of(), 0, 10, 1, 1,true);
         when(service.purchaseProducts(req, page, size)).thenReturn(paged);
 
         // when
@@ -245,7 +245,7 @@ class ProductControllerImplTest {
         final Boolean signedUrl = false;
         final int page = 0, size = 20;
         final PagedResponse<ProductResponse> paged =
-                new PagedResponse<>(List.of(), 0, 20, 1, 1);
+                new PagedResponse<>(List.of(), 0, 20, 1, 1,true);
         when(service.getAllProducts(signedUrl, page, size))
                 .thenReturn(paged);
 
@@ -281,7 +281,7 @@ class ProductControllerImplTest {
         final LocalDateTime to = LocalDateTime.now();
         final int page = 0, size = 10;
         final PagedResponse<ProductResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10, 1, 1);
+                new PagedResponse<>(List.of(), 0, 10, 1, 1,true);
         when(service.findAllProducts(from, to, page, size))
                 .thenReturn(paged);
 
@@ -320,7 +320,7 @@ class ProductControllerImplTest {
         final Direction direction = Direction.GE;
         final int page = 0, size = 10;
         final PagedResponse<ProductResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10, 1, 1);
+                new PagedResponse<>(List.of(), 0, 10, 1, 1,true);
         when(service.findAllProductsByCategory(categoryId, price, direction, page, size))
                 .thenReturn(paged);
 
