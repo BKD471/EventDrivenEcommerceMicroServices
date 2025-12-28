@@ -52,6 +52,7 @@ spring:
 aws:
   secretsmanager:
     dbSecretName: OrderServiceSecrets
+    region: ap-south-1
 
 general:
   configurations:

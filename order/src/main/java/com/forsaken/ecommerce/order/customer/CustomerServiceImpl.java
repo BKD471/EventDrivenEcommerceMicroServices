@@ -3,12 +3,15 @@ package com.forsaken.ecommerce.order.customer;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
+
+import static feign.FeignException.NotFound;
 
 
 @Service
@@ -34,7 +37,7 @@ public class CustomerServiceImpl implements ICustomerService {
                 );
             }
             return CompletableFuture.completedFuture(customerResponse.data());
-        } catch (feign.FeignException.NotFound ex) {
+        } catch (NotFound ex) {
             log.warn(
                     "Customer not found while calling customer service. method=getCustomer, status={}, responseBody={}",
                     ex.status(),
@@ -48,7 +51,7 @@ public class CustomerServiceImpl implements ICustomerService {
                             ex
                     )
             );
-        } catch (feign.FeignException ex) {
+        } catch (FeignException ex) {
             log.error(
                     "Customer service call failed. method=getCustomer, status={}, responseBody={}",
                     ex.status(),
