@@ -8,6 +8,9 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "aws.secretsmanager")
 public record SecretsManagerProperties(
         @NotBlank
-        String dbSecretName
+        String dbSecretName,
+
+        @NotBlank
+        String region
 ) {
 }

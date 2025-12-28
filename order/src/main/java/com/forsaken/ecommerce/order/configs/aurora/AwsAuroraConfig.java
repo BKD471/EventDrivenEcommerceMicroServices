@@ -22,8 +22,6 @@ public class AwsAuroraConfig {
     @Bean
     public AwsDbCredentials awsDbCredentials() {
         final String secretName = secretsManagerProperties.dbSecretName();
-        final Region region = Region.AP_SOUTH_1;
-
         try {
             final GetSecretValueResponse getSecretValueResponse =
                     secretsManagerClient.getSecretValue(GetSecretValueRequest.builder()
@@ -32,9 +30,9 @@ public class AwsAuroraConfig {
             final Map<String, String> secrets =
                     objectMapper.readValue(getSecretValueResponse.secretString(), Map.class);
             return AwsDbCredentials.builder()
-                    .userName(secrets.get("postgress_username"))
-                    .password(secrets.get("postgress_password"))
-                    .host(secrets.get("postgress_host"))
+                    .userName(secrets.get("postgres_username"))
+                    .password(secrets.get("postgres_password"))
+                    .host(secrets.get("postgres_host"))
                     .port(secrets.get("port"))
                     .dbName(secrets.get("dbname"))
                     .build();
@@ -46,7 +44,7 @@ public class AwsAuroraConfig {
     @Bean
     public SecretsManagerClient secretsManagerClient() {
         return SecretsManagerClient.builder()
-                .region(Region.AP_SOUTH_1)
+                .region(Region.of(secretsManagerProperties.region()))
                 .build();
     }
 }

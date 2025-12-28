@@ -75,7 +75,7 @@ class CustomerServiceImplTest {
     void shouldReturnCustomerWhenResponseIsValid() throws Exception {
         // given
         final CustomerResponse customer
-                = new CustomerResponse("123", "John","Doe","test_email@com");
+                = new CustomerResponse("123", "John", "Doe", "test_email@com");
         final ApiResponse<CustomerResponse> apiResponse =
                 new ApiResponse<>(ApiResponse.Status.SUCCESS, customer, null);
         when(customerClient.findCustomerById("123"))
@@ -126,7 +126,7 @@ class CustomerServiceImplTest {
     void shouldFailWhenCustomerDataIsNull() {
         // given
         final ApiResponse<CustomerResponse> apiResponse =
-                new ApiResponse<>(FAILED,null, null);
+                new ApiResponse<>(FAILED, null, null);
         when(customerClient.findCustomerById("123"))
                 .thenReturn(apiResponse);
 

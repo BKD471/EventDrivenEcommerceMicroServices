@@ -90,9 +90,9 @@ class AwsAuroraConfigTest {
                 .thenReturn("aurora/db/credentials");
         final String secretJson = """
                 {
-                  "postgress_username": "db_user",
-                  "postgress_password": "db_password",
-                  "postgress_host": "aurora.cluster.amazonaws.com",
+                  "postgres_username": "db_user",
+                  "postgres_password": "db_password",
+                  "postgres_host": "aurora.cluster.amazonaws.com",
                   "port": "5432",
                   "dbname": "order_db"
                 }
