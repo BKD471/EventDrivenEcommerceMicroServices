@@ -59,10 +59,10 @@ aws:
   secretsmanager:
     secretName: EcommerceCredentials
   s3:
-    bucketName: my-invoice-pdfs-qa
+    bucketName: invoice-pdfs-qa
     expiration: 30 # Pre-signed URL expiration (in minutes).
     dlq:
-      bucket: dlq-bucket-qa
+      bucket: dlqs-bucket-qa
       paymentPrefix: payment-dlq
       orderPrefix: order-dlq
   dynamodb:

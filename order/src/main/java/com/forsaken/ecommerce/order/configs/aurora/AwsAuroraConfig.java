@@ -16,13 +16,15 @@ import java.util.Map;
 public class AwsAuroraConfig {
 
     private final SecretsManagerProperties secretsManagerProperties;
-    private final SecretsManagerClient secretsManagerClient;
     private final ObjectMapper objectMapper;
 
     @Bean
     public AwsDbCredentials awsDbCredentials() {
         final String secretName = secretsManagerProperties.dbSecretName();
         try {
+            final SecretsManagerClient secretsManagerClient = SecretsManagerClient.builder()
+                    .region(Region.of(secretsManagerProperties.region()))
+                    .build();
             final GetSecretValueResponse getSecretValueResponse =
                     secretsManagerClient.getSecretValue(GetSecretValueRequest.builder()
                             .secretId(secretName)
@@ -39,12 +41,5 @@ public class AwsAuroraConfig {
         } catch (Exception e) {
             throw new RuntimeException("Failed to load AWS credentials from Secrets Manager", e);
         }
-    }
-
-    @Bean
-    public SecretsManagerClient secretsManagerClient() {
-        return SecretsManagerClient.builder()
-                .region(Region.of(secretsManagerProperties.region()))
-                .build();
     }
 }

@@ -31,5 +31,5 @@ aws:
     accessSecretName: EcommerceCredentials
     dbSecretName: ProductServiceSecrets
   s3:
-    bucketName: my-product-images-47
+    bucketName: product-profile-images-dev
     expiration: 30
