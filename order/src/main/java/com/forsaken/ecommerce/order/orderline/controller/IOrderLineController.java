@@ -3,7 +3,6 @@ package com.forsaken.ecommerce.order.orderline.controller;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.orderline.dto.OrderLineResponse;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -64,7 +63,7 @@ public interface IOrderLineController {
     @GetMapping("/order/{order-ref}")
     ResponseEntity<ApiResponse<PagedResponse<OrderLineResponse>>> findByOrderReference(
             @PathVariable("order-ref") @NotBlank final String orderReference,
-            @RequestParam(name = "page", defaultValue = "1") final int page,
-            @RequestParam(name = "size", defaultValue = "3") final int size
+            @RequestParam(name = "page", required = false) final Integer page,
+            @RequestParam(name = "size", required = false) final Integer size
     );
 }
