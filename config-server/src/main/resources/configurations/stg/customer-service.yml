@@ -1,11 +1,11 @@
 server:
   port: 8090
-spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://localhost:9098/realms/ecommerce
+
+aws:
+  secretsmanager:
+    secretName: EcommerceCredentials
+  dynamodb:
+    tableName: Customers
 
 general:
   configurations:
