@@ -222,7 +222,7 @@ class CustomerServiceImplTest {
     @Test
     void findAllCustomers_WithPagination_ReturnsPagedResponse() {
         // Given
-        final Integer pageSize = 2;
+        final int pageSize = 2;
 
         final Map<String, String> cursor =
                 Map.of("customerId", "cust_123");
