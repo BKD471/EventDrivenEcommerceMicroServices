@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,7 +53,7 @@ import static org.mockito.Mockito.when;
  *     <li>{@code deleteItem(Consumer)}</li>
  *     <li>{@code query(Consumer)}</li>
  * </ul>
- *
+ * <p>
  * These tests verify that:
  * <ul>
  *     <li>The correct Enhanced Client methods are invoked</li>
@@ -330,12 +331,9 @@ public class CustomerRepositoryTest {
         final Map<String, AttributeValue> lastEvaluatedKey =
                 Map.of("customerId", AttributeValue.builder().s("cust_123").build());
 
-        @SuppressWarnings("unchecked")
-        final PageIterable<Customer> pageIterable = mock(PageIterable.class);
-        @SuppressWarnings("unchecked")
-        final Iterator<Page<Customer>> iterator = mock(Iterator.class);
-        @SuppressWarnings("unchecked")
-        final Page<Customer> dynamoPage = mock(Page.class);
+        @SuppressWarnings("unchecked") final PageIterable<Customer> pageIterable = mock(PageIterable.class);
+        @SuppressWarnings("unchecked") final Iterator<Page<Customer>> iterator = mock(Iterator.class);
+        @SuppressWarnings("unchecked") final Page<Customer> dynamoPage = mock(Page.class);
 
         when(properties.tableName()).thenReturn("customer-table");
         when(enhancedClient.table(eq("customer-table"), any(TableSchema.class)))
@@ -355,6 +353,62 @@ public class CustomerRepositoryTest {
         assertEquals(dynamoPage, result);
         verify(customerTable).scan(any(Consumer.class));
         verify(iterator).next();
+    }
+
+    /**
+     * Verifies that {@link CustomerRepository#scanPage(int, Map)} returns
+     * an empty DynamoDB {@link software.amazon.awssdk.enhanced.dynamodb.model.Page}
+     * when the scan operation yields no results.
+     *
+     * <p><b>Test scenario:</b></p>
+     * <ul>
+     *   <li>The DynamoDB scan returns a {@link PageIterable} whose iterator
+     *       has no pages.</li>
+     *   <li>This simulates an empty table or an exhausted cursor.</li>
+     * </ul>
+     *
+     * <p><b>Expected behavior:</b></p>
+     * <ul>
+     *   <li>An empty {@code Page} is returned instead of throwing
+     *       {@link java.util.NoSuchElementException}.</li>
+     *   <li>The returned page contains no items.</li>
+     *   <li>The {@code lastEvaluatedKey} is an empty map, indicating that
+     *       there are no more pages available.</li>
+     * </ul>
+     *
+     * <p>This test ensures safe handling of edge cases in cursor-based
+     * pagination and prevents runtime failures caused by assuming
+     * scan results are always present.</p>
+     */
+    @Test
+    void scanPage_ShouldReturnEmptyPage_WhenNoPagesExist() {
+        // Given
+        final int limit = 2;
+        final Map<String, AttributeValue> lastEvaluatedKey =
+                Map.of("customerId", AttributeValue.builder().s("cust_123").build());
+
+        @SuppressWarnings("unchecked") final PageIterable<Customer> pageIterable = mock(PageIterable.class);
+        @SuppressWarnings("unchecked") final Iterator<Page<Customer>> iterator = mock(Iterator.class);
+
+        when(properties.tableName()).thenReturn("customer-table");
+        when(enhancedClient.table(eq("customer-table"), any(TableSchema.class)))
+                .thenReturn(customerTable);
+        when(customerTable.scan(any(Consumer.class)))
+                .thenReturn(pageIterable);
+        when(pageIterable.iterator()).thenReturn(iterator);
+        when(iterator.hasNext()).thenReturn(false); // 👈 KEY DIFFERENCE
+
+        // When
+        final Page<Customer> result =
+                repository.scanPage(limit, lastEvaluatedKey);
+
+        // Then
+        assertNotNull(result);
+        assertTrue(result.items().isEmpty());
+        assertTrue(result.lastEvaluatedKey().isEmpty());
+        verify(customerTable).scan(any(Consumer.class));
+        verify(iterator).hasNext();
+        verify(iterator, never()).next();
     }
 
     /**

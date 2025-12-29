@@ -9,10 +9,13 @@ import software.amazon.awssdk.enhanced.dynamodb.DynamoDbIndex;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.model.Page;
+import software.amazon.awssdk.enhanced.dynamodb.model.PageIterable;
 import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,8 +61,8 @@ public class CustomerRepository {
      * Initializes the repository by wiring the enhanced DynamoDB client and
      * deriving the mapped table schema for {@link Customer}.
      *
-     * @param enhancedClient       the enhanced DynamoDB client instance
-     * @param dynamoDbProperties   configuration properties such as table name
+     * @param enhancedClient     the enhanced DynamoDB client instance
+     * @param dynamoDbProperties configuration properties such as table name
      */
     public CustomerRepository(
             final DynamoDbEnhancedClient enhancedClient,
@@ -151,14 +154,60 @@ public class CustomerRepository {
         return Optional.empty();
     }
 
+    /**
+     * Scans the Customer DynamoDB table and returns a single page of results
+     * using cursor-based pagination.
+     *
+     * <p>This method performs a DynamoDB <b>scan</b> operation via the
+     * Enhanced Client and returns at most {@code limit} items starting
+     * from the provided {@code lastKey} (exclusive).</p>
+     *
+     * <p><b>Pagination behavior:</b></p>
+     * <ul>
+     *   <li>{@code limit} controls the maximum number of items returned in this page.</li>
+     *   <li>{@code lastKey} represents the cursor from the previous page and is passed
+     *       as DynamoDB's {@code exclusiveStartKey}.</li>
+     *   <li>The returned {@link software.amazon.awssdk.enhanced.dynamodb.model.Page}
+     *       contains a {@code lastEvaluatedKey} which should be used as the cursor
+     *       for the next request.</li>
+     * </ul>
+     *
+     * <p><b>Empty result handling:</b></p>
+     * <ul>
+     *   <li>If the table is empty or no items match the scan criteria,
+     *       an empty {@code Page} is returned.</li>
+     *   <li>This method never throws {@link java.util.NoSuchElementException}
+     *       due to missing scan results.</li>
+     * </ul>
+     *
+     * <p><b>Notes:</b></p>
+     * <ul>
+     *   <li>This method uses a <b>scan</b> operation and should be used cautiously
+     *       for large tables.</li>
+     *   <li>Caller is responsible for interpreting {@code lastEvaluatedKey == null}
+     *       as the end of the result set.</li>
+     * </ul>
+     *
+     * @param limit   maximum number of items to return in a single page
+     * @param lastKey cursor from the previous page; may be {@code null} for the first page
+     * @return a single DynamoDB {@code Page} containing customers and a cursor for the next page
+     */
     public Page<Customer> scanPage(
             final int limit,
             final Map<String, AttributeValue> lastKey
     ) {
-        return customerTable.scan(r -> r
+        final PageIterable<Customer> pages = customerTable.scan(r -> r
                 .limit(limit)
                 .exclusiveStartKey(lastKey)
-        ).iterator().next();
+        );
+        final Iterator<Page<Customer>> iterator = pages.iterator();
+        if (!iterator.hasNext()) {
+            return Page.builder(Customer.class)
+                    .items(List.of())
+                    .lastEvaluatedKey(Collections.emptyMap())
+                    .build();
+        }
+        return iterator.next();
     }
 }
 

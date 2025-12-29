@@ -277,21 +277,16 @@ class CustomerServiceImplTest {
     @Test
     void findAllCustomers_PageOutOfRange_ReturnsEmptyContent() {
         // Given
-        final Integer pageSize = 2;
-
+        final int pageSize = 2;
         final Map<String, String> cursor =
                 Map.of("customerId", "cust_999");
-
         final Map<String, AttributeValue> lastEvaluatedKey =
                 Map.of("customerId", AttributeValue.builder().s("cust_999").build());
-
         // Mock empty DynamoDB page
         final Page<Customer> dynamoPage = mock(Page.class);
-
         when(customerProperties.maxPageSize()).thenReturn(50);
         when(customerRepository.scanPage(pageSize, lastEvaluatedKey))
                 .thenReturn(dynamoPage);
-
         when(dynamoPage.items()).thenReturn(List.of());
         when(dynamoPage.lastEvaluatedKey()).thenReturn(null);
 
@@ -322,31 +317,23 @@ class CustomerServiceImplTest {
     @ValueSource(ints = {0, -1, -2, -3, -4, -5})
     void findAllCustomers_InvalidOrNegativePage_AlwaysUsesPage1(int page) {
         // Given
-        final Integer pageSize = 2;
-
+        final int pageSize = 2;
         final Map<String, String> cursor =
                 Map.of("customerId", "cust_123");
-
         final Map<String, AttributeValue> lastEvaluatedKey =
                 Map.of("customerId", AttributeValue.builder().s("cust_123").build());
-
         final Customer existingCustomerOne =
                 constructCustomer("cust_123", "test-user-firstname-123",
                         "test-user-lastname-123", "abc@gmail.com");
-
         final Customer existingCustomerTwo =
                 constructCustomer("cust_456", "test-user-firstname-456",
                         "test-user-lastname-456", "xyz@gmail.com");
-
         final Page<Customer> dynamoPage = mock(Page.class);
-
         when(customerProperties.maxPageSize()).thenReturn(50);
         when(customerRepository.scanPage(pageSize, lastEvaluatedKey))
                 .thenReturn(dynamoPage);
-
         when(dynamoPage.items())
                 .thenReturn(List.of(existingCustomerOne, existingCustomerTwo));
-
         when(dynamoPage.lastEvaluatedKey())
                 .thenReturn(lastEvaluatedKey);
 
@@ -365,7 +352,6 @@ class CustomerServiceImplTest {
                 result.content()
         );
         assertEquals(lastEvaluatedKey, result.nextCursor());
-
         verify(customerRepository, times(1))
                 .scanPage(pageSize, lastEvaluatedKey);
     }
