@@ -138,7 +138,7 @@ public class ProductServiceImpl implements IProductService {
             purchasedProducts.add(product.toproductPurchaseResponse(productRequest.quantity()));
         }
 
-        final int start = finalPage * finalPage;
+        final int start = finalPage * finalSize;
         final int end = Math.min(start + finalSize, purchasedProducts.size());
         final List<ProductPurchaseResponse> pagedContent =
                 (start >= purchasedProducts.size()) ? List.of() : purchasedProducts.subList(start, end);
