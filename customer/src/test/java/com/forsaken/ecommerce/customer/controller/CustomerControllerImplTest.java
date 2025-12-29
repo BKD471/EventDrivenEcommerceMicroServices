@@ -102,7 +102,6 @@ class CustomerControllerImplTest {
         // Given
         final CustomerRequest request = constructCustomerRequest();
         final String serviceResponse = "updated-customer-object";
-
         when(customerService.updateCustomer(request)).thenReturn(serviceResponse);
 
         // When
@@ -129,30 +128,27 @@ class CustomerControllerImplTest {
     @Test
     void findAll_WithPagination_ReturnsPagedResponse() {
         // Given
-        int page = 1;
-        int size = 3;
-
-        CustomerResponse customer1 = constructCustomerResponse();
-        CustomerResponse customer2 = constructCustomerResponse();
-
-        PagedResponse<CustomerResponse> pagedResponse = PagedResponse.<CustomerResponse>builder()
+        final int page = 1;
+        final int size = 3;
+        final CustomerResponse customer1 = constructCustomerResponse();
+        final CustomerResponse customer2 = constructCustomerResponse();
+        final PagedResponse<CustomerResponse> pagedResponse = PagedResponse.<CustomerResponse>builder()
                 .content(List.of(customer1, customer2))
                 .page(page)
                 .size(size)
                 .totalElements(2)
                 .totalPages(1)
                 .build();
-
         when(customerService.findAllCustomers(page, size))
                 .thenReturn(pagedResponse);
 
         // When
-        ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> resp =
+        final ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> resp =
                 controller.findAll(page, size);
 
         // Then
         assertEquals(HttpStatus.OK, resp.getStatusCode());
-        ApiResponse<PagedResponse<CustomerResponse>> body = resp.getBody();
+        final ApiResponse<PagedResponse<CustomerResponse>> body = resp.getBody();
         assertNotNull(body);
         assertEquals(ApiResponse.Status.SUCCESS, body.status());
         assertEquals("All Customers Data Fetched", body.message());

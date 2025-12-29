@@ -229,15 +229,13 @@ class CustomerServiceImplTest {
         final Customer existingCustomerThree = constructCustomer("cust_789", "test-user-firstname-789",
                 "test-user-lastname-789", "klm@gmail.com");
         when(orderProperties.maxPageSize()).thenReturn(50);
-        when(orderProperties.defaultPageSize()).thenReturn(5);
-        when(orderProperties.defaultPageNumber()).thenReturn(0);
-        when(customerRepository.findAll()).thenReturn(List.of(existingCustomerOne, existingCustomerTwo, existingCustomerThree));
-
-        CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
-        CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();
+        when(customerRepository.findAll())
+                .thenReturn(List.of(existingCustomerOne, existingCustomerTwo, existingCustomerThree));
+        final CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
+        final CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();
 
         // When
-        PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
+        final PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
 
         // Then
         assertNotNull(result);
