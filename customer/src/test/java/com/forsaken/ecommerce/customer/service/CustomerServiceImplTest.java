@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.customer.service;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.customer.configs.general.OrderProperties;
 import com.forsaken.ecommerce.customer.dto.CustomerRequest;
 import com.forsaken.ecommerce.customer.dto.CustomerResponse;
 import com.forsaken.ecommerce.customer.model.Address;
@@ -60,6 +61,10 @@ class CustomerServiceImplTest {
 
     @Mock
     private CustomerRepository customerRepository;
+
+    @Mock
+    private OrderProperties orderProperties;
+
     @InjectMocks
     private CustomerServiceImpl customerService;
 
@@ -223,14 +228,14 @@ class CustomerServiceImplTest {
                 "test-user-lastname-456", "xyz@gmail.com");
         final Customer existingCustomerThree = constructCustomer("cust_789", "test-user-firstname-789",
                 "test-user-lastname-789", "klm@gmail.com");
-
-        when(customerRepository.findAll()).thenReturn(List.of(existingCustomerOne, existingCustomerTwo, existingCustomerThree));
-
-        CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
-        CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();
+        when(orderProperties.maxPageSize()).thenReturn(50);
+        when(customerRepository.findAll())
+                .thenReturn(List.of(existingCustomerOne, existingCustomerTwo, existingCustomerThree));
+        final CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
+        final CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();
 
         // When
-        PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
+        final PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
 
         // Then
         assertNotNull(result);
@@ -262,6 +267,7 @@ class CustomerServiceImplTest {
                         "test-user-lastname-123", "abc@gmail.com");
         final Customer existingCustomerTwo = constructCustomer("cust_456", "test-user-firstname-456",
                 "test-user-lastname-456", "xyz@gmail.com");
+        when(orderProperties.maxPageSize()).thenReturn(50);
         when(customerRepository.findAll()).thenReturn(List.of(existingCustomerOne, existingCustomerTwo));
 
         // When
@@ -293,6 +299,7 @@ class CustomerServiceImplTest {
                         "test-user-lastname-123", "abc@gmail.com");
         final Customer existingCustomerTwo = constructCustomer("cust_456", "test-user-firstname-456",
                 "test-user-lastname-456", "xyz@gmail.com");
+        when(orderProperties.maxPageSize()).thenReturn(50);
         when(customerRepository.findAll()).thenReturn(List.of(existingCustomerOne, existingCustomerTwo));
         final CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
         final CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();

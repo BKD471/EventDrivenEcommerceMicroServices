@@ -7,3 +7,8 @@ spring:
         jwt:
           issuer-uri: http://localhost:9098/realms/ecommerce
 
+general:
+  configurations:
+    maxPageSize: 50
+    defaultPageSize: 5
+    defaultPageNumber: 0
