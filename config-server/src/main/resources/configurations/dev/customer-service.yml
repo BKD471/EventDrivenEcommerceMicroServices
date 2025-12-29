@@ -11,4 +11,4 @@ general:
   configurations:
     maxPageSize: 50
     defaultPageSize: 5
-    defaultPageNumber: 0
+    defaultPageNumber: 1

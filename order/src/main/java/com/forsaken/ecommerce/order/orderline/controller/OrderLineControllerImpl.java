@@ -19,8 +19,8 @@ public class OrderLineControllerImpl implements IOrderLineController {
     @Override
     public ResponseEntity<ApiResponse<PagedResponse<OrderLineResponse>>> findByOrderReference(
             final String orderReference,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     ) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
