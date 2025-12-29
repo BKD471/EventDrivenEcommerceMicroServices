@@ -214,7 +214,7 @@ class ProductServiceImplTest {
                 new ProductPurchaseRequest(1, 5);
         when(productProperties.maxPageSize()).thenReturn(50);
         when(productRepository.findAllByIdInOrderById(List.of(1)))
-                .thenReturn(List.of());
+                .thenReturn(List.of(product));
 
         // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
