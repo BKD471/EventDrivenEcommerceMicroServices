@@ -72,8 +72,8 @@ public class CustomerServiceImpl implements ICustomerService {
         return PagedResponse.<CustomerResponse>builder()
                 .content(page.items().stream().map(Customer::fromCustomer).toList())
                 .size(page.items().size())
-                .totalElements(page.count())
-                .totalPages((int) Math.ceil((double) page.count() / finalSize))
+                .totalElements(-1L)
+                .totalPages(-1)
                 .nextCursor(page.lastEvaluatedKey())
                 .build();
     }
