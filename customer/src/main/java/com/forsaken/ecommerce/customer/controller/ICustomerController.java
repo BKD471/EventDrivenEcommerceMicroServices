@@ -86,7 +86,7 @@ public interface ICustomerController {
      */
     @GetMapping
     ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(
-            @RequestParam(required = false) final Integer size,
+            @RequestParam(name = "size", required = false) final Integer size,
             @RequestParam(required = false) String cursorCustomerId
     );
 
