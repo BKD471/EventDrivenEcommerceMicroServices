@@ -44,7 +44,7 @@ public class CustomerControllerImpl implements ICustomerController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(final int page, final int size) {
+    public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(final Integer page, final Integer size) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
                         ApiResponse.<PagedResponse<CustomerResponse>>builder()

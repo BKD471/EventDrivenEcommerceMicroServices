@@ -68,7 +68,7 @@ public interface ICustomerService {
      * @return a {@link PagedResponse} containing a list of {@link CustomerResponse} objects
      *         along with pagination metadata such as total pages and total elements
      */
-    PagedResponse<CustomerResponse> findAllCustomers(final int page, final int size);
+    PagedResponse<CustomerResponse> findAllCustomers(final Integer page, final Integer size);
 
     /**
      * Retrieves the details of a customer using their unique identifier.

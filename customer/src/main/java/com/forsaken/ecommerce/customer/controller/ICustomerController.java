@@ -85,8 +85,8 @@ public interface ICustomerController {
      */
     @GetMapping
     ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(
-            @RequestParam(name = "page", defaultValue = "1") final int page,
-            @RequestParam(name = "size", defaultValue = "3") final int size
+            @RequestParam(name = "page", required = false) final Integer page,
+            @RequestParam(name = "size", required = false) final Integer size
     );
 
     /**

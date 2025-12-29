@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.customer.service;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.customer.configs.general.OrderProperties;
 import com.forsaken.ecommerce.customer.dto.CustomerRequest;
 import com.forsaken.ecommerce.customer.dto.CustomerResponse;
 import com.forsaken.ecommerce.customer.model.Customer;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 public class CustomerServiceImpl implements ICustomerService {
 
     private final CustomerRepository customerRepository;
+    private final OrderProperties orderProperties;
     private final Class<?> className = CustomerServiceImpl.class;
 
     @Override
@@ -56,24 +58,29 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
-    public PagedResponse<CustomerResponse> findAllCustomers(final int page, final int size) {
+    public PagedResponse<CustomerResponse> findAllCustomers(final Integer page, final Integer size) {
         log.info("Received request to get all customers");
-        final List<CustomerResponse> customerResponses=this.customerRepository.findAll()
+        final int finalPage = null != page ?
+                Math.max(page - 1, 0) :
+                orderProperties.defaultPageNumber();
+        final int finalSize = null != size ?
+                Math.min(Math.max(size, 1), orderProperties.maxPageSize()) :
+                orderProperties.defaultPageSize();
+
+        final List<CustomerResponse> customerResponses = this.customerRepository.findAll()
                 .stream()
                 .map(Customer::fromCustomer)
                 .collect(Collectors.toList());
-
-        final int finalPage = Math.max(page - 1, 0);
-        final int start = finalPage * size;
-        final int end = Math.min(start + size, customerResponses.size());
+        final int start = finalPage * finalSize;
+        final int end = Math.min(start + finalSize, customerResponses.size());
 
         final List<CustomerResponse> pagedContent =
                 (start >= customerResponses.size()) ? List.of() : customerResponses.subList(start, end);
-        final int totalPages = (int) Math.ceil((double) customerResponses.size() / size);
+        final int totalPages = (int) Math.ceil((double) customerResponses.size() / finalSize);
         return PagedResponse.<CustomerResponse>builder()
                 .content(pagedContent)
                 .page(finalPage + 1)
-                .size(size)
+                .size(finalSize)
                 .totalElements(customerResponses.size())
                 .totalPages(totalPages)
                 .build();

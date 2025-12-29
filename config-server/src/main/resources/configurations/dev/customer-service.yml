@@ -6,3 +6,9 @@ aws:
     secretName: EcommerceCredentials
   dynamodb:
     tableName: Customers
+
+general:
+  configurations:
+    maxPageSize: 50
+    defaultPageSize: 5
+    defaultPageNumber: 1
