@@ -7,6 +7,7 @@ import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.client_configurations.product.ProductClientProperties;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,7 +118,8 @@ class ProductServiceImplTest {
                 constructPurchaseResponse(2, "Product B", BigDecimal.valueOf(15), 1)
         );
         final PagedResponse<PurchaseResponse> pagedResponse =
-                new PagedResponse<>(responses, 1, responses.size(), responses.size(), 5, false);
+                new PagedResponse<>(responses, 1, responses.size(),
+                        responses.size(), 5, Map.of(), false);
         final ApiResponse<PagedResponse<PurchaseResponse>> apiResponse =
                 new ApiResponse<>(ApiResponse.Status.SUCCESS, pagedResponse, null);
         final ResponseEntity<ApiResponse<PagedResponse<PurchaseResponse>>> responseEntity =
@@ -125,15 +128,19 @@ class ProductServiceImplTest {
         final String expectedUrl = baseUri + "/purchase";
         when(productClientProperties.url()).thenReturn(baseUri);
         final ParameterizedTypeReference<ApiResponse<PagedResponse<PurchaseResponse>>> responseType =
-                new ParameterizedTypeReference<>() {};
+                new ParameterizedTypeReference<>() {
+                };
         when(productRestTemplate.exchange(
                 eq(expectedUrl),
                 eq(HttpMethod.POST),
                 argThat(entity ->
-                        entity.getBody().equals(requests)
-                                && entity.getHeaders().getContentType() != null
-                                && entity.getHeaders().getContentType().toString()
-                                .equals("application/json")
+                        {
+                            Assertions.assertNotNull(entity.getBody());
+                            return entity.getBody().equals(requests)
+                                    && entity.getHeaders().getContentType() != null
+                                    && entity.getHeaders().getContentType().toString()
+                                    .equals("application/json");
+                        }
                 ),
                 eq(responseType)
         )).thenReturn(responseEntity);

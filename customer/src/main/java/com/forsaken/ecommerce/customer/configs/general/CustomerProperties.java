@@ -7,7 +7,7 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @ConfigurationProperties(prefix = "general.configurations")
-public record OrderProperties(
+public record CustomerProperties(
 
         @Min(1)
         @Max(100)

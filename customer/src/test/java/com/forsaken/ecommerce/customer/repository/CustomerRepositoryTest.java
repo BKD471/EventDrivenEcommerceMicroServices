@@ -13,9 +13,11 @@ import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.model.Page;
 import software.amazon.awssdk.enhanced.dynamodb.model.PageIterable;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,7 +53,7 @@ import static org.mockito.Mockito.when;
  *     <li>{@code deleteItem(Consumer)}</li>
  *     <li>{@code query(Consumer)}</li>
  * </ul>
- *
+ * <p>
  * These tests verify that:
  * <ul>
  *     <li>The correct Enhanced Client methods are invoked</li>
@@ -87,7 +90,6 @@ public class CustomerRepositoryTest {
         when(properties.tableName()).thenReturn("customer-table");
         when(enhancedClient.table(eq("customer-table"), any(TableSchema.class)))
                 .thenReturn(customerTable);
-
         repository = new CustomerRepository(enhancedClient, properties);
     }
 
@@ -132,7 +134,7 @@ public class CustomerRepositoryTest {
         assertTrue(result.isPresent());
         assertEquals(CUSTOMER_ID, result.get().getCustomerId());
         // Additional verification: ensure a Consumer was passed into getItem (i.e. repository built the request)
-        Consumer captured = captor.getValue();
+        final Consumer captured = captor.getValue();
         assertNotNull(captured);
     }
 
@@ -275,7 +277,6 @@ public class CustomerRepositoryTest {
 
         final SdkIterable<Page<Customer>> iterable = mock(SdkIterable.class);
         when(iterable.iterator()).thenReturn(List.of(page).iterator());
-
         // Capture the Consumer passed into emailIndex.query(...) instead of using any(...)
         final ArgumentCaptor<Consumer> captor = ArgumentCaptor.forClass(Consumer.class);
         when(emailIndex.query(captor.capture())).thenReturn(iterable);
@@ -285,6 +286,129 @@ public class CustomerRepositoryTest {
         assertFalse(result.isPresent());
         // Verify repository actually supplied a Consumer
         assertNotNull(captor.getValue());
+    }
+
+    /**
+     * Verifies that {@link CustomerRepository#scanPage(int, Map)} returns
+     * the first page of results from a DynamoDB scan operation.
+     *
+     * <p>
+     * This test simulates a DynamoDB Enhanced Client scan using mocked
+     * {@link DynamoDbTable},
+     * {@link PageIterable},
+     * and {@link Page} objects.
+     * </p>
+     *
+     * <p><b>Test Scenario:</b></p>
+     * <ul>
+     *   <li>A scan request is issued with a limit of {@code 2} items.</li>
+     *   <li>A non-null {@code lastEvaluatedKey} is provided to simulate pagination.</li>
+     *   <li>The DynamoDB table scan returns an iterable containing at least one page.</li>
+     * </ul>
+     *
+     * <p><b>Mocked Behavior:</b></p>
+     * <ul>
+     *   <li>{@code enhancedClient.table(...)} returns a mocked DynamoDB table.</li>
+     *   <li>{@code table.scan(...)} returns a mocked {@link PageIterable}.</li>
+     *   <li>The iterator of the iterable returns a single mocked page.</li>
+     * </ul>
+     *
+     * <p><b>Expected Outcome:</b></p>
+     * <ul>
+     *   <li>The repository method returns the first {@link Page} from the scan result.</li>
+     *   <li>The scan operation is invoked exactly once.</li>
+     * </ul>
+     *
+     * <p>
+     * This test ensures that the repository correctly handles DynamoDB scan pagination
+     * and does not attempt to process additional pages beyond the first.
+     * </p>
+     */
+    @Test
+    void scanPage_ShouldReturnFirstDynamoDbPage() {
+        // Given
+        final int limit = 2;
+        final Map<String, AttributeValue> lastEvaluatedKey =
+                Map.of("customerId", AttributeValue.builder().s("cust_123").build());
+
+        @SuppressWarnings("unchecked") final PageIterable<Customer> pageIterable = mock(PageIterable.class);
+        @SuppressWarnings("unchecked") final Iterator<Page<Customer>> iterator = mock(Iterator.class);
+        @SuppressWarnings("unchecked") final Page<Customer> dynamoPage = mock(Page.class);
+
+        when(properties.tableName()).thenReturn("customer-table");
+        when(enhancedClient.table(eq("customer-table"), any(TableSchema.class)))
+                .thenReturn(customerTable);
+        when(customerTable.scan(any(Consumer.class)))
+                .thenReturn(pageIterable);
+        when(pageIterable.iterator()).thenReturn(iterator);
+        when(iterator.hasNext()).thenReturn(true);
+        when(iterator.next()).thenReturn(dynamoPage);
+
+        // When
+        final Page<Customer> result =
+                repository.scanPage(limit, lastEvaluatedKey);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(dynamoPage, result);
+        verify(customerTable).scan(any(Consumer.class));
+        verify(iterator).next();
+    }
+
+    /**
+     * Verifies that {@link CustomerRepository#scanPage(int, Map)} returns
+     * an empty DynamoDB {@link software.amazon.awssdk.enhanced.dynamodb.model.Page}
+     * when the scan operation yields no results.
+     *
+     * <p><b>Test scenario:</b></p>
+     * <ul>
+     *   <li>The DynamoDB scan returns a {@link PageIterable} whose iterator
+     *       has no pages.</li>
+     *   <li>This simulates an empty table or an exhausted cursor.</li>
+     * </ul>
+     *
+     * <p><b>Expected behavior:</b></p>
+     * <ul>
+     *   <li>An empty {@code Page} is returned instead of throwing
+     *       {@link java.util.NoSuchElementException}.</li>
+     *   <li>The returned page contains no items.</li>
+     *   <li>The {@code lastEvaluatedKey} is an empty map, indicating that
+     *       there are no more pages available.</li>
+     * </ul>
+     *
+     * <p>This test ensures safe handling of edge cases in cursor-based
+     * pagination and prevents runtime failures caused by assuming
+     * scan results are always present.</p>
+     */
+    @Test
+    void scanPage_ShouldReturnEmptyPage_WhenNoPagesExist() {
+        // Given
+        final int limit = 2;
+        final Map<String, AttributeValue> lastEvaluatedKey =
+                Map.of("customerId", AttributeValue.builder().s("cust_123").build());
+
+        @SuppressWarnings("unchecked") final PageIterable<Customer> pageIterable = mock(PageIterable.class);
+        @SuppressWarnings("unchecked") final Iterator<Page<Customer>> iterator = mock(Iterator.class);
+
+        when(properties.tableName()).thenReturn("customer-table");
+        when(enhancedClient.table(eq("customer-table"), any(TableSchema.class)))
+                .thenReturn(customerTable);
+        when(customerTable.scan(any(Consumer.class)))
+                .thenReturn(pageIterable);
+        when(pageIterable.iterator()).thenReturn(iterator);
+        when(iterator.hasNext()).thenReturn(false); // 👈 KEY DIFFERENCE
+
+        // When
+        final Page<Customer> result =
+                repository.scanPage(limit, lastEvaluatedKey);
+
+        // Then
+        assertNotNull(result);
+        assertTrue(result.items().isEmpty());
+        assertTrue(result.lastEvaluatedKey().isEmpty());
+        verify(customerTable).scan(any(Consumer.class));
+        verify(iterator).hasNext();
+        verify(iterator, never()).next();
     }
 
     /**

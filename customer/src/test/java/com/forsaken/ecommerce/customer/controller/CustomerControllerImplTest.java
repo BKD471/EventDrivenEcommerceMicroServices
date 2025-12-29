@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -128,32 +129,32 @@ class CustomerControllerImplTest {
     @Test
     void findAll_WithPagination_ReturnsPagedResponse() {
         // Given
-        final int page = 1;
-        final int size = 3;
+        final Integer pageSize = 2;
         final CustomerResponse customer1 = constructCustomerResponse();
         final CustomerResponse customer2 = constructCustomerResponse();
-        final PagedResponse<CustomerResponse> pagedResponse = PagedResponse.<CustomerResponse>builder()
-                .content(List.of(customer1, customer2))
-                .page(page)
-                .size(size)
-                .totalElements(2)
-                .totalPages(1)
-                .build();
-        when(customerService.findAllCustomers(page, size))
+        final PagedResponse<CustomerResponse> pagedResponse =
+                PagedResponse.<CustomerResponse>builder()
+                        .content(List.of(customer1, customer2))
+                        .size(2)
+                        .nextCursor(Map.of("customerId", "CUST#123"))
+                        .build();
+        when(customerService.findAllCustomers(pageSize, null))
                 .thenReturn(pagedResponse);
 
         // When
-        final ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> resp =
-                controller.findAll(page, size);
+        final ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> response =
+                controller.findAll(pageSize, null);
 
         // Then
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        final ApiResponse<PagedResponse<CustomerResponse>> body = resp.getBody();
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        final ApiResponse<PagedResponse<CustomerResponse>> body = response.getBody();
         assertNotNull(body);
+
         assertEquals(ApiResponse.Status.SUCCESS, body.status());
         assertEquals("All Customers Data Fetched", body.message());
         assertEquals(pagedResponse, body.data());
-        verify(customerService, times(1)).findAllCustomers(page, size);
+        verify(customerService).findAllCustomers(pageSize, null);
     }
 
     /**

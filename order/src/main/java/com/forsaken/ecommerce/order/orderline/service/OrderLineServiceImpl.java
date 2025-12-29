@@ -41,7 +41,7 @@ public class OrderLineServiceImpl implements IOrderLineService {
         return PagedResponse.<OrderLineResponse>builder()
                 .content(orderLinePage.getContent())
                 .page(finalPage + 1)
-                .size(finalSize)
+                .size(orderLinePage.getSize())
                 .totalElements(orderLinePage.getTotalElements())
                 .totalPages(orderLinePage.getTotalPages())
                 .isLastPage(orderLinePage.isLast())

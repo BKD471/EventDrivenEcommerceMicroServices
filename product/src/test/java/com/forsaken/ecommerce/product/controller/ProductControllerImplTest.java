@@ -163,7 +163,7 @@ class ProductControllerImplTest {
     /**
      * Verifies purchasing flow through controller:
      * <ul>
-     *     <li>Delegates to {@link IProductService#purchaseProducts(List, int, int)}</li>
+     *     <li>Delegates to {@link IProductService#purchaseProducts(List, Integer, Integer)}</li>
      *     <li>Returns HTTP 202 (Accepted)</li>
      *     <li>Returns a paginated purchase response</li>
      *     <li>Does not interact with {@link IS3Service}</li>
@@ -177,7 +177,8 @@ class ProductControllerImplTest {
         final List<ProductPurchaseRequest> req = List.of(productPurchaseRequest);
         final int page = 0, size = 10;
         final PagedResponse<ProductPurchaseResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10, 1, 1,true);
+                new PagedResponse<>(List.of(), 0, 10,
+                        1, 1, null, true);
         when(service.purchaseProducts(req, page, size)).thenReturn(paged);
 
         // when
@@ -211,7 +212,7 @@ class ProductControllerImplTest {
     void findById_ShouldReturnOkWithProductResponse() throws ProductNotFoundExceptions {
         // given
         final Integer productId = 99;
-        final Boolean signedUrl = true;
+        final boolean signedUrl = true;
         final ProductResponse productResponse = constructProductResponse(productId);
         when(service.getProductById(productId, signedUrl))
                 .thenReturn(productResponse);
@@ -233,7 +234,7 @@ class ProductControllerImplTest {
     /**
      * Verifies that fetching all products:
      * <ul>
-     *     <li>Invokes {@link IProductService#getAllProducts(Boolean, int, int)}</li>
+     *     <li>Invokes {@link IProductService#getAllProducts(Boolean, Integer, Integer)}</li>
      *     <li>Returns HTTP 200 (OK)</li>
      *     <li>Returns a page of product information</li>
      *     <li>Does not interact with {@link IS3Service}</li>
@@ -245,7 +246,8 @@ class ProductControllerImplTest {
         final Boolean signedUrl = false;
         final int page = 0, size = 20;
         final PagedResponse<ProductResponse> paged =
-                new PagedResponse<>(List.of(), 0, 20, 1, 1,true);
+                new PagedResponse<>(List.of(), 0, 20, 1,
+                        1, null, true);
         when(service.getAllProducts(signedUrl, page, size))
                 .thenReturn(paged);
 
@@ -268,7 +270,8 @@ class ProductControllerImplTest {
      *
      * <p>Ensures that:
      * <ul>
-     *     <li>Controller calls {@link IProductService#findAllProducts(LocalDateTime, LocalDateTime, int, int)}</li>
+     *     <li>Controller calls {@link IProductService#findAllProducts(LocalDateTime, LocalDateTime,
+     *     Integer, Integer)}</li>
      *     <li>Responds with HTTP 200 (OK)</li>
      *     <li>Returns a paginated product list</li>
      *     <li>Does not interact with {@link IS3Service}</li>
@@ -281,7 +284,8 @@ class ProductControllerImplTest {
         final LocalDateTime to = LocalDateTime.now();
         final int page = 0, size = 10;
         final PagedResponse<ProductResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10, 1, 1,true);
+                new PagedResponse<>(List.of(), 0, 10, 1,
+                        1, null, true);
         when(service.findAllProducts(from, to, page, size))
                 .thenReturn(paged);
 
@@ -294,7 +298,8 @@ class ProductControllerImplTest {
         final var body = response.getBody();
         assertNotNull(body);
         assertEquals(paged, body.data());
-        assertEquals("Fetched All Products Information created between fromDate to toDate.", body.message());
+        assertEquals("Fetched All Products Information created between fromDate to toDate.",
+                body.message());
         verify(service).findAllProducts(from, to, page, size);
         verifyNoInteractions(s3Service);
     }
@@ -304,7 +309,8 @@ class ProductControllerImplTest {
      *
      * <p>Ensures that:
      * <ul>
-     *     <li>Controller delegates to {@link IProductService#findAllProductsByCategory(Integer, BigDecimal, Direction, int, int)}</li>
+     *     <li>Controller delegates to
+     *     {@link IProductService#findAllProductsByCategory(Integer, BigDecimal, Direction, Integer, Integer)}</li>
      *     <li>Returns HTTP 200 (OK)</li>
      *     <li>Returns the expected {@link PagedResponse}</li>
      *     <li>Does not interact with {@link IS3Service}</li>
@@ -315,12 +321,13 @@ class ProductControllerImplTest {
     @Test
     void findAllProductsByCategory_ShouldReturnOkWithPaged() throws CategoryNotFoundExceptions {
         // given
-        final Integer categoryId = 5;
+        final int categoryId = 5;
         final BigDecimal price = BigDecimal.valueOf(200);
         final Direction direction = Direction.GE;
         final int page = 0, size = 10;
         final PagedResponse<ProductResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10, 1, 1,true);
+                new PagedResponse<>(List.of(), 0, 10, 1,
+                        1, null, true);
         when(service.findAllProductsByCategory(categoryId, price, direction, page, size))
                 .thenReturn(paged);
 

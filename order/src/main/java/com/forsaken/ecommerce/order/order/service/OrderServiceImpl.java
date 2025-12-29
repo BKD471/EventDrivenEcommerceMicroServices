@@ -137,14 +137,14 @@ public class OrderServiceImpl implements IOrderService {
                 Sort.by(Sort.Direction.DESC, "createdDate")
         );
         final Page<Order> ordersPage = orderRepository.findAll(pageable);
-        return new PagedResponse<>(
-                ordersPage.stream().map(Order::fromOrder).toList(),
-                ordersPage.getNumber() + 1,
-                ordersPage.getSize(),
-                ordersPage.getTotalElements(),
-                ordersPage.getTotalPages(),
-                ordersPage.isLast()
-        );
+        return PagedResponse.<OrderResponse>builder()
+                .content(ordersPage.stream().map(Order::fromOrder).toList())
+                .page(ordersPage.getNumber() + 1)
+                .size(ordersPage.getSize())
+                .totalElements(ordersPage.getTotalElements())
+                .totalPages(ordersPage.getTotalPages())
+                .isLastPage(ordersPage.isLast())
+                .build();
     }
 
     @Override
@@ -190,7 +190,7 @@ public class OrderServiceImpl implements IOrderService {
         return PagedResponse.<OrderResponse>builder()
                 .content(orderPage.getContent().stream().map(Order::fromOrder).toList())
                 .page(finalPage + 1)
-                .size(finalSize)
+                .size(orderPage.getSize())
                 .totalElements(orderPage.getTotalElements())
                 .totalPages(orderPage.getTotalPages())
                 .isLastPage(orderPage.isLast())

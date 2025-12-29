@@ -58,7 +58,11 @@ public interface IProductRepository extends JpaRepository<Product, Integer> {
      * @param toDate   the end of the date range (inclusive)
      * @return a list of products created within the specified date range
      */
-    List<Product> findAllByAdditionDateBetween(final LocalDateTime fromDate, final LocalDateTime toDate);
+    Page<Product> findAllByAdditionDateBetween(
+            final LocalDateTime fromDate,
+            final LocalDateTime toDate,
+            final Pageable pageable
+    );
 
     /**
      * Retrieves all products belonging to the given category whose price is
@@ -71,7 +75,11 @@ public interface IProductRepository extends JpaRepository<Product, Integer> {
      * @param price    the minimum price threshold
      * @return a list of matching products with price >= given amount
      */
-    List<Product> findAllByCategoryAndPriceGreaterThanEqual(final Category category, final BigDecimal price);
+    Page<Product> findAllByCategoryAndPriceGreaterThanEqual(
+            final Category category,
+            final BigDecimal price,
+            final Pageable pageable
+    );
 
     /**
      * Retrieves all products belonging to the given category whose price is
@@ -83,5 +91,9 @@ public interface IProductRepository extends JpaRepository<Product, Integer> {
      * @param price    the maximum price threshold
      * @return a list of matching products with price <= given amount
      */
-    List<Product> findAllByCategoryAndPriceLessThanEqual(final Category category, final BigDecimal price);
+    Page<Product> findAllByCategoryAndPriceLessThanEqual(
+            final Category category,
+            final BigDecimal price,
+            final Pageable pageable
+    );
 }

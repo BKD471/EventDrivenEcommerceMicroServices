@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.Map;
+
 /**
  * REST controller contract for managing Customer resources.
  *
@@ -78,15 +80,14 @@ public interface ICustomerController {
      * <p>Page numbering starts from 1. If an invalid page or size value is provided,
      * the service layer may apply fallback defaults.</p>
      *
-     * @param page the page number to retrieve; defaults to 1
-     * @param size the number of records per page; defaults to 3
+     * @param size the number of records per page; defaults to 5
      * @return a ResponseEntity containing a paginated list of {@link CustomerResponse}
      *         inside a {@link PagedResponse}, wrapped in {@link ApiResponse}, with HTTP 200 status
      */
     @GetMapping
     ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(
-            @RequestParam(name = "page", required = false) final Integer page,
-            @RequestParam(name = "size", required = false) final Integer size
+            @RequestParam(name = "size", required = false) final Integer size,
+            @RequestParam(required = false) String cursorCustomerId
     );
 
     /**

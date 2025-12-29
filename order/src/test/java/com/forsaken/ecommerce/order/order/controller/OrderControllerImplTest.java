@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -101,6 +102,7 @@ class OrderControllerImplTest {
                         size,
                         2,
                         1,
+                        Map.of(),
                         true
                 );
         when(orderService.findAllOrders(page, size))
@@ -139,6 +141,7 @@ class OrderControllerImplTest {
                         size,
                         1,
                         1,
+                        Map.of(),
                         true
                 );
         when(orderService.findAllOrdersByCustomerId(

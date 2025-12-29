@@ -155,9 +155,9 @@ class PaymentServiceTest {
 
         // Then
         assertEquals(1, result.content().size());
-        assertEquals(PaymentMethod.PAYPAL, result.content().get(0).paymentMethod());
-        assertEquals(2L, result.content().get(0).count());
-        assertEquals(new BigDecimal("300"), result.content().get(0).totalAmount());
+        assertEquals(PaymentMethod.PAYPAL, result.content().getFirst().paymentMethod());
+        assertEquals(2L, result.content().getFirst().count());
+        assertEquals(new BigDecimal("300"), result.content().getFirst().totalAmount());
     }
 
     /**
