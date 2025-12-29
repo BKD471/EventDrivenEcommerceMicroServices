@@ -33,3 +33,9 @@ aws:
   s3:
     bucketName: product-profile-images-prod # gitguardian:ignore
     expiration: 30
+
+general:
+  configurations:
+    maxPageSize: 50
+    defaultPageSize: 5
+    defaultPageNumber: 1

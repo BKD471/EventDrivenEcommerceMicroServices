@@ -2,7 +2,7 @@ package com.forsaken.ecommerce.customer.service;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
-import com.forsaken.ecommerce.customer.configs.general.OrderProperties;
+import com.forsaken.ecommerce.customer.configs.general.CustomerProperties;
 import com.forsaken.ecommerce.customer.dto.CustomerRequest;
 import com.forsaken.ecommerce.customer.dto.CustomerResponse;
 import com.forsaken.ecommerce.customer.model.Customer;
@@ -11,8 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.apache.commons.lang.StringUtils;
+import software.amazon.awssdk.enhanced.dynamodb.model.Page;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,7 +26,7 @@ import java.util.stream.Collectors;
 public class CustomerServiceImpl implements ICustomerService {
 
     private final CustomerRepository customerRepository;
-    private final OrderProperties orderProperties;
+    private final CustomerProperties customerProperties;
     private final Class<?> className = CustomerServiceImpl.class;
 
     @Override
@@ -58,31 +60,21 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
-    public PagedResponse<CustomerResponse> findAllCustomers(final Integer page, final Integer size) {
-        log.info("Received request to get all customers");
-        final int finalPage = null != page ?
-                Math.max(page - 1, 0) :
-                Math.max(orderProperties.defaultPageNumber() - 1, 0);
-        final int finalSize = null != size ?
-                Math.min(Math.max(size, 1), orderProperties.maxPageSize()) :
-                orderProperties.defaultPageSize();
-
-        final List<CustomerResponse> customerResponses = this.customerRepository.findAll()
-                .stream()
-                .map(Customer::fromCustomer)
-                .collect(Collectors.toList());
-        final int start = finalPage * finalSize;
-        final int end = Math.min(start + finalSize, customerResponses.size());
-
-        final List<CustomerResponse> pagedContent =
-                (start >= customerResponses.size()) ? List.of() : customerResponses.subList(start, end);
-        final int totalPages = (int) Math.ceil((double) customerResponses.size() / finalSize);
+    public PagedResponse<CustomerResponse> findAllCustomers(
+            final Integer size,
+            final Map<String, String> lastEvaluatedKey
+    ) {
+        final int finalSize = size != null
+                ? Math.min(Math.max(size, 1), customerProperties.maxPageSize())
+                : customerProperties.defaultPageSize();
+        final Page<Customer> page =
+                customerRepository.scanPage(finalSize, toAttributeValueCursor(lastEvaluatedKey));
         return PagedResponse.<CustomerResponse>builder()
-                .content(pagedContent)
-                .page(finalPage + 1)
-                .size(finalSize)
-                .totalElements(customerResponses.size())
-                .totalPages(totalPages)
+                .content(page.items().stream().map(Customer::fromCustomer).toList())
+                .size(page.items().size())
+                .totalElements(page.count())
+                .totalPages((int) Math.ceil((double) page.count() / finalSize))
+                .nextCursor(page.lastEvaluatedKey())
                 .build();
     }
 
@@ -137,5 +129,24 @@ public class CustomerServiceImpl implements ICustomerService {
         if (request.address() != null) {
             customer.setAddress(request.address());
         }
+    }
+
+    private Map<String, AttributeValue> toAttributeValueCursor(
+            Map<String, String> cursor
+    ) {
+        if (cursor == null || cursor.isEmpty()) {
+            return null;
+        }
+
+        if (!cursor.containsKey("customerId") || cursor.size() != 1) {
+            throw new IllegalArgumentException("Invalid cursor format");
+        }
+
+        return Map.of(
+                "customerId",
+                AttributeValue.builder()
+                        .s(cursor.get("customerId"))
+                        .build()
+        );
     }
 }

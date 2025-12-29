@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 
 @RestController
 @RequiredArgsConstructor
@@ -44,12 +46,19 @@ public class CustomerControllerImpl implements ICustomerController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(final Integer page, final Integer size) {
+    public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> findAll(
+            final Integer page,
+            final String cursorCustomerId
+    ) {
+        final Map<String, String> cursor =
+                cursorCustomerId != null
+                        ? Map.of("customerId", cursorCustomerId)
+                        : null;
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
                         ApiResponse.<PagedResponse<CustomerResponse>>builder()
                                 .status(ApiResponse.Status.SUCCESS)
-                                .data(customerService.findAllCustomers(page, size))
+                                .data(customerService.findAllCustomers(page, cursor))
                                 .message("All Customers Data Fetched")
                                 .build()
                 );

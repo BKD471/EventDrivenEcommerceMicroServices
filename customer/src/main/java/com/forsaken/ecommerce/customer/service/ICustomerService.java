@@ -4,6 +4,9 @@ import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.customer.dto.CustomerRequest;
 import com.forsaken.ecommerce.customer.dto.CustomerResponse;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+
+import java.util.Map;
 
 /**
  * Service-layer contract for managing customer entities.
@@ -68,7 +71,10 @@ public interface ICustomerService {
      * @return a {@link PagedResponse} containing a list of {@link CustomerResponse} objects
      *         along with pagination metadata such as total pages and total elements
      */
-    PagedResponse<CustomerResponse> findAllCustomers(final Integer page, final Integer size);
+    PagedResponse<CustomerResponse> findAllCustomers(
+            final Integer page,
+            final Map<String, String> lastEvaluatedKey
+    );
 
     /**
      * Retrieves the details of a customer using their unique identifier.

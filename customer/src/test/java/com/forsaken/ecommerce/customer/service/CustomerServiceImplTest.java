@@ -3,7 +3,7 @@ package com.forsaken.ecommerce.customer.service;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
-import com.forsaken.ecommerce.customer.configs.general.OrderProperties;
+import com.forsaken.ecommerce.customer.configs.general.CustomerProperties;
 import com.forsaken.ecommerce.customer.dto.CustomerRequest;
 import com.forsaken.ecommerce.customer.dto.CustomerResponse;
 import com.forsaken.ecommerce.customer.model.Address;
@@ -18,13 +18,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.enhanced.dynamodb.model.Page;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -63,7 +67,7 @@ class CustomerServiceImplTest {
     private CustomerRepository customerRepository;
 
     @Mock
-    private OrderProperties orderProperties;
+    private CustomerProperties customerProperties;
 
     @InjectMocks
     private CustomerServiceImpl customerService;
@@ -218,33 +222,47 @@ class CustomerServiceImplTest {
     @Test
     void findAllCustomers_WithPagination_ReturnsPagedResponse() {
         // Given
-        int page = 1;
-        int size = 2;
+        final Integer pageSize = 2;
 
-        final Customer existingCustomerOne =
+        final Map<String, String> cursor =
+                Map.of("customerId", "cust_123");
+
+        final Map<String, AttributeValue> lastEvaluatedKey =
+                Map.of("customerId", AttributeValue.builder().s("cust_123").build());
+
+        final Customer customerOne =
                 constructCustomer("cust_123", "test-user-firstname-123",
                         "test-user-lastname-123", "abc@gmail.com");
-        final Customer existingCustomerTwo = constructCustomer("cust_456", "test-user-firstname-456",
-                "test-user-lastname-456", "xyz@gmail.com");
-        final Customer existingCustomerThree = constructCustomer("cust_789", "test-user-firstname-789",
-                "test-user-lastname-789", "klm@gmail.com");
-        when(orderProperties.maxPageSize()).thenReturn(50);
-        when(customerRepository.findAll())
-                .thenReturn(List.of(existingCustomerOne, existingCustomerTwo, existingCustomerThree));
-        final CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
-        final CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();
+
+        final Customer customerTwo =
+                constructCustomer("cust_456", "test-user-firstname-456",
+                        "test-user-lastname-456", "xyz@gmail.com");
+
+        // Mock DynamoDB Page
+        final Page<Customer> dynamoPage = mock(Page.class);
+
+        when(customerProperties.maxPageSize()).thenReturn(50);
+        when(customerRepository.scanPage(pageSize, lastEvaluatedKey))
+                .thenReturn(dynamoPage);
+
+        when(dynamoPage.items()).thenReturn(List.of(customerOne, customerTwo));
+        when(dynamoPage.lastEvaluatedKey()).thenReturn(lastEvaluatedKey);
 
         // When
-        final PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
+        final PagedResponse<CustomerResponse> result =
+                customerService.findAllCustomers(pageSize, cursor);
 
         // Then
         assertNotNull(result);
-        assertEquals(page, result.page());
-        assertEquals(size, result.size());
-        assertEquals(3, result.totalElements());
-        assertEquals(2, result.totalPages());  // 3 elements / size 2 = 2 pages
-        assertEquals(List.of(customerResponseOne, customerResponseTwo), result.content());
-        verify(customerRepository, times(1)).findAll();
+        assertEquals(2, result.size());
+        assertEquals(
+                List.of(customerOne.fromCustomer(), customerTwo.fromCustomer()),
+                result.content()
+        );
+        assertEquals(lastEvaluatedKey, result.nextCursor());
+
+        verify(customerRepository, times(1))
+                .scanPage(pageSize, lastEvaluatedKey);
     }
 
     /**
@@ -259,25 +277,36 @@ class CustomerServiceImplTest {
     @Test
     void findAllCustomers_PageOutOfRange_ReturnsEmptyContent() {
         // Given
-        final int page = 10;
-        final int size = 2;
+        final Integer pageSize = 2;
 
-        final Customer existingCustomerOne =
-                constructCustomer("cust_123", "test-user-firstname-123",
-                        "test-user-lastname-123", "abc@gmail.com");
-        final Customer existingCustomerTwo = constructCustomer("cust_456", "test-user-firstname-456",
-                "test-user-lastname-456", "xyz@gmail.com");
-        when(orderProperties.maxPageSize()).thenReturn(50);
-        when(customerRepository.findAll()).thenReturn(List.of(existingCustomerOne, existingCustomerTwo));
+        final Map<String, String> cursor =
+                Map.of("customerId", "cust_999");
+
+        final Map<String, AttributeValue> lastEvaluatedKey =
+                Map.of("customerId", AttributeValue.builder().s("cust_999").build());
+
+        // Mock empty DynamoDB page
+        final Page<Customer> dynamoPage = mock(Page.class);
+
+        when(customerProperties.maxPageSize()).thenReturn(50);
+        when(customerRepository.scanPage(pageSize, lastEvaluatedKey))
+                .thenReturn(dynamoPage);
+
+        when(dynamoPage.items()).thenReturn(List.of());
+        when(dynamoPage.lastEvaluatedKey()).thenReturn(null);
 
         // When
-        PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
+        final PagedResponse<CustomerResponse> result =
+                customerService.findAllCustomers(pageSize, cursor);
 
         // Then
-        assertEquals(page, result.page());
-        assertEquals(2, result.totalElements());
-        assertEquals(1, result.totalPages());
+        assertNotNull(result);
         assertTrue(result.content().isEmpty());
+        assertEquals(0, result.size());
+        assertNull(result.nextCursor());
+
+        verify(customerRepository, times(1))
+                .scanPage(pageSize, lastEvaluatedKey);
     }
 
     /**
@@ -293,25 +322,52 @@ class CustomerServiceImplTest {
     @ValueSource(ints = {0, -1, -2, -3, -4, -5})
     void findAllCustomers_InvalidOrNegativePage_AlwaysUsesPage1(int page) {
         // Given
-        final int size = 2;
+        final Integer pageSize = 2;
+
+        final Map<String, String> cursor =
+                Map.of("customerId", "cust_123");
+
+        final Map<String, AttributeValue> lastEvaluatedKey =
+                Map.of("customerId", AttributeValue.builder().s("cust_123").build());
+
         final Customer existingCustomerOne =
                 constructCustomer("cust_123", "test-user-firstname-123",
                         "test-user-lastname-123", "abc@gmail.com");
-        final Customer existingCustomerTwo = constructCustomer("cust_456", "test-user-firstname-456",
-                "test-user-lastname-456", "xyz@gmail.com");
-        when(orderProperties.maxPageSize()).thenReturn(50);
-        when(customerRepository.findAll()).thenReturn(List.of(existingCustomerOne, existingCustomerTwo));
-        final CustomerResponse customerResponseOne = existingCustomerOne.fromCustomer();
-        final CustomerResponse customerResponseTwo = existingCustomerTwo.fromCustomer();
+
+        final Customer existingCustomerTwo =
+                constructCustomer("cust_456", "test-user-firstname-456",
+                        "test-user-lastname-456", "xyz@gmail.com");
+
+        final Page<Customer> dynamoPage = mock(Page.class);
+
+        when(customerProperties.maxPageSize()).thenReturn(50);
+        when(customerRepository.scanPage(pageSize, lastEvaluatedKey))
+                .thenReturn(dynamoPage);
+
+        when(dynamoPage.items())
+                .thenReturn(List.of(existingCustomerOne, existingCustomerTwo));
+
+        when(dynamoPage.lastEvaluatedKey())
+                .thenReturn(lastEvaluatedKey);
 
         // When
-        PagedResponse<CustomerResponse> result = customerService.findAllCustomers(page, size);
+        final PagedResponse<CustomerResponse> result =
+                customerService.findAllCustomers(pageSize, cursor);
 
         // Then
-        assertEquals(1, result.page(), "Page should always normalize to 1 for invalid values");
-        assertEquals(List.of(customerResponseOne, customerResponseTwo), result.content());
-        assertEquals(2, result.totalElements());
-        assertEquals(1, result.totalPages());
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(
+                List.of(
+                        existingCustomerOne.fromCustomer(),
+                        existingCustomerTwo.fromCustomer()
+                ),
+                result.content()
+        );
+        assertEquals(lastEvaluatedKey, result.nextCursor());
+
+        verify(customerRepository, times(1))
+                .scanPage(pageSize, lastEvaluatedKey);
     }
 
     /**

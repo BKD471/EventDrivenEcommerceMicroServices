@@ -92,14 +92,14 @@ public interface IProductController {
      * @param page    page index starting from 1
      * @param size    number of items per page
      * @return a {@link ResponseEntity} with an {@link ApiResponse} containing a paginated
-     *         {@link PagedResponse} of purchase results
+     * {@link PagedResponse} of purchase results
      * @throws ProductNotFoundExceptions if any product in the request is not found
      */
     @PostMapping("/purchase")
     ResponseEntity<ApiResponse<PagedResponse<ProductPurchaseResponse>>> purchaseProducts(
             @RequestBody @Valid final List<ProductPurchaseRequest> request,
-            @RequestParam(name = "page", defaultValue = "1") final int page,
-            @RequestParam(name = "size", defaultValue = "3") final int size
+            @RequestParam(name = "page", required = false) final Integer page,
+            @RequestParam(name = "size", required = false) final Integer size
     ) throws ProductNotFoundExceptions;
 
 
@@ -133,8 +133,8 @@ public interface IProductController {
     @GetMapping
     ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> findAll(
             @RequestParam(name = "signedUrl", defaultValue = "True") final Boolean signedUrl,
-            @RequestParam(name = "page", defaultValue = "1") final int page,
-            @RequestParam(name = "size", defaultValue = "3") final int size
+            @RequestParam(name = "page", required = false) final Integer page,
+            @RequestParam(name = "size", required = false) final Integer size
     );
 
 
@@ -148,7 +148,7 @@ public interface IProductController {
      * @param page     page index starting from 1
      * @param size     number of products per page
      * @return a {@link ResponseEntity} with an {@link ApiResponse} containing a paginated list
-     *         of matching products
+     * of matching products
      */
     @GetMapping("/findAll")
     ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> findAllProducts(
@@ -158,8 +158,8 @@ public interface IProductController {
             @RequestParam(name = "toDate", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) final LocalDateTime toDate,
 
-            @RequestParam(name = "page", defaultValue = "1") final int page,
-            @RequestParam(name = "size", defaultValue = "3") final int size
+            @RequestParam(name = "page", required = false) final Integer page,
+            @RequestParam(name = "size", required = false) final Integer size
     );
 
 
@@ -185,7 +185,7 @@ public interface IProductController {
             @PathVariable("categoryId") @NotNull final Integer categoryId,
             @RequestParam(value = "price", defaultValue = "100") final BigDecimal price,
             @RequestParam(value = "direction", defaultValue = "GE") final Direction direction,
-            @RequestParam(name = "page", defaultValue = "1") final int page,
-            @RequestParam(name = "size", defaultValue = "3") final int size
+            @RequestParam(name = "page", required = false) final Integer page,
+            @RequestParam(name = "size", required = false) final Integer size
     ) throws CategoryNotFoundExceptions;
 }

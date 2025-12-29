@@ -7,8 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
@@ -23,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -44,7 +41,6 @@ import static org.mockito.Mockito.when;
  * AWS-related behaviors that are internal to builder consumers.
  */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class S3ServiceImplTest {
 
     @Mock
@@ -86,10 +82,10 @@ class S3ServiceImplTest {
         when(s3Properties.expiration()).thenReturn(30L);
         final URL fakeUrl = new URL("https://s3.com/upload-url");
         // Mock the URL returned by AWS Presigned request
-        lenient().when(presignedPutObjectRequest.url())
+        when(presignedPutObjectRequest.url())
                 .thenReturn(fakeUrl);
         // Mock Consumer< GetObjectPresignRequest.Builder >
-        lenient().when(presigner.presignPutObject(any(Consumer.class)))
+        when(presigner.presignPutObject(any(Consumer.class)))
                 .thenAnswer(inv -> {
                     PutObjectPresignRequest.Builder builder =
                             PutObjectPresignRequest.builder();
@@ -118,10 +114,8 @@ class S3ServiceImplTest {
     @Test
     void generatePresignedUploadUrl_ShouldThrowIllegalState_WhenPresignerReturnsNull() {
         // Given
-        when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(s3Properties.expiration()).thenReturn(30L);
         // Simulate AWS returning null instead of a PresignedPutObjectRequest
-        lenient().when(presigner.presignPutObject(any(Consumer.class)))
+        when(presigner.presignPutObject(any(Consumer.class)))
                 .thenReturn(null);
 
         // When
@@ -147,7 +141,7 @@ class S3ServiceImplTest {
         when(s3Properties.expiration()).thenReturn(30L);
         final String imageUrl = "https://cdn.com/uploads/img.png";
         // Simulate AWS returning presigned url null
-        lenient().when(presigner.presignPutObject(any(Consumer.class)))
+        when(presigner.presignPutObject(any(Consumer.class)))
                 .thenAnswer(inv -> {
                     PutObjectPresignRequest.Builder builder =
                             PutObjectPresignRequest.builder();
@@ -156,13 +150,13 @@ class S3ServiceImplTest {
                     consumer.accept(builder);
                     return presignedPutObjectRequest;
                 });
-        lenient().when(presignedPutObjectRequest.url())
+        when(presignedPutObjectRequest.url())
                 .thenReturn(null);
 
         // When
         final IllegalStateException exception =
                 assertThrows(IllegalStateException.class, () ->
-                        s3Service.generatePresignedUploadUrl(imageUrl,"image/png")
+                        s3Service.generatePresignedUploadUrl(imageUrl, "image/png")
                 );
 
         // Then
@@ -189,10 +183,9 @@ class S3ServiceImplTest {
         final String imageUrl = "https://cdn.com/uploads/img_123.png";
         final URL fakeDownloadUrl = new URL("https://s3.com/download-url");
         // Mock the URL returned by AWS Presigned request
-        lenient().when(presignedGetObjectRequest.url())
+        when(presignedGetObjectRequest.url())
                 .thenReturn(fakeDownloadUrl);
-        // Mock Consumer<GetObjectPresignRequest.Builder>
-        lenient().when(presigner.presignGetObject(any(Consumer.class)))
+        when(presigner.presignGetObject(any(Consumer.class)))
                 .thenAnswer(inv -> {
                     GetObjectPresignRequest.Builder builder =
                             GetObjectPresignRequest.builder();
@@ -217,11 +210,9 @@ class S3ServiceImplTest {
     @Test
     void generatePresignedDownloadUrl_ShouldThrowIllegalState_WhenPresignerReturnsNull() {
         // Given
-        when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(s3Properties.expiration()).thenReturn(30L);
         final String imageUrl = "https://cdn.com/uploads/img.png";
         // Simulate AWS returning null
-        lenient().when(presigner.presignGetObject(any(Consumer.class)))
+        when(presigner.presignGetObject(any(Consumer.class)))
                 .thenReturn(null);
 
         // When
@@ -247,7 +238,7 @@ class S3ServiceImplTest {
         when(s3Properties.expiration()).thenReturn(30L);
         final String imageUrl = "https://cdn.com/uploads/img.png";
         // Simulate AWS returning presigned url null
-        lenient().when(presigner.presignGetObject(any(Consumer.class)))
+        when(presigner.presignGetObject(any(Consumer.class)))
                 .thenAnswer(inv -> {
                     GetObjectPresignRequest.Builder builder =
                             GetObjectPresignRequest.builder();
@@ -256,7 +247,7 @@ class S3ServiceImplTest {
                     consumer.accept(builder); // simulate AWS builder population
                     return presignedGetObjectRequest;
                 });
-        lenient().when(presignedGetObjectRequest.url())
+        when(presignedGetObjectRequest.url())
                 .thenReturn(null);
 
         // When

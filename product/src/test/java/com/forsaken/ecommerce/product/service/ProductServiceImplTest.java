@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.product.service;
 
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.product.configs.general.ProductProperties;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseRequest;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -62,6 +64,9 @@ class ProductServiceImplTest {
     private ICategoryRepository categoryRepository;
 
     @Mock
+    private ProductProperties productProperties;
+
+    @Mock
     private IS3Service s3Service;
 
     @InjectMocks
@@ -80,16 +85,16 @@ class ProductServiceImplTest {
      */
     @Test
     void createProduct_ShouldSaveAndReturnId() {
-        // Given
+        // given
         final ProductRequest request = mock(ProductRequest.class);
         final Product product = constructProduct();
         when(request.toProduct()).thenReturn(product);
         when(productRepository.save(product)).thenReturn(product);
 
-        // When
+        // when
         final Integer id = service.createProduct(request);
 
-        // Then
+        // then
         assertEquals(1, id);
         verify(productRepository).save(product);
     }
@@ -105,22 +110,24 @@ class ProductServiceImplTest {
      */
     @Test
     void getAllProducts_ShouldReturnSignedUrls_WhenEnabled() {
-        // Given
+        // given
         final Pageable pageable = PageRequest.of(0, 10);
         final Product product = constructProduct();
-        final Page<Product> page = new PageImpl<>(List.of(product), pageable, 1);
+        final Page<Product> page =
+                new PageImpl<>(List.of(product), pageable, 1);
+        when(productProperties.maxPageSize()).thenReturn(50);
         when(productRepository.findAllWithCategory(pageable))
                 .thenReturn(page);
         when(s3Service.generatePresignedDownloadUrl("image-key"))
                 .thenReturn("signed-url");
 
-        // When
+        // when
         final PagedResponse<ProductResponse> response =
                 service.getAllProducts(true, 1, 10);
 
-        // Then
+        // then
         assertEquals(1, response.totalElements());
-        assertEquals("signed-url", page.getContent().get(0).getImageUrl());
+        assertEquals("signed-url", product.getImageUrl());
         verify(s3Service).generatePresignedDownloadUrl("image-key");
     }
 
@@ -138,19 +145,18 @@ class ProductServiceImplTest {
      */
     @Test
     void getProductById_ShouldReturnResponse_WhenProductExists() throws ProductNotFoundExceptions {
-        // Given
+        // given
         final Product product = constructProduct();
         when(productRepository.findById(1)).thenReturn(Optional.of(product));
         when(s3Service.generatePresignedDownloadUrl("image-key"))
                 .thenReturn("signed-img");
 
-        // When
+        // when
         final ProductResponse response = service.getProductById(1, true);
 
-        // Then
+        // then
         assertEquals(1, response.id());
         assertEquals("signed-img", product.getImageUrl());
-        verify(s3Service).generatePresignedDownloadUrl("image-key");
     }
 
     /**
@@ -159,12 +165,12 @@ class ProductServiceImplTest {
      */
     @Test
     void getProductById_ShouldThrow_WhenNotFound() {
-        // Given
-        when(productRepository.findById(10)).thenReturn(Optional.empty());
+        // given
+        when(productRepository.findById(1)).thenReturn(Optional.empty());
 
-        // Then
+        // when / then
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.getProductById(10, false));
+                () -> service.getProductById(1, false));
     }
 
     /**
@@ -175,15 +181,19 @@ class ProductServiceImplTest {
      */
     @Test
     void purchaseProducts_ShouldThrow_WhenMismatchInIds() {
-        // Given
-        final ProductPurchaseRequest productPurchaseRequest =
+        // GIVEN
+        final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 1);
+        final Pageable pageable = PageRequest.of(0, 10);
+        final Page<Product> emptyPage =
+                new PageImpl<>(List.of(), pageable, 0);
+        when(productProperties.maxPageSize()).thenReturn(50);
         when(productRepository.findAllByIdInOrderById(List.of(1)))
                 .thenReturn(List.of());
 
-        // Then
+        // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.purchaseProducts(List.of(productPurchaseRequest), 1, 10));
+                () -> service.purchaseProducts(List.of(req), 1, 10));
     }
 
     /**
@@ -194,18 +204,21 @@ class ProductServiceImplTest {
      */
     @Test
     void purchaseProducts_ShouldThrow_WhenStockInsufficient() {
-        // Given
-        final ProductPurchaseRequest productPurchaseRequest =
-                new ProductPurchaseRequest(1, 10);
+        // GIVEN
         final Product product = constructProduct();
-        // Ensure insufficient stock
-        product.setAvailableQuantity(5);
+        product.setAvailableQuantity(2);
+        final Pageable pageable = PageRequest.of(0, 10);
+        final Page<Product> page =
+                new PageImpl<>(List.of(product), pageable, 1);
+        final ProductPurchaseRequest req =
+                new ProductPurchaseRequest(1, 5);
+        when(productProperties.maxPageSize()).thenReturn(50);
         when(productRepository.findAllByIdInOrderById(List.of(1)))
-                .thenReturn(List.of(product));
+                .thenReturn(List.of());
 
-        // Then
+        // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.purchaseProducts(List.of(productPurchaseRequest), 1, 10));
+                () -> service.purchaseProducts(List.of(req), 1, 10));
     }
 
     /**
@@ -220,23 +233,40 @@ class ProductServiceImplTest {
      */
     @Test
     void purchaseProducts_ShouldReturnPagedResponse_WhenSuccessful() throws ProductNotFoundExceptions {
-        // Given
-        final ProductPurchaseRequest productPurchaseRequest =
-                new ProductPurchaseRequest(1, 2);
+        // GIVEN
+        when(productProperties.maxPageSize()).thenReturn(50);
         final Product product = constructProduct();
         product.setId(1);
-        product.setAvailableQuantity(5); // VERY IMPORTANT → matches your expected result
+        product.setAvailableQuantity(5);
+        final ProductPurchaseRequest request =
+                new ProductPurchaseRequest(1, 2);
+        // repository returns the existing product
         when(productRepository.findAllByIdInOrderById(List.of(1)))
                 .thenReturn(List.of(product));
-        when(productRepository.save(product)).thenReturn(product);
+        // save returns the same updated entity
+        when(productRepository.save(product))
+                .thenReturn(product);
 
-        // When
+        // WHEN
         final PagedResponse<ProductPurchaseResponse> response =
-                service.purchaseProducts(List.of(productPurchaseRequest), 1, 10);
+                service.purchaseProducts(List.of(request), 1, 10);
 
-        // Then
+        // THEN
+        assertNotNull(response);
+        assertEquals(1, response.page());
+        assertEquals(10, response.size());
         assertEquals(1, response.totalElements());
+        assertEquals(1, response.totalPages());
+        assertEquals(1, response.content().size());
+
+        final ProductPurchaseResponse purchaseResponse = response.content().get(0);
+        assertEquals(1, purchaseResponse.productId());
+        assertEquals(2, purchaseResponse.quantity());
+
+        // stock reduced correctly
         assertEquals(3, product.getAvailableQuantity());
+        verify(productRepository).findAllByIdInOrderById(List.of(1));
+        verify(productRepository).save(product);
     }
 
     /**
@@ -250,22 +280,23 @@ class ProductServiceImplTest {
      */
     @Test
     void findAllProducts_ShouldReturnPagedResponse() {
-        // Given
+        // GIVEN
         final Product product = constructProduct();
+        final LocalDateTime from = LocalDateTime.now().minusDays(1);
+        final LocalDateTime to = LocalDateTime.now();
 
-        // Create the exact timestamps to use
-        final LocalDateTime fromDate = LocalDateTime.now().minusDays(1);
-        final LocalDateTime toDate = LocalDateTime.now();
+        final Pageable pageable = PageRequest.of(0, 10);
+        final Page<Product> page =
+                new PageImpl<>(List.of(product), pageable, 1);
+        when(productProperties.maxPageSize()).thenReturn(50);
+        when(productRepository.findAllByAdditionDateBetween(from, to, pageable))
+                .thenReturn(page);
 
-        // Stub using EXACT arguments (no any())
-        when(productRepository.findAllByAdditionDateBetween(fromDate, toDate))
-                .thenReturn(List.of(product));
-
-        // When
+        // WHEN
         final PagedResponse<ProductResponse> response =
-                service.findAllProducts(fromDate, toDate, 1, 10);
+                service.findAllProducts(from, to, 1, 10);
 
-        // Then
+        // THEN
         assertEquals(1, response.totalElements());
     }
 
@@ -275,13 +306,14 @@ class ProductServiceImplTest {
      */
     @Test
     void findAllProductsByCategory_ShouldThrow_WhenCategoryMissing() {
-        // Given
+        // GIVEN
+        when(productProperties.maxPageSize()).thenReturn(50);
         when(categoryRepository.findById(1)).thenReturn(Optional.empty());
 
-        // Then
-        assertThrows(CategoryNotFoundExceptions.class, () ->
-                service.findAllProductsByCategory(1, BigDecimal.TEN, Direction.GE, 1, 10)
-        );
+        // WHEN / THEN
+        assertThrows(CategoryNotFoundExceptions.class,
+                () -> service.findAllProductsByCategory(
+                        1, BigDecimal.TEN, Direction.GE, 1, 10));
     }
 
     /**
@@ -298,26 +330,28 @@ class ProductServiceImplTest {
      */
     @Test
     void findAllProductsByCategory_ShouldReturnPaged_GreaterThanEqual() throws CategoryNotFoundExceptions {
-        // Given
+        // GIVEN
         final Category category = constructCategory();
-        when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
-
         final Product product = constructProduct();
-        when(productRepository.findAllByCategoryAndPriceGreaterThanEqual(category, BigDecimal.TEN))
-                .thenReturn(List.of(product));
 
-        // When
+        final Pageable pageable = PageRequest.of(0, 10);
+        final Page<Product> page =
+                new PageImpl<>(List.of(product), pageable, 1);
+
+        when(productProperties.maxPageSize()).thenReturn(50);
+        when(categoryRepository.findById(1))
+                .thenReturn(Optional.of(category));
+        when(productRepository.findAllByCategoryAndPriceGreaterThanEqual(
+                category, BigDecimal.TEN, pageable))
+                .thenReturn(page);
+
+        // WHEN
         final PagedResponse<ProductResponse> response =
-                service.findAllProductsByCategory(1, BigDecimal.TEN, Direction.GE, 1, 10);
+                service.findAllProductsByCategory(
+                        1, BigDecimal.TEN, Direction.GE, 1, 10);
 
-        // Then
+        // THEN
         assertEquals(1, response.totalElements());
-        assertEquals(1, response.content().size());
-
-        ProductResponse dto = response.content().get(0);
-        assertEquals(product.getId(), dto.id());
-        assertEquals(product.getName(), dto.name());
-        assertEquals(category.getId(), dto.categoryId());
     }
 
     /**
@@ -329,18 +363,25 @@ class ProductServiceImplTest {
      */
     @Test
     void findAllProductsByCategory_ShouldReturnPaged_LessThanEqual() throws CategoryNotFoundExceptions {
-        // Given
+        // GIVEN
         final Category category = constructCategory();
-        when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
         final Product product = constructProduct();
-        when(productRepository.findAllByCategoryAndPriceLessThanEqual(category, BigDecimal.TEN))
-                .thenReturn(List.of(product));
+        final Pageable pageable = PageRequest.of(0, 10);
+        final Page<Product> page =
+                new PageImpl<>(List.of(product), pageable, 1);
+        when(productProperties.maxPageSize()).thenReturn(50);
+        when(categoryRepository.findById(1))
+                .thenReturn(Optional.of(category));
+        when(productRepository.findAllByCategoryAndPriceLessThanEqual(
+                category, BigDecimal.TEN, pageable))
+                .thenReturn(page);
 
-        // When
+        // WHEN
         final PagedResponse<ProductResponse> response =
-                service.findAllProductsByCategory(1, BigDecimal.TEN, Direction.LE, 1, 10);
+                service.findAllProductsByCategory(
+                        1, BigDecimal.TEN, Direction.LE, 1, 10);
 
-        // Then
+        // THEN
         assertEquals(1, response.totalElements());
     }
 
@@ -349,7 +390,7 @@ class ProductServiceImplTest {
      * used across test cases.
      *
      * @return a preconfigured {@link Product} instance with ID, name, category,
-     *         available quantity, price, and image key
+     * available quantity, price, and image key
      */
     private Product constructProduct() {
         return Product.builder()

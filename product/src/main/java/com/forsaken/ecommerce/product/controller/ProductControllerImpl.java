@@ -69,8 +69,8 @@ public class ProductControllerImpl implements IProductController {
     @Override
     public ResponseEntity<ApiResponse<PagedResponse<ProductPurchaseResponse>>> purchaseProducts(
             final List<ProductPurchaseRequest> request,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     ) throws ProductNotFoundExceptions {
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(
@@ -83,7 +83,10 @@ public class ProductControllerImpl implements IProductController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<ProductResponse>> findById(final Integer productId, final Boolean signedUrl) throws ProductNotFoundExceptions {
+    public ResponseEntity<ApiResponse<ProductResponse>> findById(
+            final Integer productId,
+            final Boolean signedUrl
+    ) throws ProductNotFoundExceptions {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
                         ApiResponse.<ProductResponse>builder()
@@ -95,7 +98,11 @@ public class ProductControllerImpl implements IProductController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> findAll(final Boolean signedUrl, final int page, final int size) {
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> findAll(
+            final Boolean signedUrl,
+            final Integer page,
+            final Integer size
+    ) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
                         ApiResponse.<PagedResponse<ProductResponse>>builder()
@@ -109,8 +116,8 @@ public class ProductControllerImpl implements IProductController {
     @Override
     public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> findAllProducts(final LocalDateTime fromDate,
                                                                                        final LocalDateTime toDate,
-                                                                                       final int page,
-                                                                                       final int size
+                                                                                       final Integer page,
+                                                                                       final Integer size
     ) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(
@@ -127,8 +134,8 @@ public class ProductControllerImpl implements IProductController {
             final Integer categoryId,
             final BigDecimal price,
             final Direction direction,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     ) throws CategoryNotFoundExceptions {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(

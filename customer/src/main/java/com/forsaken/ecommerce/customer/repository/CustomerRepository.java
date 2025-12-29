@@ -10,9 +10,11 @@ import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.model.Page;
 import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -147,6 +149,16 @@ public class CustomerRepository {
             }
         }
         return Optional.empty();
+    }
+
+    public Page<Customer> scanPage(
+            final int limit,
+            final Map<String, AttributeValue> lastKey
+    ) {
+        return customerTable.scan(r -> r
+                .limit(limit)
+                .exclusiveStartKey(lastKey)
+        ).iterator().next();
     }
 }
 

@@ -50,8 +50,8 @@ public interface IProductService {
      */
     PagedResponse<ProductResponse> getAllProducts(
             final Boolean signedUrls,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     );
 
 
@@ -88,8 +88,8 @@ public interface IProductService {
     @Transactional(rollbackFor = ProductNotFoundExceptions.class)
     PagedResponse<ProductPurchaseResponse> purchaseProducts(
             final List<ProductPurchaseRequest> request,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     ) throws ProductNotFoundExceptions;
 
 
@@ -108,8 +108,8 @@ public interface IProductService {
     PagedResponse<ProductResponse> findAllProducts(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     );
 
     /**
@@ -134,7 +134,7 @@ public interface IProductService {
             final Integer categoryId,
             final BigDecimal price,
             final Direction direction,
-            final int page,
-            final int size
+            final Integer page,
+            final Integer size
     ) throws CategoryNotFoundExceptions;
 }
