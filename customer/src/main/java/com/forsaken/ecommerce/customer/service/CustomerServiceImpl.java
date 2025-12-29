@@ -62,7 +62,7 @@ public class CustomerServiceImpl implements ICustomerService {
         log.info("Received request to get all customers");
         final int finalPage = null != page ?
                 Math.max(page - 1, 0) :
-                orderProperties.defaultPageNumber();
+                Math.max(orderProperties.defaultPageNumber() - 1, 0);
         final int finalSize = null != size ?
                 Math.min(Math.max(size, 1), orderProperties.maxPageSize()) :
                 orderProperties.defaultPageSize();
