@@ -31,4 +31,4 @@ management:
       prometheus:
         enabled: true
     tags:
-      environment: dev
+      environment: e2e
