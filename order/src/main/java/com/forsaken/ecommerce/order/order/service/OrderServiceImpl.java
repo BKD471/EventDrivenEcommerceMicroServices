@@ -19,6 +19,7 @@ import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentRequest;
 import com.forsaken.ecommerce.order.product.IProductService;
 import com.forsaken.ecommerce.order.product.PurchaseResponse;
+import io.micrometer.tracing.Tracer;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,7 @@ public class OrderServiceImpl implements IOrderService {
     private final IPaymentService paymentService;
     private final IOrderProducer orderProducer;
     private final OrderProperties orderProperties;
+    private final Tracer tracer;
 
     @Transactional(
             rollbackFor = {
@@ -108,13 +110,16 @@ public class OrderServiceImpl implements IOrderService {
         paymentService.pay(paymentRequest);
         log.info("Sent Payment");
 
+        final String traceId = (null != tracer || null != tracer.currentSpan()) ?
+                tracer.currentSpan().context().traceId()
+                : "NO_TRACE";
         final OrderConfirmation orderConfirmation = OrderConfirmation.newBuilder()
                 .setOrderReference(request.reference())
                 .setTotalAmount(convertBigDecimalToBytes(request.amount()))
                 .setPaymentMethod(PaymentMethod.valueOf(request.paymentMethod().name()))
                 .setCustomer(toAvroCustomer(customer))
                 .setProducts(purchasedProducts.stream().map(this::toAvroPurchase).toList())
-                .setTraceId("traceId") // TODO tracing will be done later
+                .setTraceId(traceId)
                 .build();
         log.info("Created Order Confirmation: {}", orderConfirmation);
         orderProducer.sendOrderConfirmation(orderConfirmation);

@@ -14,6 +14,10 @@ import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentRequest;
 import com.forsaken.ecommerce.order.product.IProductService;
 import com.forsaken.ecommerce.order.product.PurchaseResponse;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.TraceContext;
+import io.micrometer.tracing.Tracer;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -82,6 +86,14 @@ class OrderServiceImplTest {
     private IOrderProducer orderProducer;
     @Mock
     private OrderProperties orderProperties;
+    @Mock
+    private Tracer tracer;
+    @Mock
+    private Tracer.SpanInScope spanInScope;
+    @Mock
+    private Span span;
+    @Mock
+    private TraceContext traceContext;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -121,6 +133,9 @@ class OrderServiceImplTest {
         when(orderRepository.save(order)).thenReturn(order);
         when(order.getId()).thenReturn(10);
         when(order.getReference()).thenReturn("ORD-1");
+        when(tracer.currentSpan()).thenReturn(span);
+        when(span.context()).thenReturn(traceContext);
+        when(traceContext.traceId()).thenReturn("test-trace-id");
 
         // when
         final Integer result = orderService.createOrder(request);
