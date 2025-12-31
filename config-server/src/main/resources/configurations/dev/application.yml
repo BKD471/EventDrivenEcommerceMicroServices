@@ -26,6 +26,13 @@ management:
     health:
       show-details: always
 
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      environment: dev
+
 logging:
   pattern:
     # Logs will include traceId + spanId from OpenTelemetry MDC
