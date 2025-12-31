@@ -15,7 +15,7 @@
             <maxHistory>7</maxHistory>
         </rollingPolicy>
 
-        <!-- SAFEST encoder: NO PROVIDERS -->
+        <!-- JSON encoder using timestamp, pattern, and MDC providers -->
         <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
             <providers>
                 <timestamp/>
@@ -33,6 +33,9 @@
                     </pattern>
                 </pattern>
                 <mdc/>
+                <stackTrace>
+                    <fieldName>stacktrace</fieldName>
+                </stackTrace>
             </providers>
         </encoder>
     </appender>
@@ -55,11 +58,16 @@
                     </pattern>
                 </pattern>
                 <mdc/>
+                <stackTrace>
+                    <fieldName>stacktrace</fieldName>
+                </stackTrace>
             </providers>
         </encoder>
     </appender>
+
     <root level="INFO">
         <appender-ref ref="JSON_FILE"/>
         <appender-ref ref="CONSOLE"/>
     </root>
+
 </configuration>
