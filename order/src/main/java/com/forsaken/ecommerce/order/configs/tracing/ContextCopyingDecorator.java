@@ -32,7 +32,6 @@ public class ContextCopyingDecorator implements TaskDecorator {
     public Runnable decorate(final Runnable runnable) {
         final RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
         final Map<String, String> mdcContext = MDC.getCopyOfContextMap();
-
         // Capture Micrometer context (traceId, spanId, baggage, etc.)
         final ContextSnapshot snapshot = ContextSnapshot.captureAll();
         return () -> {
@@ -46,7 +45,7 @@ public class ContextCopyingDecorator implements TaskDecorator {
                 runnable.run();
             } finally {
                 RequestContextHolder.resetRequestAttributes();
-                if (null != mdcContext) MDC.clear();
+                MDC.clear();
             }
         };
     }
