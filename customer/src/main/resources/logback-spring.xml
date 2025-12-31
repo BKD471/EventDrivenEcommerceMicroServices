@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProperty scope="context" name="SERVICE_NAME"
+                    source="spring.application.name" defaultValue="unknown-service"/>
+
+    <property name="LOG_DIR" value="./logs"/>
+
+    <appender name="JSON_FILE"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/app.log</file>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/app-%d{yyyy-MM-dd}.gz</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+
+        <!-- SAFEST encoder: NO PROVIDERS -->
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <pattern>
+                    <pattern>
+                        {
+                        "service":"${SERVICE_NAME}",
+                        "traceId":"%X{traceId:-}",
+                        "spanId":"%X{spanId:-}",
+                        "level":"%level",
+                        "logger":"%logger",
+                        "thread":"%thread",
+                        "message":"%message"
+                        }
+                    </pattern>
+                </pattern>
+                <mdc/>
+            </providers>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <pattern>
+                    <pattern>
+                        {
+                        "service":"${SERVICE_NAME}",
+                        "traceId":"%X{traceId:-}",
+                        "spanId":"%X{spanId:-}",
+                        "level":"%level",
+                        "logger":"%logger",
+                        "thread":"%thread",
+                        "message":"%message"
+                        }
+                    </pattern>
+                </pattern>
+                <mdc/>
+            </providers>
+        </encoder>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="JSON_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
