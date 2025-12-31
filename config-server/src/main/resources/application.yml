@@ -7,15 +7,12 @@ spring:
     config:
       server:
         native:
-          search-locations: classpath:/configurations/{profile} # location of configuration files
-  # natively or by default config server should fetch/search for location of
-  # our different configuration files or configuration files for each configuration
-  # for each microservices in our applications
+          search-locations: classpath:/configurations/{profile}
 management:
   endpoints:
     web:
       exposure:
-        include: '*'   # include all endpoints & show all health metrics
+        include: '*'
   endpoint:
     health:
       show-details: always
@@ -29,4 +26,3 @@ eureka:
 
 server:
   port: 8888
-
