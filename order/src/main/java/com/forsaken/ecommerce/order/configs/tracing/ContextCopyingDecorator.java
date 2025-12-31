@@ -10,6 +10,22 @@ import java.util.Map;
 
 import static io.micrometer.context.ContextSnapshot.Scope;
 
+/**
+ * {@link TaskDecorator} that captures and propagates contextual information from the
+ * calling thread to asynchronous tasks executed on other threads.
+ * <p>
+ * This decorator:
+ * <ul>
+ *     <li>Captures Micrometer tracing context (such as {@code traceId}, {@code spanId},
+ *     and baggage) using {@link ContextSnapshot} and restores it for the async task,</li>
+ *     <li>Copies the SLF4J {@link MDC} logging context so log entries from async code
+ *     can be correlated with the originating request, and</li>
+ *     <li>Propagates Spring Web {@link RequestAttributes} via {@link RequestContextHolder}
+ *     so request-scoped data remains available in async execution.</li>
+ * </ul>
+ * This propagation is essential for consistent distributed tracing and logging correlation
+ * when using asynchronous execution (for example with {@code @Async} or thread pools).
+ */
 public class ContextCopyingDecorator implements TaskDecorator {
 
     @Override
