@@ -1,6 +1,5 @@
 package com.forsaken.ecommerce.order.configs.tracing;
 
-
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
