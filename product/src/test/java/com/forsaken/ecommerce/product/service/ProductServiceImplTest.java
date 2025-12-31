@@ -31,8 +31,10 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import static com.forsaken.ecommerce.product.dto.ProductRequest.Direction;
@@ -184,16 +186,13 @@ class ProductServiceImplTest {
         // GIVEN
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 1);
-        final Pageable pageable = PageRequest.of(0, 10);
-        final Page<Product> emptyPage =
-                new PageImpl<>(List.of(), pageable, 0);
-        when(productProperties.maxPageSize()).thenReturn(50);
+
         when(productRepository.findAllByIdInOrderById(List.of(1)))
-                .thenReturn(List.of());
+                .thenReturn(List.of()); // simulate missing product
 
         // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.purchaseProducts(List.of(req), 1, 10));
+                () -> service.purchaseProducts(List.of(req)));
     }
 
     /**
@@ -206,60 +205,52 @@ class ProductServiceImplTest {
     void purchaseProducts_ShouldThrow_WhenStockInsufficient() {
         // GIVEN
         final Product product = constructProduct();
-        product.setAvailableQuantity(2);
-        final Pageable pageable = PageRequest.of(0, 10);
-        final Page<Product> page =
-                new PageImpl<>(List.of(product), pageable, 1);
+        product.setAvailableQuantity(2); // less than requested
+
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 5);
-        when(productProperties.maxPageSize()).thenReturn(50);
+
         when(productRepository.findAllByIdInOrderById(List.of(1)))
                 .thenReturn(List.of(product));
 
         // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.purchaseProducts(List.of(req), 1, 10));
+                () -> service.purchaseProducts(List.of(req)));
     }
 
     /**
      * Verifies that a successful product purchase:
      * <ul>
-     *     <li>Loads all required products</li>
-     *     <li>Validates available stock</li>
+     *     <li>Loads all required products from the repository</li>
+     *     <li>Validates sufficient available stock</li>
      *     <li>Updates inventory quantities correctly</li>
-     *     <li>Saves updated product state</li>
-     *     <li>Returns a {@link PagedResponse} containing purchase results</li>
+     *     <li>Persists the updated product state</li>
+     *     <li>Returns a list of {@link ProductPurchaseResponse} with purchase details</li>
      * </ul>
      */
     @Test
-    void purchaseProducts_ShouldReturnPagedResponse_WhenSuccessful() throws ProductNotFoundExceptions {
+    void purchaseProducts_ShouldReturnResponse_WhenSuccessful() throws ProductNotFoundExceptions {
         // GIVEN
-        when(productProperties.maxPageSize()).thenReturn(50);
         final Product product = constructProduct();
         product.setId(1);
         product.setAvailableQuantity(5);
+
         final ProductPurchaseRequest request =
                 new ProductPurchaseRequest(1, 2);
-        // repository returns the existing product
         when(productRepository.findAllByIdInOrderById(List.of(1)))
                 .thenReturn(List.of(product));
-        // save returns the same updated entity
         when(productRepository.save(product))
                 .thenReturn(product);
 
         // WHEN
-        final PagedResponse<ProductPurchaseResponse> response =
-                service.purchaseProducts(List.of(request), 1, 10);
+        final List<ProductPurchaseResponse> responses =
+                service.purchaseProducts(List.of(request));
 
         // THEN
-        assertNotNull(response);
-        assertEquals(1, response.page());
-        assertEquals(10, response.size());
-        assertEquals(1, response.totalElements());
-        assertEquals(1, response.totalPages());
-        assertEquals(1, response.content().size());
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
 
-        final ProductPurchaseResponse purchaseResponse = response.content().get(0);
+        final ProductPurchaseResponse purchaseResponse = responses.get(0);
         assertEquals(1, purchaseResponse.productId());
         assertEquals(2, purchaseResponse.quantity());
 
@@ -383,6 +374,47 @@ class ProductServiceImplTest {
 
         // THEN
         assertEquals(1, response.totalElements());
+    }
+
+    /**
+     * Verifies that the product purchase operation behaves as a safe no-op
+     * when an empty purchase request is provided.
+     *
+     * <p>An empty request is considered a valid input for this command-style API.
+     * In such cases, the service should:
+     * <ul>
+     *   <li>Return an empty result list</li>
+     *   <li>Perform no database interactions</li>
+     *   <li>Avoid throwing exceptions</li>
+     * </ul>
+     *
+     * <p>This behavior is critical for order orchestration flows where an order
+     * may legitimately contain no purchasable items. The test protects against
+     * regressions that could reintroduce unnecessary database calls or runtime
+     * failures (e.g., empty IN-clause queries or index errors).
+     *
+     * <p>Expected behavior:
+     * <ul>
+     *   <li>Result is non-null</li>
+     *   <li>Result list is empty</li>
+     *   <li>{@code productRepository} is not interacted with</li>
+     * </ul>
+     */
+    @Test
+    void purchaseProducts_ShouldReturnEmptyList_WhenRequestIsEmpty() throws ProductNotFoundExceptions {
+        // Given
+        final List<ProductPurchaseRequest> emptyRequest = List.of();
+
+        // When
+        final List<ProductPurchaseResponse> responses =
+                service.purchaseProducts(emptyRequest);
+
+        // Then
+        assertNotNull(responses);
+        assertTrue(responses.isEmpty());
+
+        // No database interaction should occur
+        verifyNoInteractions(productRepository);
     }
 
     /**

@@ -85,21 +85,28 @@ public interface IProductController {
     /**
      * Purchases one or more products.
      *
-     * <p>This endpoint updates product quantities and returns a paginated summary
-     * of purchase details. If any requested product cannot be found, an exception is thrown.
+     * <p>This endpoint performs a transactional purchase operation by validating
+     * product availability, decrementing inventory quantities, and returning the
+     * purchase results for all requested products.</p>
      *
-     * @param request list of purchase requests; must be valid
-     * @param page    page index starting from 1
-     * @param size    number of items per page
-     * @return a {@link ResponseEntity} with an {@link ApiResponse} containing a paginated
-     * {@link PagedResponse} of purchase results
-     * @throws ProductNotFoundExceptions if any product in the request is not found
+     * <p>This is a <b>command-style</b> endpoint (state-changing). Pagination is
+     * intentionally not applied because the response size is bounded by the
+     * input request.</p>
+     *
+     * <p>If any product in the request does not exist or does not have sufficient
+     * stock, the entire transaction is rolled back and no inventory updates
+     * are persisted.</p>
+     *
+     * <p>An empty request is treated as a valid no-op and results in an empty list.</p>
+     *
+     * @param request list of product purchase requests; must not be {@code null}
+     * @return a {@link ResponseEntity} containing an {@link ApiResponse} with a
+     *         list of {@link ProductPurchaseResponse} items
+     * @throws ProductNotFoundExceptions if any product is missing or has insufficient stock
      */
     @PostMapping("/purchase")
-    ResponseEntity<ApiResponse<PagedResponse<ProductPurchaseResponse>>> purchaseProducts(
-            @RequestBody @Valid final List<ProductPurchaseRequest> request,
-            @RequestParam(name = "page", required = false) final Integer page,
-            @RequestParam(name = "size", required = false) final Integer size
+    ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> purchaseProducts(
+            @RequestBody @Valid final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions;
 
 

@@ -7,7 +7,6 @@ import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -74,22 +73,25 @@ public interface IProductService {
     /**
      * Processes purchase operations for one or more products.
      *
-     * <p>This method decreases product quantities, calculates total amounts,
-     * and returns a paginated list of purchase results.
+     * <p>This method performs a transactional purchase operation by validating
+     * product availability, decrementing stock quantities, and returning the
+     * purchase results for all requested products.</p>
      *
-     * <p>The transaction rolls back if any product in the request is not found.
+     * <p>This is a <b>command-style</b> operation (state-changing), not a query.
+     * The result size is bounded by the input request, so pagination is intentionally
+     * not applied.</p>
      *
-     * @param request list of purchase requests; must not be {@code null}
-     * @param page    page index starting from 1
-     * @param size    number of elements per page
-     * @return a {@link PagedResponse} containing {@link ProductPurchaseResponse} items
-     * @throws ProductNotFoundExceptions if any product in the purchase request is missing
+     * <p>The entire operation executes within a single transaction. If any product
+     * in the request does not exist or does not have sufficient stock, the transaction
+     * is rolled back and no inventory changes are persisted.</p>
+     *
+     * @param request list of product purchase requests; must not be {@code null} or empty
+     * @return a list of {@link ProductPurchaseResponse} representing the successfully
+     *         purchased products
+     * @throws ProductNotFoundExceptions if any product is missing or has insufficient stock
      */
-    @Transactional(rollbackFor = ProductNotFoundExceptions.class)
-    PagedResponse<ProductPurchaseResponse> purchaseProducts(
-            final List<ProductPurchaseRequest> request,
-            final Integer page,
-            final Integer size
+    List<ProductPurchaseResponse> purchaseProducts(
+            final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions;
 
 
