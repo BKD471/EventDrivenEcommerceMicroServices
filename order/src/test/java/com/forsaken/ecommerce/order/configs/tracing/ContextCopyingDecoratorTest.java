@@ -187,4 +187,9 @@ class ContextCopyingDecoratorTest {
         // then
         assertThat(valueFromAsyncThread.get()).isEqualTo("micrometer-trace");
     }
+
+    @AfterEach
+    void cleanupMicrometerContextRegistry() {
+        ContextRegistry.getInstance().removeThreadLocalAccessor("test-trace-context");
+    }
 }
