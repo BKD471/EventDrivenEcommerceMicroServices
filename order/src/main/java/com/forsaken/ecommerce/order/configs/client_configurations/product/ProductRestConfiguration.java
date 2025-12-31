@@ -6,6 +6,7 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.util.Timeout;
 
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
@@ -29,9 +30,14 @@ public class ProductRestConfiguration {
     }
 
     @Bean
-    public RestTemplate productRestTemplate(final CloseableHttpClient productHttpClient) {
+    public RestTemplate productRestTemplate(
+            final RestTemplateBuilder builder,
+            final CloseableHttpClient productHttpClient
+    ) {
         final HttpComponentsClientHttpRequestFactory factory =
                 new HttpComponentsClientHttpRequestFactory(productHttpClient);
-        return new RestTemplate(factory);
+        return builder
+                .requestFactory(() -> factory)
+                .build();
     }
 }
