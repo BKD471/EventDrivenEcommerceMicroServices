@@ -31,16 +31,4 @@ management:
       prometheus:
         enabled: true
     tags:
-      environment: dev
-
-
-logging:
-  pattern:
-    level: "%5p [%X{traceId},%X{spanId}]"
-    console: "%d{HH:mm:ss.SSS} %5p [%X{traceId},%X{spanId}] [%thread] %logger{36} - %msg%n"
-  level:
-    root: INFO
-    org.springframework.web: INFO
-    org.springframework.data: INFO
-    org.springframework.cache: INFO
-    com.forsaken: INFO
+      environment: prod
