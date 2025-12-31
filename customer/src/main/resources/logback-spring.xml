@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true">
+
+    <springProperty
+            scope="context"
+            name="SERVICE_NAME"
+            source="spring.application.name"/>
+
+    <property name="LOG_DIR" value="${LOG_DIR:-logs}"/>
+
+    <appender name="JSON_FILE"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/app.log</file>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/app.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>
+                {
+                "service": "${SERVICE_NAME}"
+                }
+            </customFields>
+            <includeStackTrace>true</includeStackTrace>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>
+                {
+                "service": "${SERVICE_NAME}"
+                }
+            </customFields>
+            <includeStackTrace>true</includeStackTrace>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="JSON_FILE"/>
+    </root>
+
+    <logger name="com.forsaken" level="DEBUG"/>
+
+</configuration>
