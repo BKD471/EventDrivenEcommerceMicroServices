@@ -65,6 +65,9 @@ class ProductControllerImplTest {
     @Mock
     private ProductPurchaseRequest productPurchaseRequest;
 
+    @Mock
+    private ProductPurchaseResponse productPurchaseResponse;
+
     /**
      * Verifies that {@link ProductControllerImpl#getPresignedUrl(String, String)}
      * correctly:
@@ -163,9 +166,9 @@ class ProductControllerImplTest {
     /**
      * Verifies purchasing flow through controller:
      * <ul>
-     *     <li>Delegates to {@link IProductService#purchaseProducts(List, Integer, Integer)}</li>
+     *     <li>Delegates to {@link IProductService#purchaseProducts(List)}</li>
      *     <li>Returns HTTP 202 (Accepted)</li>
-     *     <li>Returns a paginated purchase response</li>
+     *     <li>Returns a list of {@link ProductPurchaseResponse} wrapped in {@link ApiResponse}</li>
      *     <li>Does not interact with {@link IS3Service}</li>
      * </ul>
      *
@@ -173,25 +176,28 @@ class ProductControllerImplTest {
      */
     @Test
     void purchaseProducts_ShouldReturnAcceptedWithPagedResponse() throws ProductNotFoundExceptions {
-        // given
-        final List<ProductPurchaseRequest> req = List.of(productPurchaseRequest);
-        final int page = 0, size = 10;
-        final PagedResponse<ProductPurchaseResponse> paged =
-                new PagedResponse<>(List.of(), 0, 10,
-                        1, 1, null, true);
-        when(service.purchaseProducts(req, page, size)).thenReturn(paged);
+        // GIVEN
+        final List<ProductPurchaseRequest> req =
+                List.of(productPurchaseRequest);
+        final List<ProductPurchaseResponse> responses =
+                List.of(productPurchaseResponse);
+        when(service.purchaseProducts(req))
+                .thenReturn(responses);
 
-        // when
-        final ResponseEntity<ApiResponse<PagedResponse<ProductPurchaseResponse>>> response =
-                controller.purchaseProducts(req, page, size);
+        // WHEN
+        final ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> response =
+                controller.purchaseProducts(req);
 
-        // then
+        // THEN
         assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+
         final var body = response.getBody();
         assertNotNull(body);
-        assertEquals(paged, body.data());
+        assertEquals(ApiResponse.Status.SUCCESS, body.status());
+        assertEquals(responses, body.data());
         assertEquals("Product Purchased.", body.message());
-        verify(service).purchaseProducts(req, page, size);
+
+        verify(service).purchaseProducts(req);
         verifyNoInteractions(s3Service);
     }
 

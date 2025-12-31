@@ -89,17 +89,13 @@ public interface IProductController {
      * of purchase details. If any requested product cannot be found, an exception is thrown.
      *
      * @param request list of purchase requests; must be valid
-     * @param page    page index starting from 1
-     * @param size    number of items per page
      * @return a {@link ResponseEntity} with an {@link ApiResponse} containing a paginated
      * {@link PagedResponse} of purchase results
      * @throws ProductNotFoundExceptions if any product in the request is not found
      */
     @PostMapping("/purchase")
-    ResponseEntity<ApiResponse<PagedResponse<ProductPurchaseResponse>>> purchaseProducts(
-            @RequestBody @Valid final List<ProductPurchaseRequest> request,
-            @RequestParam(name = "page", required = false) final Integer page,
-            @RequestParam(name = "size", required = false) final Integer size
+    ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> purchaseProducts(
+            @RequestBody @Valid final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions;
 
 

@@ -5,7 +5,6 @@ import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions;
 import com.forsaken.ecommerce.common.exceptions.ProductServiceException;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
-import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.client_configurations.product.ProductClientProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,11 +42,11 @@ public class ProductServiceImpl implements IProductService {
         headers.set(CONTENT_TYPE, APPLICATION_JSON_VALUE);
 
         final HttpEntity<List<PurchaseRequest>> requestEntity = new HttpEntity<>(requestBody, headers);
-        final ParameterizedTypeReference<ApiResponse<PagedResponse<PurchaseResponse>>>
+        final ParameterizedTypeReference<ApiResponse<List<PurchaseResponse>>>
                 responseType = new ParameterizedTypeReference<>() {
         };
         try {
-            final ResponseEntity<ApiResponse<PagedResponse<PurchaseResponse>>> response = productRestTemplate.exchange(
+            final ResponseEntity<ApiResponse<List<PurchaseResponse>>> response = productRestTemplate.exchange(
                     productClientProperties.url() + "/purchase",
                     POST,
                     requestEntity,
@@ -66,7 +65,7 @@ public class ProductServiceImpl implements IProductService {
                         )
                 );
             }
-            return CompletableFuture.completedFuture(response.getBody().data().content());
+            return CompletableFuture.completedFuture(response.getBody().data());
         } catch (HttpClientErrorException.NotFound ex) {
             log.error(
                     "Product not found while calling product service. method=purchaseProducts, status={}, responseBody={}",

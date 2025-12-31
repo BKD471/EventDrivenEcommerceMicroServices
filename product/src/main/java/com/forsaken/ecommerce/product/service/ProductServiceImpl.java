@@ -17,8 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static com.forsaken.ecommerce.product.dto.ProductRequest.Direction;
 import static com.forsaken.ecommerce.product.dto.ProductRequest.Direction.GE;
@@ -98,24 +97,17 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
-    public PagedResponse<ProductPurchaseResponse> purchaseProducts(
-            final List<ProductPurchaseRequest> request,
-            final Integer page,
-            final Integer size
+    @Transactional(rollbackFor = ProductNotFoundExceptions.class)
+    public List<ProductPurchaseResponse> purchaseProducts(
+            final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions {
 
         log.info("Received request to purchase products {}", request);
-        final int finalPage = page != null
-                ? Math.max(page - 1, 0)
-                : productProperties.defaultPageNumber();
-        final int finalSize = size != null
-                ? Math.min(Math.max(size, 1), productProperties.maxPageSize())
-                : productProperties.defaultPageSize();
-        final List<Integer> productIds = request
+        final var productIds = request
                 .stream()
                 .map(ProductPurchaseRequest::productId)
                 .toList();
-        final List<Product> storedProducts = repository.findAllByIdInOrderById(productIds);
+        final var storedProducts = repository.findAllByIdInOrderById(productIds);
         if (productIds.size() != storedProducts.size()) {
             throw new ProductNotFoundExceptions("One or more products does not exist",
                     "purchaseProducts(List<ProductPurchaseRequest> request) in " + className);
@@ -137,19 +129,7 @@ public class ProductServiceImpl implements IProductService {
             repository.save(product);
             purchasedProducts.add(product.toproductPurchaseResponse(productRequest.quantity()));
         }
-
-        final int start = finalPage * finalSize;
-        final int end = Math.min(start + finalSize, purchasedProducts.size());
-        final List<ProductPurchaseResponse> pagedContent =
-                (start >= purchasedProducts.size()) ? List.of() : purchasedProducts.subList(start, end);
-        final int totalPages = (int) Math.ceil((double) purchasedProducts.size() / finalSize);
-        return PagedResponse.<ProductPurchaseResponse>builder()
-                .content(pagedContent)
-                .page(finalPage + 1)
-                .size(finalSize)
-                .totalElements(purchasedProducts.size())
-                .totalPages(totalPages)
-                .build();
+        return purchasedProducts;
     }
 
     @Override

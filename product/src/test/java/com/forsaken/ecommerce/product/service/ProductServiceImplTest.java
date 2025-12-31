@@ -184,16 +184,13 @@ class ProductServiceImplTest {
         // GIVEN
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 1);
-        final Pageable pageable = PageRequest.of(0, 10);
-        final Page<Product> emptyPage =
-                new PageImpl<>(List.of(), pageable, 0);
-        when(productProperties.maxPageSize()).thenReturn(50);
+
         when(productRepository.findAllByIdInOrderById(List.of(1)))
-                .thenReturn(List.of());
+                .thenReturn(List.of()); // simulate missing product
 
         // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.purchaseProducts(List.of(req), 1, 10));
+                () -> service.purchaseProducts(List.of(req)));
     }
 
     /**
@@ -206,60 +203,52 @@ class ProductServiceImplTest {
     void purchaseProducts_ShouldThrow_WhenStockInsufficient() {
         // GIVEN
         final Product product = constructProduct();
-        product.setAvailableQuantity(2);
-        final Pageable pageable = PageRequest.of(0, 10);
-        final Page<Product> page =
-                new PageImpl<>(List.of(product), pageable, 1);
+        product.setAvailableQuantity(2); // less than requested
+
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 5);
-        when(productProperties.maxPageSize()).thenReturn(50);
+
         when(productRepository.findAllByIdInOrderById(List.of(1)))
                 .thenReturn(List.of(product));
 
         // WHEN / THEN
         assertThrows(ProductNotFoundExceptions.class,
-                () -> service.purchaseProducts(List.of(req), 1, 10));
+                () -> service.purchaseProducts(List.of(req)));
     }
 
     /**
      * Verifies that a successful product purchase:
      * <ul>
-     *     <li>Loads all required products</li>
-     *     <li>Validates available stock</li>
+     *     <li>Loads all required products from the repository</li>
+     *     <li>Validates sufficient available stock</li>
      *     <li>Updates inventory quantities correctly</li>
-     *     <li>Saves updated product state</li>
-     *     <li>Returns a {@link PagedResponse} containing purchase results</li>
+     *     <li>Persists the updated product state</li>
+     *     <li>Returns a list of {@link ProductPurchaseResponse} with purchase details</li>
      * </ul>
      */
     @Test
-    void purchaseProducts_ShouldReturnPagedResponse_WhenSuccessful() throws ProductNotFoundExceptions {
+    void purchaseProducts_ShouldReturnResponse_WhenSuccessful() throws ProductNotFoundExceptions {
         // GIVEN
-        when(productProperties.maxPageSize()).thenReturn(50);
         final Product product = constructProduct();
         product.setId(1);
         product.setAvailableQuantity(5);
+
         final ProductPurchaseRequest request =
                 new ProductPurchaseRequest(1, 2);
-        // repository returns the existing product
         when(productRepository.findAllByIdInOrderById(List.of(1)))
                 .thenReturn(List.of(product));
-        // save returns the same updated entity
         when(productRepository.save(product))
                 .thenReturn(product);
 
         // WHEN
-        final PagedResponse<ProductPurchaseResponse> response =
-                service.purchaseProducts(List.of(request), 1, 10);
+        final List<ProductPurchaseResponse> responses =
+                service.purchaseProducts(List.of(request));
 
         // THEN
-        assertNotNull(response);
-        assertEquals(1, response.page());
-        assertEquals(10, response.size());
-        assertEquals(1, response.totalElements());
-        assertEquals(1, response.totalPages());
-        assertEquals(1, response.content().size());
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
 
-        final ProductPurchaseResponse purchaseResponse = response.content().get(0);
+        final ProductPurchaseResponse purchaseResponse = responses.get(0);
         assertEquals(1, purchaseResponse.productId());
         assertEquals(2, purchaseResponse.quantity());
 

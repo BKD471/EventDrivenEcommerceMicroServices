@@ -67,16 +67,14 @@ public class ProductControllerImpl implements IProductController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<PagedResponse<ProductPurchaseResponse>>> purchaseProducts(
-            final List<ProductPurchaseRequest> request,
-            final Integer page,
-            final Integer size
+    public ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> purchaseProducts(
+            final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions {
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(
-                        ApiResponse.<PagedResponse<ProductPurchaseResponse>>builder()
+                        ApiResponse.<List<ProductPurchaseResponse>>builder()
                                 .status(ApiResponse.Status.SUCCESS)
-                                .data(service.purchaseProducts(request, page, size))
+                                .data(service.purchaseProducts(request))
                                 .message("Product Purchased.")
                                 .build()
                 );

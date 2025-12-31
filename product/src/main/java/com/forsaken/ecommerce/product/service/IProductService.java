@@ -80,16 +80,11 @@ public interface IProductService {
      * <p>The transaction rolls back if any product in the request is not found.
      *
      * @param request list of purchase requests; must not be {@code null}
-     * @param page    page index starting from 1
-     * @param size    number of elements per page
      * @return a {@link PagedResponse} containing {@link ProductPurchaseResponse} items
      * @throws ProductNotFoundExceptions if any product in the purchase request is missing
      */
-    @Transactional(rollbackFor = ProductNotFoundExceptions.class)
-    PagedResponse<ProductPurchaseResponse> purchaseProducts(
-            final List<ProductPurchaseRequest> request,
-            final Integer page,
-            final Integer size
+    List<ProductPurchaseResponse> purchaseProducts(
+            final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions;
 
 
