@@ -103,6 +103,8 @@ public class ProductServiceImpl implements IProductService {
     ) throws ProductNotFoundExceptions {
 
         log.info("Received request to purchase products {}", request);
+        if (null == request || request.isEmpty()) return List.of();
+
         final var productIds = request
                 .stream()
                 .map(ProductPurchaseRequest::productId)

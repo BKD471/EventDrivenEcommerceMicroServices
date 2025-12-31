@@ -31,8 +31,10 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import static com.forsaken.ecommerce.product.dto.ProductRequest.Direction;
@@ -372,6 +374,47 @@ class ProductServiceImplTest {
 
         // THEN
         assertEquals(1, response.totalElements());
+    }
+
+    /**
+     * Verifies that the product purchase operation behaves as a safe no-op
+     * when an empty purchase request is provided.
+     *
+     * <p>An empty request is considered a valid input for this command-style API.
+     * In such cases, the service should:
+     * <ul>
+     *   <li>Return an empty result list</li>
+     *   <li>Perform no database interactions</li>
+     *   <li>Avoid throwing exceptions</li>
+     * </ul>
+     *
+     * <p>This behavior is critical for order orchestration flows where an order
+     * may legitimately contain no purchasable items. The test protects against
+     * regressions that could reintroduce unnecessary database calls or runtime
+     * failures (e.g., empty IN-clause queries or index errors).
+     *
+     * <p>Expected behavior:
+     * <ul>
+     *   <li>Result is non-null</li>
+     *   <li>Result list is empty</li>
+     *   <li>{@code productRepository} is not interacted with</li>
+     * </ul>
+     */
+    @Test
+    void purchaseProducts_ShouldReturnEmptyList_WhenRequestIsEmpty() throws ProductNotFoundExceptions {
+        // Given
+        final List<ProductPurchaseRequest> emptyRequest = List.of();
+
+        // When
+        final List<ProductPurchaseResponse> responses =
+                service.purchaseProducts(emptyRequest);
+
+        // Then
+        assertNotNull(responses);
+        assertTrue(responses.isEmpty());
+
+        // No database interaction should occur
+        verifyNoInteractions(productRepository);
     }
 
     /**
