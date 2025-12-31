@@ -23,6 +23,8 @@
                     <pattern>
                         {
                         "service":"${SERVICE_NAME}",
+                        "traceId":"%X{traceId:-}",
+                        "spanId":"%X{spanId:-}",
                         "level":"%level",
                         "logger":"%logger",
                         "thread":"%thread",
@@ -30,7 +32,7 @@
                         }
                     </pattern>
                 </pattern>
-                <mdc/>
+
                 <stackTrace>
                     <fieldName>stacktrace</fieldName>
                 </stackTrace>
@@ -46,6 +48,8 @@
                     <pattern>
                         {
                         "service":"${SERVICE_NAME}",
+                        "traceId":"%X{traceId:-}",
+                        "spanId":"%X{spanId:-}",
                         "level":"%level",
                         "logger":"%logger",
                         "thread":"%thread",
@@ -53,7 +57,7 @@
                         }
                     </pattern>
                 </pattern>
-                <mdc/>
+
                 <stackTrace>
                     <fieldName>stacktrace</fieldName>
                 </stackTrace>
