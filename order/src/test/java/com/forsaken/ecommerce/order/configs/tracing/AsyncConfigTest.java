@@ -1,5 +1,6 @@
 package com.forsaken.ecommerce.order.configs.tracing;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -51,6 +52,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AsyncConfigTest {
 
     private final AsyncConfig asyncConfig = new AsyncConfig();
+    private ThreadPoolTaskExecutor executor;
+
+    @AfterEach
+    void tearDown() {
+        if (null != executor) executor.shutdown();
+        MDC.clear();
+    }
 
     /**
      * Verifies that the async task executor is initialized with the expected
@@ -59,7 +67,7 @@ class AsyncConfigTest {
     @Test
     void shouldCreateExecutorWithExpectedConfiguration() {
         // when
-        final ThreadPoolTaskExecutor executor = asyncConfig.appTaskExecutor();
+        executor = asyncConfig.appTaskExecutor();
 
         // then
         assertThat(executor.getCorePoolSize()).isEqualTo(10);
@@ -80,7 +88,7 @@ class AsyncConfigTest {
     @Test
     void shouldPropagateMdcContextToAsyncThread() throws Exception {
         // given
-        final ThreadPoolTaskExecutor executor = asyncConfig.appTaskExecutor();
+        executor = asyncConfig.appTaskExecutor();
         MDC.put("traceId", "test-trace-id");
 
         final CountDownLatch latch = new CountDownLatch(1);
@@ -97,8 +105,6 @@ class AsyncConfigTest {
         assertThat(completed).isTrue();
         assertThat(traceIdFromAsyncThread.get())
                 .isEqualTo("test-trace-id");
-
-        MDC.clear();
     }
 
     /**
@@ -108,7 +114,7 @@ class AsyncConfigTest {
     @Test
     void shouldClearMdcInsideAsyncThreadAfterExecution() throws Exception {
         // given
-        final ThreadPoolTaskExecutor executor = asyncConfig.appTaskExecutor();
+        executor = asyncConfig.appTaskExecutor();
         MDC.put("traceId", "cleanup-test");
 
         final CountDownLatch latch = new CountDownLatch(1);
@@ -130,7 +136,5 @@ class AsyncConfigTest {
         // then
         assertThat(mdcDuringExecution.get()).isEqualTo("cleanup-test");
         assertThat(mdcAfterExecution.get()).isNull();
-        // cleanup test thread MDC
-        MDC.clear();
     }
 }

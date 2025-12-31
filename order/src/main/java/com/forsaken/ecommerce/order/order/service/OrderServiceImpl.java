@@ -110,8 +110,8 @@ public class OrderServiceImpl implements IOrderService {
         paymentService.pay(paymentRequest);
         log.info("Sent Payment");
 
-        final String traceId = tracer.currentSpan() != null
-                ? tracer.currentSpan().context().traceId()
+        final String traceId = (null != tracer || null != tracer.currentSpan()) ?
+                tracer.currentSpan().context().traceId()
                 : "NO_TRACE";
         final OrderConfirmation orderConfirmation = OrderConfirmation.newBuilder()
                 .setOrderReference(request.reference())

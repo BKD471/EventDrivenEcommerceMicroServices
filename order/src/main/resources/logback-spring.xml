@@ -20,9 +20,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <includeMdc>true</includeMdc>
             <customFields>
-                {
-                "service": "${SERVICE_NAME}"
-                }
+                { "service": "${SERVICE_NAME}" }
             </customFields>
             <includeStackTrace>true</includeStackTrace>
         </encoder>
