@@ -185,7 +185,7 @@ services:
     volumes:
       - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /Users/bhaskarkumardas/Desktop/CloudNativeMicroServices/logs:/host_logs:ro
+      - ./logs:/host_logs:ro
       - ./promtail/positions.yaml:/tmp/positions.yaml
 
     networks:
