@@ -71,13 +71,13 @@ public class CustomerServiceImpl implements ICustomerService {
     @Override
     @Cacheable(
             value = "customers",
-            key = "{#size, #lastEvaluatedKey}"
+            key = "#size + ':' + #root.target.cursorKey(#lastEvaluatedKey)"
     )
     public PagedResponse<CustomerResponse> findAllCustomers(
             final Integer size,
             final Map<String, String> lastEvaluatedKey
     ) {
-        final int finalSize = size != null
+        final int finalSize = null != size
                 ? Math.min(Math.max(size, 1), customerProperties.maxPageSize())
                 : customerProperties.defaultPageSize();
         final Page<Customer> page =
@@ -141,6 +141,17 @@ public class CustomerServiceImpl implements ICustomerService {
         return String.format("Deleted customer with id %s", customerId);
     }
 
+    /**
+     * Merges non-null and non-blank fields from the incoming request
+     * into the existing {@link Customer} entity.
+     * <p>
+     * Only fields explicitly provided in the request are updated.
+     * This prevents overwriting existing values with null or blank data
+     * during partial update operations.
+     *
+     * @param customer existing persisted customer entity
+     * @param request  incoming customer update request
+     */
     private void mergeCustomer(final Customer customer, final CustomerRequest request) {
         if (StringUtils.isNotBlank(request.firstname())) customer.setFirstName(request.firstname());
         if (StringUtils.isNotBlank(request.lastname())) customer.setLastName(request.lastname());
@@ -148,10 +159,28 @@ public class CustomerServiceImpl implements ICustomerService {
         if (null != request.address()) customer.setAddress(request.address());
     }
 
+    /**
+     * Converts a pagination cursor represented as a Map into a DynamoDB
+     * {@link AttributeValue} map suitable for use as a {@code lastEvaluatedKey}.
+     * <p>
+     * Expected cursor format:
+     * <pre>
+     * {
+     *   "customerId": "<id>"
+     * }
+     * </pre>
+     * <p>
+     * Returns {@code null} when the cursor is null or empty, indicating
+     * the start of pagination.
+     *
+     * @param cursor pagination cursor from the API request
+     * @return DynamoDB-compatible attribute value map or {@code null} for initial page
+     * @throws IllegalArgumentException if the cursor format is invalid
+     */
     private Map<String, AttributeValue> toAttributeValueCursor(
             final Map<String, String> cursor
     ) {
-        if (cursor == null || cursor.isEmpty()) return null;
+        if (null == cursor || cursor.isEmpty()) return null;
         if (!cursor.containsKey("customerId") || cursor.size() != 1)
             throw new IllegalArgumentException("Invalid cursor format");
 
@@ -161,5 +190,31 @@ public class CustomerServiceImpl implements ICustomerService {
                         .s(cursor.get("customerId"))
                         .build()
         );
+    }
+
+    /**
+     * Generates a deterministic string representation of a pagination cursor
+     * for use as part of a cache key.
+     * <p>
+     * This method ensures stable cache keys for logically equivalent cursors,
+     * avoiding cache misses caused by differing {@link Map} instances.
+     * <p>
+     * The cursor entries are sorted by key before serialization to guarantee
+     * consistent ordering.
+     *
+     * @param lastEvaluatedKey pagination cursor map
+     * @return deterministic string representation of the cursor
+     */
+    public String cursorKey(final Map<String, String> lastEvaluatedKey) {
+        if (null == lastEvaluatedKey || lastEvaluatedKey.isEmpty()) {
+            return "START";
+        }
+
+        return lastEvaluatedKey.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> e.getKey() + "=" + e.getValue())
+                .reduce((a, b) -> a + "&" + b)
+                .orElse("START");
     }
 }
