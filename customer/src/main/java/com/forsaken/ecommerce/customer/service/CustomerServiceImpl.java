@@ -107,7 +107,7 @@ public class CustomerServiceImpl implements ICustomerService {
     @Override
     @Cacheable(
             value = "customerByEmail",
-            key = "#customerEmail.toLowerCase()"
+            key = "#customerEmail"
     )
     public CustomerResponse findByEmail(final String customerEmail) throws CustomerNotFoundExceptions {
         log.info("Received request to get customer by Email {}", customerEmail);
@@ -181,8 +181,9 @@ public class CustomerServiceImpl implements ICustomerService {
             final Map<String, String> cursor
     ) {
         if (null == cursor || cursor.isEmpty()) return null;
-        if (!cursor.containsKey("customerId") || cursor.size() != 1)
+        if (!cursor.containsKey("customerId") || cursor.size() != 1) {
             throw new IllegalArgumentException("Invalid cursor format");
+        }
 
         return Map.of(
                 "customerId",
@@ -193,14 +194,15 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     /**
-     * Generates a deterministic string representation of a pagination cursor
+     * Generates a deterministic string representation of the pagination cursor
      * for use as part of a cache key.
      * <p>
-     * This method ensures stable cache keys for logically equivalent cursors,
-     * avoiding cache misses caused by differing {@link Map} instances.
+     * NOTE: This method is intentionally {@code public} because it is invoked
+     * from a Spring Cache SpEL expression. Due to Spring's use of CGLIB proxies,
+     * private or package-private methods are not accessible from SpEL.
      * <p>
-     * The cursor entries are sorted by key before serialization to guarantee
-     * consistent ordering.
+     * This method is not part of the service API and should be treated as an
+     * internal implementation detail.
      *
      * @param lastEvaluatedKey pagination cursor map
      * @return deterministic string representation of the cursor

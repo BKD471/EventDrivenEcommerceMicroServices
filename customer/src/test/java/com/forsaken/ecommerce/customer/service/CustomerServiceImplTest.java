@@ -489,6 +489,55 @@ class CustomerServiceImplTest {
     }
 
     /**
+     * Unit tests for {@link CustomerServiceImpl#cursorKey(Map)},
+     * ensuring deterministic cache key generation.
+     */
+    @Test
+    void cursorKey_ShouldReturnStart_WhenNull() {
+        // When
+        final String key = customerService.cursorKey(null);
+
+        // Then
+        assertEquals("START", key);
+    }
+
+    @Test
+    void cursorKey_ShouldReturnStart_WhenEmptyMap() {
+        // When
+        final String key = customerService.cursorKey(Map.of());
+
+        // Then
+        assertEquals("START", key);
+    }
+
+    @Test
+    void cursorKey_ShouldReturnSingleEntry_WhenOneElementPresent() {
+        // Given
+        final Map<String, String> cursor = Map.of("customerId", "cust_123");
+
+        // When
+        final String key = customerService.cursorKey(cursor);
+
+        // Then
+        assertEquals("customerId=cust_123", key);
+    }
+
+    @Test
+    void cursorKey_ShouldReturnSortedKey_WhenMultipleEntriesPresent() {
+        // Given (intentionally unordered)
+        final Map<String, String> cursor = Map.of(
+                "b", "2",
+                "a", "1"
+        );
+
+        // When
+        final String key = customerService.cursorKey(cursor);
+
+        // Then
+        assertEquals("a=1&b=2", key);
+    }
+
+    /**
      * Helper method for constructing a {@link Customer} object with
      * the provided attributes and a default address.
      */

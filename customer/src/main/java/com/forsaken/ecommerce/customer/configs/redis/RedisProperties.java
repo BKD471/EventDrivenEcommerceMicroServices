@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.customer.configs.redis;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -28,6 +29,7 @@ public record RedisProperties(
          * <p>
          * Valid range: 10–60 minutes.
          */
+        @NotNull
         @Max(60)
         @Min(10)
         Long ttlMinutes
