@@ -9,6 +9,9 @@ import com.forsaken.ecommerce.customer.model.Customer;
 import com.forsaken.ecommerce.customer.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.apache.commons.lang.StringUtils;
 import software.amazon.awssdk.enhanced.dynamodb.model.Page;
@@ -17,7 +20,6 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 
 @Service
@@ -30,6 +32,7 @@ public class CustomerServiceImpl implements ICustomerService {
     private final Class<?> className = CustomerServiceImpl.class;
 
     @Override
+    @CacheEvict(value = {"customers", "customerById"}, allEntries = true)
     public String createCustomer(final CustomerRequest request) throws CustomerNotFoundExceptions {
         log.info("Creating customer with request {}", request);
 
@@ -46,6 +49,12 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = "customerById", key = "#request.id"),
+            @CacheEvict(value = "customerExists", key = "#request.id"),
+            @CacheEvict(value = "customerByEmail", allEntries = true),
+            @CacheEvict(value = "customers", allEntries = true)
+    })
     public String updateCustomer(final CustomerRequest request) throws CustomerNotFoundExceptions {
         log.info("Received request to update customer {}", request);
         final Customer customer = this.customerRepository.findById(request.id())
@@ -60,6 +69,10 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
+    @Cacheable(
+            value = "customers",
+            key = "{#size, #lastEvaluatedKey}"
+    )
     public PagedResponse<CustomerResponse> findAllCustomers(
             final Integer size,
             final Map<String, String> lastEvaluatedKey
@@ -79,6 +92,7 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
+    @Cacheable(value = "customerById", key = "#customerId")
     public CustomerResponse findById(final String customerId) throws CustomerNotFoundExceptions {
         log.info("Received request to get customer by ID {}", customerId);
         return this.customerRepository.findById(customerId)
@@ -91,6 +105,10 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
+    @Cacheable(
+            value = "customerByEmail",
+            key = "#customerEmail.toLowerCase()"
+    )
     public CustomerResponse findByEmail(final String customerEmail) throws CustomerNotFoundExceptions {
         log.info("Received request to get customer by Email {}", customerEmail);
         return this.customerRepository.findByEmail(customerEmail)
@@ -103,6 +121,7 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
+    @Cacheable(value = "customerExists", key = "#customerId")
     public boolean existsById(final String customerId) {
         log.info("Received request to check if customer with id {}", customerId);
         return this.customerRepository.findById(customerId)
@@ -110,6 +129,12 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = "customerById", key = "#customerId"),
+            @CacheEvict(value = "customerExists", key = "#customerId"),
+            @CacheEvict(value = "customerByEmail", allEntries = true),
+            @CacheEvict(value = "customers", allEntries = true)
+    })
     public String deleteCustomer(final String customerId) {
         log.info("Received request to delete customer with id {}", customerId);
         this.customerRepository.deleteById(customerId);
@@ -117,30 +142,18 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     private void mergeCustomer(final Customer customer, final CustomerRequest request) {
-        if (StringUtils.isNotBlank(request.firstname())) {
-            customer.setFirstName(request.firstname());
-        }
-        if (StringUtils.isNotBlank(request.lastname())) {
-            customer.setLastName(request.lastname());
-        }
-        if (StringUtils.isNotBlank(request.email())) {
-            customer.setCustomerEmail(request.email());
-        }
-        if (request.address() != null) {
-            customer.setAddress(request.address());
-        }
+        if (StringUtils.isNotBlank(request.firstname())) customer.setFirstName(request.firstname());
+        if (StringUtils.isNotBlank(request.lastname())) customer.setLastName(request.lastname());
+        if (StringUtils.isNotBlank(request.email())) customer.setCustomerEmail(request.email());
+        if (null != request.address()) customer.setAddress(request.address());
     }
 
     private Map<String, AttributeValue> toAttributeValueCursor(
-            Map<String, String> cursor
+            final Map<String, String> cursor
     ) {
-        if (cursor == null || cursor.isEmpty()) {
-            return null;
-        }
-
-        if (!cursor.containsKey("customerId") || cursor.size() != 1) {
+        if (cursor == null || cursor.isEmpty()) return null;
+        if (!cursor.containsKey("customerId") || cursor.size() != 1)
             throw new IllegalArgumentException("Invalid cursor format");
-        }
 
         return Map.of(
                 "customerId",
