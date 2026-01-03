@@ -4,7 +4,6 @@ import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.customer.dto.CustomerRequest;
 import com.forsaken.ecommerce.customer.dto.CustomerResponse;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
@@ -66,13 +65,12 @@ public interface ICustomerService {
      * <p>Page numbering is expected to start from 1, unless the service layer applies
      * its own defaulting or normalization logic.</p>
      *
-     * @param page the page number to retrieve; must be greater than zero
-     * @param size the number of customer records to include per page; must be greater than zero
+     * @param pageSize the page size; must be greater than zero
      * @return a {@link PagedResponse} containing a list of {@link CustomerResponse} objects
      *         along with pagination metadata such as total pages and total elements
      */
     PagedResponse<CustomerResponse> findAllCustomers(
-            final Integer page,
+            final Integer pageSize,
             final Map<String, String> lastEvaluatedKey
     );
 

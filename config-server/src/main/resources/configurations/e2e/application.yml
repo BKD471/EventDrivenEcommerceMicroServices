@@ -32,3 +32,9 @@ management:
         enabled: true
     tags:
       environment: e2e
+  health:
+    redis:
+      enabled: false
+    reactive:
+      redis:
+        enabled: false

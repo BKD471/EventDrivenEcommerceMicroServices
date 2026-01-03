@@ -489,6 +489,84 @@ class CustomerServiceImplTest {
     }
 
     /**
+     * Unit tests for {@link CustomerServiceImpl#cursorKey(Map)}.
+     *
+     * <p>These tests validate the deterministic behavior of pagination cursor
+     * normalization used in cache key generation. Since pagination cursors are
+     * represented as unordered {@link Map} instances, the {@code cursorKey}
+     * method must consistently produce the same string output for logically
+     * equivalent inputs.</p>
+     *
+     * <p>The tests cover the following scenarios:</p>
+     * <ul>
+     *     <li>{@code null} cursor input</li>
+     *     <li>Empty cursor map</li>
+     *     <li>Single-entry cursor</li>
+     *     <li>Multi-entry cursor with unordered keys</li>
+     * </ul>
+     *
+     * <p>This ensures stable cache keys across requests and prevents
+     * unnecessary cache misses caused by map ordering differences.</p>
+     */
+    @Test
+    void cursorKey_ShouldReturnStart_WhenNull() {
+        // When
+        final String key = customerService.cursorKey(null);
+
+        // Then
+        assertEquals("START", key);
+    }
+
+    /**
+     * Verifies that an empty pagination cursor results in the default
+     * cache key marker.
+     */
+    @Test
+    void cursorKey_ShouldReturnStart_WhenEmptyMap() {
+        // When
+        final String key = customerService.cursorKey(Map.of());
+
+        // Then
+        assertEquals("START", key);
+    }
+
+    /**
+     * Ensures a cursor with a single entry is converted into a simple
+     * {@code key=value} string representation.
+     */
+    @Test
+    void cursorKey_ShouldReturnSingleEntry_WhenOneElementPresent() {
+        // Given
+        final Map<String, String> cursor = Map.of("customerId", "cust_123");
+
+        // When
+        final String key = customerService.cursorKey(cursor);
+
+        // Then
+        assertEquals("customerId=cust_123", key);
+    }
+
+    /**
+     * Verifies that cursors containing multiple entries are normalized
+     * into a deterministic, sorted string representation, regardless
+     * of the original map ordering.
+     */
+    @Test
+    void cursorKey_ShouldReturnSortedKey_WhenMultipleEntriesPresent() {
+        // Given
+        final Map<String, String> cursor = Map.of(
+                "b", "2",
+                "a", "1"
+        );
+
+        // When
+        final String key = customerService.cursorKey(cursor);
+
+        // Then
+        assertEquals("a=1&b=2", key);
+    }
+
+    /**
      * Helper method for constructing a {@link Customer} object with
      * the provided attributes and a default address.
      */
