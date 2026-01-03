@@ -71,14 +71,14 @@ public class CustomerServiceImpl implements ICustomerService {
     @Override
     @Cacheable(
             value = "customers",
-            key = "#size + ':' + #root.target.cursorKey(#lastEvaluatedKey)"
+            key = "#pageSize + ':' + #root.target.cursorKey(#lastEvaluatedKey)"
     )
     public PagedResponse<CustomerResponse> findAllCustomers(
-            final Integer size,
+            final Integer pageSize,
             final Map<String, String> lastEvaluatedKey
     ) {
-        final int finalSize = null != size
-                ? Math.min(Math.max(size, 1), customerProperties.maxPageSize())
+        final int finalSize = null != pageSize
+                ? Math.min(Math.max(pageSize, 1), customerProperties.maxPageSize())
                 : customerProperties.defaultPageSize();
         final Page<Customer> page =
                 customerRepository.scanPage(finalSize, toAttributeValueCursor(lastEvaluatedKey));
