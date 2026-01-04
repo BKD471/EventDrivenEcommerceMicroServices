@@ -7,6 +7,7 @@ import com.forsaken.ecommerce.order.orderline.model.OrderLine;
 import com.forsaken.ecommerce.order.orderline.repository.OrderLineRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,10 @@ public class OrderLineServiceImpl implements IOrderLineService {
     private final OrderProperties orderProperties;
 
     @Override
+    @Cacheable(
+            value = "orderLinesByOrderReference",
+            key = "{#orderReference, #page, #size}"
+    )
     public PagedResponse<OrderLineResponse> findAllByOrderReference(
             final String orderReference,
             final Integer page,
