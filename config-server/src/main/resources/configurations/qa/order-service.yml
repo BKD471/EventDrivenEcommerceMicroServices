@@ -53,8 +53,21 @@ spring:
     port: ${REDIS_PORT}
     # Redis runs inside Docker and is accessible only via the internal Docker network.
     # Authentication is intentionally disabled and enforced via network isolation.
+
+    # Redis is deployed as an internal-only cache within a private Docker network.
+    # It is not exposed outside the cluster or VPC.
+    #
+    # Authentication is intentionally disabled to reduce operational overhead,
+    # as access is strictly controlled via network isolation and security policies.
+    #
+    # If Redis is migrated to a managed or externally accessible deployment,
+    # authentication (password / ACLs / TLS) MUST be enabled.
   cache:
     type: redis
+
+app:
+  cache:
+    ttlMinutes: 15
 
 aws:
   secretsmanager:
