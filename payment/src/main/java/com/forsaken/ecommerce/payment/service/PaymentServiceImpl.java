@@ -9,11 +9,14 @@ import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
 import com.forsaken.ecommerce.payment.repository.IPaymentRepository;
 import com.forsaken.ecommerce.payment.repository.PaymentSummary;
+import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,12 +36,20 @@ public class PaymentServiceImpl implements IPaymentService {
 
     private final IPaymentRepository repository;
     private final INotificationProducerService notificationProducer;
+    private final Tracer tracer;
 
     @Override
+    @CacheEvict(
+            value = {"paymentSummaries", "paymentsByDate"},
+            allEntries = true
+    )
     public Integer createPayment(final PaymentRequest request) {
         final Payment payment = this.repository.save(request.toPayment());
         final LocalDateTime localDateTime = LocalDateTime.now();
         final Instant instant = localDateTime.atZone(ZoneId.of("UTC")).toInstant();
+        final String traceId = null != tracer.currentSpan()
+                ? tracer.currentSpan().context().traceId()
+                : "NO_TRACE";
 
         this.notificationProducer.sendNotification(
                 new PaymentConfirmation(
@@ -49,7 +60,7 @@ public class PaymentServiceImpl implements IPaymentService {
                         request.customer().lastname(),
                         request.customer().email(),
                         instant,
-                        "traceId TODO" // TODO to be done later
+                        traceId
                 )
         );
         log.info("Created Payment Request: {}", request);
@@ -57,6 +68,10 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     @Override
+    @Cacheable(
+            value = "paymentSummaries",
+            key = "{#fromDate ?: 'START', #toDate ?: 'NOW', #page, #size}"
+    )
     public PagedResponse<PaymentSummaryDto> getPaymentSummary(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
@@ -88,6 +103,10 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     @Override
+    @Cacheable(
+            value = "paymentsByDate",
+            key = "{#fromDate ?: 'START', #toDate ?: 'NOW', #page, #size}"
+    )
     public PagedResponse<Payment> getAllPayments(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
@@ -116,7 +135,7 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     private ByteBuffer convertBigDecimalToBytes(final BigDecimal value) {
-        if (value == null) return null;
+        if (null == value) return null;
 
         final Schema DECIMAL_SCHEMA =
                 LogicalTypes.decimal(18, 2)
