@@ -14,6 +14,9 @@ import com.forsaken.ecommerce.product.repository.ICategoryRepository;
 import com.forsaken.ecommerce.product.repository.IProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +46,7 @@ public class ProductServiceImpl implements IProductService {
     private final Class<?> className = ProductServiceImpl.class;
 
     @Override
+    @CacheEvict(value = {"products", "productById"}, allEntries = true)
     public Integer createProduct(final ProductRequest request) {
         log.info("Received request to create product {}", request);
         final Product product = request.toProduct();
@@ -50,15 +54,19 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
+    @Cacheable(
+            value = "products",
+            key = "{#page, #size}"
+    )
     public PagedResponse<ProductResponse> getAllProducts(
             final Boolean signedUrls,
             final Integer page,
             final Integer size
     ) {
-        final int finalPage = page != null
+        final int finalPage = null != page
                 ? Math.max(page - 1, 0)
                 : productProperties.defaultPageNumber();
-        final int finalSize = size != null
+        final int finalSize = null != size
                 ? Math.min(Math.max(size, 1), productProperties.maxPageSize())
                 : productProperties.defaultPageSize();
         final Pageable pageable = PageRequest.of(
@@ -84,6 +92,11 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
+    @Cacheable(
+            value = "productById",
+            key = "#id",
+            condition = "!#signedUrl"
+    )
     public ProductResponse getProductById(final Integer id, final boolean signedUrl) throws ProductNotFoundExceptions {
         log.info("Received request to get product by ID {}", id);
         final Optional<Product> productOpt = repository.findById(id);
@@ -98,6 +111,10 @@ public class ProductServiceImpl implements IProductService {
 
     @Override
     @Transactional(rollbackFor = ProductNotFoundExceptions.class)
+    @Caching(evict = {
+            @CacheEvict(value = "productById", allEntries = true),
+            @CacheEvict(value = "products", allEntries = true)
+    })
     public List<ProductPurchaseResponse> purchaseProducts(
             final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions {
@@ -135,6 +152,10 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
+    @Cacheable(
+            value = "productsByDate",
+            key = "{#fromDate, #toDate, #page, #size}"
+    )
     public PagedResponse<ProductResponse> findAllProducts(
             LocalDateTime fromDate,
             LocalDateTime toDate,
@@ -146,10 +167,10 @@ public class ProductServiceImpl implements IProductService {
         if (toDate == null) toDate = LocalDateTime.now();
         if (fromDate == null) fromDate = toDate.minusMonths(6);
 
-        final int finalPage = page != null
+        final int finalPage = null != page
                 ? Math.max(page - 1, 0)
                 : productProperties.defaultPageNumber();
-        final int finalSize = size != null
+        final int finalSize = null != size
                 ? Math.min(Math.max(size, 1), productProperties.maxPageSize())
                 : productProperties.defaultPageSize();
         final Pageable pageable = PageRequest.of(
@@ -172,6 +193,10 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
+    @Cacheable(
+            value = "productsByCategory",
+            key = "{#categoryId, #price, #direction, #page, #size}"
+    )
     public PagedResponse<ProductResponse> findAllProductsByCategory(
             final Integer categoryId,
             final BigDecimal price,
@@ -180,10 +205,10 @@ public class ProductServiceImpl implements IProductService {
             final Integer size
     ) throws CategoryNotFoundExceptions {
         log.info("Received request to get all products by category {}", categoryId);
-        final int finalPage = page != null
+        final int finalPage = null != page
                 ? Math.max(page - 1, 0)
                 : productProperties.defaultPageNumber();
-        final int finalSize = size != null
+        final int finalSize = null != size
                 ? Math.min(Math.max(size, 1), productProperties.maxPageSize())
                 : productProperties.defaultPageSize();
         final Pageable pageable = PageRequest.of(
@@ -198,10 +223,12 @@ public class ProductServiceImpl implements IProductService {
                                 "findAllProductsByCategory(Integer categoryId,BigDecimal price," +
                                         "Direction direction,int page,int size) in " + className)
                 );
-        Page<Product> productPage = null;
-        if (GE.equals(direction))
+        Page<Product> productPage;
+        if (GE.equals(direction)) {
             productPage = repository.findAllByCategoryAndPriceGreaterThanEqual(category, price, pageable);
-        else productPage = repository.findAllByCategoryAndPriceLessThanEqual(category, price, pageable);
+        } else {
+            productPage = repository.findAllByCategoryAndPriceLessThanEqual(category, price, pageable);
+        }
         return PagedResponse.<ProductResponse>builder()
                 .content(
                         productPage.getContent().stream().map(product -> product.toProductResponse()).toList()
