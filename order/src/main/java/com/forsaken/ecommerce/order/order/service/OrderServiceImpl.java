@@ -26,6 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -61,6 +63,12 @@ public class OrderServiceImpl implements IOrderService {
             }
     )
     @Override
+    @CacheEvict(
+            value = {"orders", "orderById", "ordersByCustomer"},
+            allEntries = true
+    )
+    // Full eviction ensures consistency after order creation.
+    // Granular eviction can be introduced if cache pressure increases.
     public Integer createOrder(final OrderRequest request)
             throws CustomerNotFoundExceptions, BusinessException,
             PaymentFailedExceptions, ProductNotFoundExceptions {
@@ -99,7 +107,6 @@ public class OrderServiceImpl implements IOrderService {
             order.addOrderLine(orderLine);
         });
         final Order savedOrder = orderRepository.save(order);
-
         final PaymentRequest paymentRequest = PaymentRequest.builder()
                 .amount(request.amount())
                 .paymentMethod(request.paymentMethod())
@@ -110,7 +117,7 @@ public class OrderServiceImpl implements IOrderService {
         paymentService.pay(paymentRequest);
         log.info("Sent Payment");
 
-        final String traceId = (null != tracer || null != tracer.currentSpan()) ?
+        final String traceId = (null != tracer && null != tracer.currentSpan()) ?
                 tracer.currentSpan().context().traceId()
                 : "NO_TRACE";
         final OrderConfirmation orderConfirmation = OrderConfirmation.newBuilder()
@@ -128,6 +135,10 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
+    @Cacheable(
+            value = "orders",
+            key = "{#page, #size}"
+    )
     public PagedResponse<OrderResponse> findAllOrders(final Integer page, final Integer size) {
         log.info("Finding all orders | page={}, size={}", page, size);
         final int finalPage = page != null
@@ -153,6 +164,7 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
+    @Cacheable(value = "orderById", key = "#id")
     public OrderResponse findById(final Integer id) {
         log.info("Finding Order by ID: {}", id);
         return this.orderRepository.findById(id)
@@ -163,6 +175,13 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
+    @Cacheable(
+            value = "ordersByCustomer",
+            key = "{#customerId, " +
+                    "(#fromDate != null ? #fromDate.toString() : 'START'), " +
+                    "(#toDate != null ? #toDate.toString() : 'NOW'), " +
+                    "#page, #size}"
+    )
     public PagedResponse<OrderResponse> findAllOrdersByCustomerId(
             final String customerId,
             final LocalDateTime fromDate,
@@ -202,6 +221,27 @@ public class OrderServiceImpl implements IOrderService {
                 .build();
     }
 
+    /**
+     * Converts a {@link BigDecimal} monetary value into an Avro-compatible
+     * {@link ByteBuffer} using the {@code decimal} logical type.
+     *
+     * <p>Avro does not natively support {@link BigDecimal}, so monetary values
+     * must be encoded as {@code BYTES} with a {@code decimal} logical type
+     * specifying precision and scale.</p>
+     *
+     * <p>This implementation uses:</p>
+     * <ul>
+     *   <li><b>Precision:</b> 18 digits</li>
+     *   <li><b>Scale:</b> 2 decimal places</li>
+     * </ul>
+     *
+     * <p>The resulting {@link ByteBuffer} is safe for serialization in Avro
+     * messages and preserves exact numeric precision required for financial data.</p>
+     *
+     * @param value the monetary value to convert; may be {@code null}
+     * @return a {@link ByteBuffer} containing the Avro-encoded decimal value,
+     * or {@code null} if the input value is {@code null}
+     */
     private ByteBuffer convertBigDecimalToBytes(final BigDecimal value) {
         if (value == null) {
             return null;
@@ -215,6 +255,20 @@ public class OrderServiceImpl implements IOrderService {
         return DECIMAL_CONVERSION.toBytes(value, DECIMAL_SCHEMA, DECIMAL_SCHEMA.getLogicalType());
     }
 
+    /**
+     * Maps an internal {@link CustomerResponse} DTO into its corresponding
+     * Avro representation used for inter-service communication.
+     *
+     * <p>This method performs a straightforward field-to-field mapping
+     * without transformation or enrichment.</p>
+     *
+     * <p>The resulting Avro object is used as part of an
+     * {@link com.forsaken.ecommerce.avro.OrderConfirmation} event.</p>
+     *
+     * @param customer the customer DTO obtained from the customer service
+     * @return an Avro {@link com.forsaken.ecommerce.avro.CustomerResponse}
+     * representing the same customer data
+     */
     private com.forsaken.ecommerce.avro.CustomerResponse toAvroCustomer(final CustomerResponse customer) {
         return com.forsaken.ecommerce.avro.CustomerResponse.newBuilder()
                 .setId(customer.id())
@@ -224,6 +278,20 @@ public class OrderServiceImpl implements IOrderService {
                 .build();
     }
 
+    /**
+     * Converts a {@link PurchaseResponse} DTO into its Avro equivalent for
+     * inclusion in order confirmation events.
+     *
+     * <p>Price values are converted using {@link #convertBigDecimalToBytes(BigDecimal)}
+     * to ensure compatibility with Avro decimal logical types.</p>
+     *
+     * <p>This method is typically invoked when building an
+     * {@link com.forsaken.ecommerce.avro.OrderConfirmation} payload.</p>
+     *
+     * @param product the purchased product DTO
+     * @return an Avro {@link com.forsaken.ecommerce.avro.PurchaseResponse}
+     * representing the purchased product
+     */
     private com.forsaken.ecommerce.avro.PurchaseResponse toAvroPurchase(final PurchaseResponse product) {
         return com.forsaken.ecommerce.avro.PurchaseResponse.newBuilder()
                 .setProductId(product.productId())

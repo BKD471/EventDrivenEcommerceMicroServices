@@ -30,8 +30,8 @@ public record RedisProperties(
          * Valid range: 10–60 minutes.
          */
         @NotNull
-        @Max(60)
         @Min(10)
+        @Max(60)
         Long ttlMinutes
 ) {
 }
