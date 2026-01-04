@@ -30,14 +30,22 @@ public class RedisConfig {
 
     /**
      * Creates the default {@link RedisCacheConfiguration} used by Spring Cache.
-     * <p>
-     * Configuration details:
+     *
+     * <p><strong>Configuration details:</strong>
      * <ul>
      *   <li>Applies a global TTL based on application cache settings</li>
      *   <li>Disables caching of {@code null} values to prevent stale misses</li>
      *   <li>Uses JSON serialization for cache values to ensure readability
      *       and cross-service compatibility</li>
      * </ul>
+     *
+     * <p><strong>Important:</strong><br>
+     * Redis memory limits and eviction policies
+     * ({@code maxmemory}, {@code maxmemory-policy})
+     * are configured at the Redis server/container level.
+     * <br>
+     * This configuration intentionally focuses on client-side cache behavior:
+     * TTL, serialization, and null handling.
      *
      * @return configured {@link RedisCacheConfiguration} instance
      */

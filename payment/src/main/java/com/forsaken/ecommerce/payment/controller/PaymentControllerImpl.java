@@ -2,9 +2,9 @@ package com.forsaken.ecommerce.payment.controller;
 
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
-import com.forsaken.ecommerce.payment.model.Payment;
 import com.forsaken.ecommerce.payment.service.IPaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -51,7 +51,7 @@ public class PaymentControllerImpl implements IPaymentController {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<PagedResponse<Payment>>> getAllPayments(
+    public ResponseEntity<ApiResponse<PagedResponse<PaymentDto>>> getAllPayments(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
             final int page,
@@ -59,7 +59,7 @@ public class PaymentControllerImpl implements IPaymentController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
-                        ApiResponse.<PagedResponse<Payment>>builder()
+                        ApiResponse.<PagedResponse<PaymentDto>>builder()
                                 .status(ApiResponse.Status.SUCCESS)
                                 .data(paymentService.getAllPayments(fromDate, toDate, page, size))
                                 .message("Fetched Payments")

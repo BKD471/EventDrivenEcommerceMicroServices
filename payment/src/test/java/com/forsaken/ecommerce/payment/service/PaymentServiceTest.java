@@ -5,11 +5,13 @@ import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.payment.dto.Customer;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
 import com.forsaken.ecommerce.payment.repository.IPaymentRepository;
 import com.forsaken.ecommerce.payment.repository.PaymentSummary;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,6 +64,9 @@ class PaymentServiceTest {
     @Mock
     private INotificationProducerService notificationProducer;
 
+    @Mock
+    private Tracer tracer;
+
     private PaymentServiceImpl service;
 
     /**
@@ -72,7 +77,7 @@ class PaymentServiceTest {
      */
     @BeforeEach
     void setup() {
-        service = new PaymentServiceImpl(repository, notificationProducer);
+        service = new PaymentServiceImpl(repository, notificationProducer, tracer);
     }
 
     /**
@@ -190,7 +195,7 @@ class PaymentServiceTest {
                 .thenReturn(page);
 
         // When
-        PagedResponse<Payment> result =
+        final PagedResponse<PaymentDto> result =
                 service.getAllPayments(fromDate, toDate, 1, 5);
 
         // Then

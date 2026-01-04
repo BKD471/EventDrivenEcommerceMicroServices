@@ -4,6 +4,7 @@ package com.forsaken.ecommerce.payment.service;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
@@ -38,6 +39,16 @@ public class PaymentServiceImpl implements IPaymentService {
     private final INotificationProducerService notificationProducer;
     private final Tracer tracer;
 
+    /**
+     * Payment creation mutates the underlying dataset in a way that affects
+     * all aggregated summaries and date-based listings.
+     *
+     * Because cache keys are derived from arbitrary date ranges and pagination
+     * parameters, targeted eviction is not feasible.
+     *
+     * Therefore, all related caches are fully invalidated to guarantee
+     * consistency over stale or incorrect financial data.
+     */
     @Override
     @CacheEvict(
             value = {"paymentSummaries", "paymentsByDate"},
@@ -47,7 +58,7 @@ public class PaymentServiceImpl implements IPaymentService {
         final Payment payment = this.repository.save(request.toPayment());
         final LocalDateTime localDateTime = LocalDateTime.now();
         final Instant instant = localDateTime.atZone(ZoneId.of("UTC")).toInstant();
-        final String traceId = null != tracer.currentSpan()
+        final String traceId = (null != tracer && null != tracer.currentSpan())
                 ? tracer.currentSpan().context().traceId()
                 : "NO_TRACE";
 
@@ -70,7 +81,9 @@ public class PaymentServiceImpl implements IPaymentService {
     @Override
     @Cacheable(
             value = "paymentSummaries",
-            key = "{#fromDate ?: 'START', #toDate ?: 'NOW', #page, #size}"
+            key = "{#fromDate != null ? #fromDate.toString() : 'START', " +
+                    "#toDate != null ? #toDate.toString() : 'NOW', " +
+                    "#page, #size}"
     )
     public PagedResponse<PaymentSummaryDto> getPaymentSummary(
             final LocalDateTime fromDate,
@@ -105,9 +118,11 @@ public class PaymentServiceImpl implements IPaymentService {
     @Override
     @Cacheable(
             value = "paymentsByDate",
-            key = "{#fromDate ?: 'START', #toDate ?: 'NOW', #page, #size}"
+            key = "{#fromDate != null ? #fromDate.toString() : 'START', " +
+                    "#toDate != null ? #toDate.toString() : 'NOW', " +
+                    "#page, #size}"
     )
-    public PagedResponse<Payment> getAllPayments(
+    public PagedResponse<PaymentDto> getAllPayments(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
             final int page,
@@ -125,8 +140,11 @@ public class PaymentServiceImpl implements IPaymentService {
                 pageable
         );
 
-        return PagedResponse.<Payment>builder()
-                .content(paymentPage.getContent())
+        return PagedResponse.<PaymentDto>builder()
+                .content(paymentPage.getContent()
+                        .stream()
+                        .map(PaymentDto::from).toList()
+                )
                 .page(paymentPage.getNumber() + 1)
                 .size(paymentPage.getSize())
                 .totalElements(paymentPage.getTotalElements())
