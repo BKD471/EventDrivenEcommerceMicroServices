@@ -4,16 +4,20 @@ package com.forsaken.ecommerce.payment.service;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
 import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
 import com.forsaken.ecommerce.payment.repository.IPaymentRepository;
 import com.forsaken.ecommerce.payment.repository.PaymentSummary;
+import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,12 +37,30 @@ public class PaymentServiceImpl implements IPaymentService {
 
     private final IPaymentRepository repository;
     private final INotificationProducerService notificationProducer;
+    private final Tracer tracer;
 
+    /**
+     * Payment creation mutates the underlying dataset in a way that affects
+     * all aggregated summaries and date-based listings.
+     *
+     * Because cache keys are derived from arbitrary date ranges and pagination
+     * parameters, targeted eviction is not feasible.
+     *
+     * Therefore, all related caches are fully invalidated to guarantee
+     * consistency over stale or incorrect financial data.
+     */
     @Override
+    @CacheEvict(
+            value = {"paymentSummaries", "paymentsByDate"},
+            allEntries = true
+    )
     public Integer createPayment(final PaymentRequest request) {
         final Payment payment = this.repository.save(request.toPayment());
         final LocalDateTime localDateTime = LocalDateTime.now();
         final Instant instant = localDateTime.atZone(ZoneId.of("UTC")).toInstant();
+        final String traceId = (null != tracer && null != tracer.currentSpan())
+                ? tracer.currentSpan().context().traceId()
+                : "NO_TRACE";
 
         this.notificationProducer.sendNotification(
                 new PaymentConfirmation(
@@ -49,7 +71,7 @@ public class PaymentServiceImpl implements IPaymentService {
                         request.customer().lastname(),
                         request.customer().email(),
                         instant,
-                        "traceId TODO" // TODO to be done later
+                        traceId
                 )
         );
         log.info("Created Payment Request: {}", request);
@@ -57,6 +79,12 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     @Override
+    @Cacheable(
+            value = "paymentSummaries",
+            key = "{#fromDate != null ? #fromDate.toString() : 'START', " +
+                    "#toDate != null ? #toDate.toString() : 'NOW', " +
+                    "#page, #size}"
+    )
     public PagedResponse<PaymentSummaryDto> getPaymentSummary(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
@@ -88,7 +116,13 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     @Override
-    public PagedResponse<Payment> getAllPayments(
+    @Cacheable(
+            value = "paymentsByDate",
+            key = "{#fromDate != null ? #fromDate.toString() : 'START', " +
+                    "#toDate != null ? #toDate.toString() : 'NOW', " +
+                    "#page, #size}"
+    )
+    public PagedResponse<PaymentDto> getAllPayments(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
             final int page,
@@ -106,8 +140,11 @@ public class PaymentServiceImpl implements IPaymentService {
                 pageable
         );
 
-        return PagedResponse.<Payment>builder()
-                .content(paymentPage.getContent())
+        return PagedResponse.<PaymentDto>builder()
+                .content(paymentPage.getContent()
+                        .stream()
+                        .map(PaymentDto::from).toList()
+                )
                 .page(paymentPage.getNumber() + 1)
                 .size(paymentPage.getSize())
                 .totalElements(paymentPage.getTotalElements())
@@ -116,7 +153,7 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     private ByteBuffer convertBigDecimalToBytes(final BigDecimal value) {
-        if (value == null) return null;
+        if (null == value) return null;
 
         final Schema DECIMAL_SCHEMA =
                 LogicalTypes.decimal(18, 2)

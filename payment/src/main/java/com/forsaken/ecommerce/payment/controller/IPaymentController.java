@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.payment.controller;
 
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
@@ -101,7 +102,7 @@ public interface IPaymentController {
      *         {@link Payment} entities and pagination metadata
      */
     @GetMapping("/allPayments")
-    ResponseEntity<ApiResponse<PagedResponse<Payment>>> getAllPayments(
+    ResponseEntity<ApiResponse<PagedResponse<PaymentDto>>> getAllPayments(
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) final LocalDateTime fromDate,
 

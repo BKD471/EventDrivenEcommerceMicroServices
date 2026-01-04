@@ -3,8 +3,8 @@ server:
 
 spring:
   redis:
-    host: redis
-    port: 6379
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT}
     # Redis runs inside Docker and is accessible only via the internal Docker network.
     # Authentication is intentionally disabled and enforced via network isolation.
   cache:

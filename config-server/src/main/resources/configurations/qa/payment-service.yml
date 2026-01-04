@@ -1,7 +1,42 @@
 server:
   port: 8060
 
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    producer:
+      topicName: payment-topic
+      partitions: 10
+      replicationFactor: 3
+      minInSyncReplicas: 2
+      ack: all
+      retries: 5
+      compressionType: gzip
+      retryBackOffMs: 200
+      isUncleanElection: false
+      bootstrapServers: localhost:9092,localhost:9093,localhost:9094
+      keySerializer: org.apache.kafka.common.serialization.StringSerializer
+      valueSerializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      schemaRegistryUrl: "http://127.0.0.1:8081"
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT}
+    # Redis runs inside Docker and is accessible only via the internal Docker network.
+    # Authentication is intentionally disabled and enforced via network isolation.
+  cache:
+    type: redis
 
+app:
+  cache:
+    ttlMinutes: 15
 
-
-
+aws:
+  secretsmanager:
+    dbSecretName: PaymentServiceSecrets

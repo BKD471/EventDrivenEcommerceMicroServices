@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.payment.service;
 
 import com.forsaken.ecommerce.common.responses.PagedResponse;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
@@ -71,7 +72,7 @@ public interface IPaymentService {
      * @return a {@link PagedResponse} containing a page of {@link Payment} entities along
      *         with pagination metadata such as total elements and total pages
      */
-    PagedResponse<Payment> getAllPayments(
+    PagedResponse<PaymentDto> getAllPayments(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,
             final int page,

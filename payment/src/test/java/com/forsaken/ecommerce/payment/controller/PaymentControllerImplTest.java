@@ -5,9 +5,9 @@ import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.payment.dto.Customer;
+import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
-import com.forsaken.ecommerce.payment.model.Payment;
 import com.forsaken.ecommerce.payment.service.IPaymentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -161,17 +161,17 @@ class PaymentControllerImplTest {
         final int page = 1;
         final int size = 20;
         @SuppressWarnings("unchecked")
-        final PagedResponse<Payment> pagedPayments = mock(PagedResponse.class);
+        final PagedResponse<PaymentDto> pagedPayments = mock(PagedResponse.class);
         when(paymentService.getAllPayments(fromDate, toDate, page, size))
                 .thenReturn(pagedPayments);
 
         // When
-        final ResponseEntity<ApiResponse<PagedResponse<Payment>>> response =
+        final ResponseEntity<ApiResponse<PagedResponse<PaymentDto>>> response =
                 controller.getAllPayments(fromDate, toDate, page, size);
 
         // Then
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        final ApiResponse<PagedResponse<Payment>> body = response.getBody();
+        final ApiResponse<PagedResponse<PaymentDto>> body = response.getBody();
         assertNotNull(body);
         assertEquals(ApiResponse.Status.SUCCESS, body.status());
         assertSame(pagedPayments, body.data());
