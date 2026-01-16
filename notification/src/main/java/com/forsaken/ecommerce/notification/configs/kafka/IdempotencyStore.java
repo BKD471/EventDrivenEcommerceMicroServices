@@ -53,6 +53,41 @@ public class IdempotencyStore {
         redis.delete(buildKey(scope, eventId));
     }
 
+    /**
+     * Builds a namespaced Redis key used for idempotency tracking.
+     *
+     * <p>
+     * The generated key combines the logical {@link IdempotencyScope} with the
+     * event identifier to ensure isolation between different event domains
+     * (e.g. PAYMENT vs ORDER) while still allowing the same {@code eventId}
+     * value to be reused safely across scopes.
+     * </p>
+     *
+     * <p>
+     * Key format:
+     * </p>
+     *
+     * <pre>
+     * &lt;scope&gt;-idempotency:&lt;eventId&gt;
+     * </pre>
+     *
+     * <p>
+     * Example:
+     * </p>
+     * <pre>
+     * payment-idempotency:ORD-123
+     * order-idempotency:ORD-123
+     * </pre>
+     *
+     * <p>
+     * This design prevents accidental key collisions in Redis and makes
+     * idempotency keys easy to inspect and debug during operations.
+     * </p>
+     *
+     * @param scope   logical scope used to namespace the idempotency key
+     * @param eventId unique identifier of the event within the given scope
+     * @return a fully-qualified Redis key for idempotency tracking
+     */
     private String buildKey(final IdempotencyScope scope, final String eventId) {
         return scope.name().toLowerCase() + "-idempotency:" + eventId;
     }

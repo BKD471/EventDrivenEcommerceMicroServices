@@ -3,6 +3,8 @@ package com.forsaken.ecommerce.notification.service;
 import com.forsaken.ecommerce.avro.CustomerResponse;
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.IdempotencyScope;
+import com.forsaken.ecommerce.notification.configs.kafka.IdempotencyStore;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.models.EventType;
 import com.forsaken.ecommerce.notification.models.PaymentMethod;
@@ -49,104 +51,144 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link NotificationConsumerImpl}.
  *
- * <p>
- * This test class validates the behavior of Kafka listener methods responsible
- * for consuming payment and order notification events, as well as their
- * corresponding Dead Letter Queue (DLQ) consumers.
- * </p>
- *
- * <h2>Test scope</h2>
+ * <h2>Purpose</h2>
  *
  * <p>
- * These are <b>pure unit tests</b>. Kafka infrastructure, retry policies,
- * error handlers, and acknowledgment semantics provided by Spring Kafka
- * are intentionally <b>out of scope</b> and mocked.
+ * This test suite validates the behavior of Kafka consumers responsible for
+ * processing <b>payment</b> and <b>order</b> notification events in the
+ * notification service.
  * </p>
  *
  * <p>
- * The tests invoke listener methods directly and verify:
+ * The tests are <b>pure unit tests</b> and intentionally avoid any dependency
+ * on Kafka brokers, Redis, databases, or external services.
+ * All collaborators are mocked.
  * </p>
+ *
+ * <h2>Key responsibilities under test</h2>
+ *
  * <ul>
- *     <li>Business logic execution</li>
- *     <li>Correct interaction with repositories and email services</li>
- *     <li>Explicit acknowledgment behavior</li>
- *     <li>Exception propagation or suppression as designed</li>
+ *   <li>Correct handling of payment and order confirmation events</li>
+ *   <li>Redis-based idempotency enforcement via {@link IdempotencyStore}</li>
+ *   <li>Correct ordering of side effects (email → persistence → acknowledgment)</li>
+ *   <li>Explicit Kafka acknowledgment behavior</li>
+ *   <li>Failure propagation vs suppression semantics</li>
  * </ul>
  *
- * <h2>Mocked dependencies</h2>
+ * <h2>Idempotency behavior</h2>
  *
+ * <p>
+ * Kafka provides <b>at-least-once delivery</b>, which means duplicate events
+ * are possible. To prevent duplicate email notifications, the consumer uses
+ * a Redis-backed {@link IdempotencyStore}.
+ * </p>
+ *
+ * <p>
+ * In this test suite:
+ * </p>
  * <ul>
- *     <li>{@link INotificationRepository} – prevents real persistence</li>
- *     <li>{@link IEmailService} – prevents external email delivery</li>
- *     <li>{@link IDlqS3Service} – prevents real S3 interactions</li>
- *     <li>{@link KafkaProperties} – supplies required configuration values</li>
- *     <li>{@link Acknowledgment} – verifies manual offset control</li>
+ *   <li>{@code markIfNotProcessed(scope, eventId)} is explicitly stubbed</li>
+ *   <li>Tests avoid generic matchers like {@code any()} for idempotency</li>
+ *   <li>Each test controls whether processing should proceed or be skipped</li>
+ * </ul>
+ *
+ * <p>
+ * Redis behavior itself is <b>out of scope</b> and covered by
+ * {@code IdempotencyStoreTest}.
+ * </p>
+ *
+ * <h2>Processing order (Option A)</h2>
+ *
+ * <p>
+ * The consumer follows a strict processing order:
+ * </p>
+ *
+ * <ol>
+ *   <li>Check idempotency</li>
+ *   <li>Send email notification</li>
+ *   <li>Persist notification record</li>
+ *   <li>Acknowledge Kafka offset</li>
+ * </ol>
+ *
+ * <p>
+ * This ordering ensures that:
+ * </p>
+ * <ul>
+ *   <li>No notification is persisted if email delivery fails</li>
+ *   <li>Failures trigger Kafka retries or DLQ routing</li>
+ *   <li>Duplicate events do not produce duplicate side effects</li>
  * </ul>
  *
  * <h2>Kafka acknowledgment strategy</h2>
  *
  * <p>
- * The production consumer uses <b>manual acknowledgment</b>. These tests verify:
+ * The consumer uses <b>manual acknowledgment</b>. These tests verify that:
  * </p>
  *
  * <ul>
- *     <li>Acknowledgment occurs only after successful processing</li>
- *     <li>No acknowledgment occurs when processing fails</li>
- *     <li>Null (tombstone) records are acknowledged immediately</li>
+ *   <li>Offsets are acknowledged only after successful processing</li>
+ *   <li>Offsets are NOT acknowledged when processing fails</li>
+ *   <li>Offsets are acknowledged immediately for tombstone (null) records</li>
  * </ul>
  *
- * <p>
- * Actual Kafka commit behavior, retries, and DLQ routing are enforced by
- * Spring Kafka configuration and are validated separately via integration tests.
- * </p>
- *
- * <h2>Error handling philosophy</h2>
+ * <h2>Failure handling philosophy</h2>
  *
  * <ul>
- *     <li>Primary consumers (payment/order):
- *         <ul>
- *             <li>Throw exceptions on processing failures</li>
- *             <li>Allow Spring Kafka to trigger retries or DLQ routing</li>
- *         </ul>
- *     </li>
- *     <li>DLQ consumers:
- *         <ul>
- *             <li>Persist failed records to S3</li>
- *             <li>Acknowledge only after successful persistence</li>
- *             <li>Fail fast if DLQ persistence itself fails</li>
- *         </ul>
- *     </li>
+ *   <li><b>Primary consumers (payment/order)</b>
+ *     <ul>
+ *       <li>Fail fast on processing errors</li>
+ *       <li>Propagate exceptions</li>
+ *       <li>Do not acknowledge offsets on failure</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>DLQ consumers</b>
+ *     <ul>
+ *       <li>Persist failed records to S3</li>
+ *       <li>Never propagate exceptions</li>
+ *       <li>Acknowledge offsets only after successful persistence</li>
+ *     </ul>
+ *   </li>
  * </ul>
  *
  * <h2>Null (tombstone) record handling</h2>
  *
  * <p>
- * Kafka records with {@code null} payloads are treated as non-recoverable
- * (e.g., compaction tombstones or producer bugs). The consumer:
+ * Kafka records with {@code null} payloads are treated as non-recoverable.
+ * The consumer:
  * </p>
  *
  * <ul>
- *     <li>Logs the occurrence for observability</li>
- *     <li>Skips all business processing</li>
- *     <li>Acknowledges immediately to avoid infinite retry loops</li>
+ *   <li>Skips all business processing</li>
+ *   <li>Does not send emails or persist data</li>
+ *   <li>Acknowledges the offset immediately</li>
  * </ul>
+ *
+ * <h2>Out of scope</h2>
+ *
+ * <ul>
+ *   <li>Kafka retry configuration</li>
+ *   <li>Redis TTL semantics</li>
+ *   <li>Email formatting and templates</li>
+ *   <li>Serialization / deserialization logic</li>
+ * </ul>
+ *
+ * <p>
+ * These concerns are covered by integration or component-level tests.
+ * </p>
  *
  * <h2>Why this matters</h2>
  *
  * <p>
- * This test suite ensures that:
+ * This test suite ensures correctness, safety, and operational predictability
+ * of Kafka consumers by enforcing:
  * </p>
- * <ul>
- *     <li>Consumers are resilient to downstream failures</li>
- *     <li>No message is silently dropped</li>
- *     <li>DLQ events are preserved safely</li>
- *     <li>Kafka consumer stability is maintained</li>
- * </ul>
  *
- * <p>
- * Together, these tests enforce correctness, safety, and operational
- * predictability of the notification service.
- * </p>
+ * <ul>
+ *   <li>Exactly-once business effects</li>
+ *   <li>At-least-once Kafka delivery semantics</li>
+ *   <li>No silent data loss</li>
+ *   <li>No duplicate notifications</li>
+ * </ul>
  */
 @ExtendWith(MockitoExtension.class)
 class NotificationConsumerImplTest {
@@ -165,6 +207,9 @@ class NotificationConsumerImplTest {
 
     @Mock
     private Acknowledgment acknowledgment;
+
+    @Mock
+    private IdempotencyStore idempotencyStore;
 
     @InjectMocks
     private NotificationConsumerImpl consumer;
@@ -222,6 +267,10 @@ class NotificationConsumerImplTest {
     @Test
     void shouldConsumePaymentConfirmationAndSendEmail() {
         // given
+        when(idempotencyStore.markIfNotProcessed(
+                eq(IdempotencyScope.PAYMENT),
+                eq("ORD-100")
+        )).thenReturn(true);
         final PaymentConfirmation paymentAvro = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
                 new ConsumerRecord<>("payment-topic", 0, 0L, "key", paymentAvro);
@@ -274,6 +323,10 @@ class NotificationConsumerImplTest {
     @Test
     void shouldConsumeOrderConfirmationAndSendEmail() {
         // given
+        when(idempotencyStore.markIfNotProcessed(
+                eq(IdempotencyScope.ORDER),
+                eq("ORD-200")
+        )).thenReturn(true);
         final CustomerResponse customer = constructCustomer();
         final OrderConfirmation orderAvro = constructOrderConfirmation(customer);
         final ConsumerRecord<String, OrderConfirmation> record =
@@ -332,14 +385,13 @@ class NotificationConsumerImplTest {
     @Test
     void shouldNotFailConsumerWhenPaymentEmailSendingThrowsException() {
         // given
+        when(idempotencyStore.markIfNotProcessed(
+                eq(IdempotencyScope.PAYMENT),
+                eq("ORD-100")
+        )).thenReturn(true);
         final PaymentConfirmation paymentAvro = constructPaymentConfirmation();
         final ConsumerRecord<String, PaymentConfirmation> record =
                 new ConsumerRecord<>("payment-topic", 0, 0L, "key", paymentAvro);
-        doNothing().when(notificationRepository)
-                .save(argThat(n ->
-                        n.getType() == PAYMENT_CONFIRMATION &&
-                                n.getPaymentConfirmation() != null
-                ));
         doThrow(new RuntimeException("SMTP server down"))
                 .when(emailService)
                 .sendPaymentSuccessEmail(
@@ -348,17 +400,15 @@ class NotificationConsumerImplTest {
                         eq(fromBytes(paymentAvro.getAmount())),
                         eq("ORD-100"),
                         eq(PaymentMethod.PAYPAL),
-                        any(LocalDateTime.class) // date conversion is not the focus here
+                        any(LocalDateTime.class)
                 );
 
         // when + then
         assertThrows(RuntimeException.class, () ->
                 consumer.consumePaymentSuccessNotifications(record, acknowledgment)
         );
-        // then
-        verify(notificationRepository).save(argThat(n ->
-                n.getType() == PAYMENT_CONFIRMATION
-        ));
+
+        // email attempted
         verify(emailService).sendPaymentSuccessEmail(
                 eq("john@doe.com"),
                 eq("John Doe"),
@@ -367,6 +417,11 @@ class NotificationConsumerImplTest {
                 eq(PaymentMethod.PAYPAL),
                 any(LocalDateTime.class)
         );
+
+        // DB save must NOT happen
+        verify(notificationRepository, never()).save(any());
+
+        // offset must NOT be acknowledged
         verify(acknowledgment, never()).acknowledge();
     }
 
@@ -391,15 +446,13 @@ class NotificationConsumerImplTest {
     @Test
     void shouldNotFailConsumerWhenOrderEmailSendingThrowsException() {
         // given
-        final CustomerResponse customer = constructCustomer();
-        final OrderConfirmation orderAvro = constructOrderConfirmation(customer);
+        when(idempotencyStore.markIfNotProcessed(
+                eq(IdempotencyScope.ORDER),
+                eq("ORD-200")
+        )).thenReturn(true);
+        final OrderConfirmation orderAvro = constructOrderConfirmation(constructCustomer());
         final ConsumerRecord<String, OrderConfirmation> record =
                 new ConsumerRecord<>("order-topic", 0, 0L, "key", orderAvro);
-        doNothing().when(notificationRepository)
-                .save(argThat(n ->
-                        n.getType() == ORDER_CONFIRMATION &&
-                                n.getOrderConfirmation() != null
-                ));
         doThrow(new RuntimeException("SMTP server down"))
                 .when(emailService)
                 .sendOrderConfirmationEmail(
@@ -414,10 +467,6 @@ class NotificationConsumerImplTest {
         assertThrows(RuntimeException.class, () ->
                 consumer.consumeOrderConfirmationNotifications(record, acknowledgment)
         );
-        // then
-        verify(notificationRepository).save(argThat(n ->
-                n.getType() == ORDER_CONFIRMATION
-        ));
         verify(emailService).sendOrderConfirmationEmail(
                 eq("alice@smith.com"),
                 eq("Alice Smith"),
@@ -425,6 +474,9 @@ class NotificationConsumerImplTest {
                 eq("ORD-200"),
                 eq(List.of())
         );
+        // DB save must NOT happen
+        verify(notificationRepository, never()).save(any());
+        // offset must NOT be acknowledged
         verify(acknowledgment, never()).acknowledge();
     }
 

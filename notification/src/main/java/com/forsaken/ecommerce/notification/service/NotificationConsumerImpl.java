@@ -8,7 +8,6 @@ import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
 import com.forsaken.ecommerce.notification.repository.INotificationRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -197,7 +196,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
-            if (orderConfirmation != null) {
+            if (null != orderConfirmation) {
                 idempotencyStore.remove(
                         IdempotencyScope.ORDER,
                         orderConfirmation.getOrderReference()
@@ -271,12 +270,14 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     private LocalDateTime getTimeStampForLogs(final ConsumerRecord<String, ?> record) {
         return LocalDateTime.ofInstant(
                 java.time.Instant.ofEpochMilli(record.timestamp()),
-                zoneId
+                zoneId()
         );
     }
 
-    @PostConstruct
-    void init() {
-        this.zoneId = ZoneId.of(kafkaProperties.timeZone());
+    private ZoneId zoneId() {
+        if (zoneId == null) {
+            zoneId = ZoneId.of(kafkaProperties.timeZone());
+        }
+        return zoneId;
     }
 }
