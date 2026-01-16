@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.IdempotencyStore;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
@@ -38,6 +39,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     private final IEmailService emailService;
     private final IDlqS3Service dlqS3Service;
     private final KafkaProperties kafkaProperties;
+    private final IdempotencyStore idempotencyStore;
 
     @KafkaListener(
             topics = "${spring.kafka.consumer.paymentTopicName}",
@@ -74,6 +76,15 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             );
             final var customerName = getCustomerName(paymentConfirmation);
             final BigDecimal amount = fromBytes(paymentConfirmation.getAmount());
+
+            final PaymentConfirmation event = record.value();
+            final String eventId = event.getOrderReference();
+            //  Avoid duplicate email
+            if (idempotencyStore.isAlreadyProcessed(eventId)) {
+                log.info("Skipping duplicate payment event {}", eventId);
+                acknowledgment.acknowledge();
+                return;
+            }
             emailService.sendPaymentSuccessEmail(
                     paymentConfirmation.getCustomerEmail(),
                     customerName,
@@ -140,6 +151,15 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             .build()
             );
             final var customerName = getCustomerName(orderConfirmation);
+
+            final OrderConfirmation event = record.value();
+            final String eventId = event.getOrderReference();
+            //  Avoid duplicate email
+            if (idempotencyStore.isAlreadyProcessed(eventId)) {
+                log.info("Skipping duplicate order event {}", eventId);
+                acknowledgment.acknowledge();
+                return;
+            }
             emailService.sendOrderConfirmationEmail(
                     orderConfirmation.getCustomer().getEmail(),
                     customerName,
