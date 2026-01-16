@@ -2,6 +2,8 @@ package com.forsaken.ecommerce.notification.service;
 
 import com.forsaken.ecommerce.avro.OrderConfirmation;
 import com.forsaken.ecommerce.avro.PaymentConfirmation;
+import com.forsaken.ecommerce.notification.configs.kafka.IdempotencyScope;
+import com.forsaken.ecommerce.notification.configs.kafka.IdempotencyStore;
 import com.forsaken.ecommerce.notification.configs.kafka.KafkaProperties;
 import com.forsaken.ecommerce.notification.mapper.AvroMapper;
 import com.forsaken.ecommerce.notification.models.Notification;
@@ -15,7 +17,6 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
@@ -38,6 +39,8 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     private final IEmailService emailService;
     private final IDlqS3Service dlqS3Service;
     private final KafkaProperties kafkaProperties;
+    private final IdempotencyStore idempotencyStore;
+    private ZoneId zoneId;
 
     @KafkaListener(
             topics = "${spring.kafka.consumer.paymentTopicName}",
@@ -50,12 +53,12 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             final Acknowledgment acknowledgment
     ) {
         log.info("#Consuming the message from Payment Topic:: {}", getTimeStampForLogs(record));
-
+        PaymentConfirmation paymentConfirmation = null;
         try {
             MDC.put("traceId", record.value() != null ? record.value().getTraceId() : "null record");
             MDC.put("spanId", "-");
 
-            final PaymentConfirmation paymentConfirmation = record.value();
+            paymentConfirmation = record.value();
             // Null values can occur due to tombstone records or producer bugs.
             // These are non-recoverable and should be acknowledged to avoid retry loops.
             if (null == paymentConfirmation) {
@@ -64,20 +67,24 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                 return;
             }
 
-            log.info("Received PaymentConfirmation: {}", paymentConfirmation.getOrderReference());
-            notificationRepository.save(
-                    Notification.builder()
-                            .type(PAYMENT_CONFIRMATION)
-                            .notificationDate(LocalDateTime.now(ZoneId.of(kafkaProperties.timeZone())))
-                            .paymentConfirmation(mapToPaymentConfirmation(paymentConfirmation))
-                            .build()
+            final String eventId = paymentConfirmation.getOrderReference();
+            final boolean firstTime = idempotencyStore.markIfNotProcessed(
+                    IdempotencyScope.PAYMENT,
+                    eventId
             );
-            final var customerName = getCustomerName(paymentConfirmation);
-            final BigDecimal amount = fromBytes(paymentConfirmation.getAmount());
+            // Avoid duplicate email
+            if (!firstTime) {
+                log.info("Duplicate payment event skipped: {}", eventId);
+                acknowledgment.acknowledge();
+                return;
+            }
+
+            log.info("Received PaymentConfirmation: {}", paymentConfirmation.getOrderReference());
+            // send payment email
             emailService.sendPaymentSuccessEmail(
                     paymentConfirmation.getCustomerEmail(),
-                    customerName,
-                    amount,
+                    getCustomerName(paymentConfirmation),
+                    fromBytes(paymentConfirmation.getAmount()),
                     paymentConfirmation.getOrderReference(),
                     mapPaymentMethod(paymentConfirmation.getPaymentMethod()),
                     LocalDateTime.ofInstant(
@@ -85,6 +92,15 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             ZoneId.of(kafkaProperties.timeZone())
                     )
             );
+            // save to DB
+            notificationRepository.save(
+                    Notification.builder()
+                            .type(PAYMENT_CONFIRMATION)
+                            .notificationDate(LocalDateTime.now(ZoneId.of(kafkaProperties.timeZone())))
+                            .paymentConfirmation(mapToPaymentConfirmation(paymentConfirmation))
+                            .build()
+            );
+
             acknowledgment.acknowledge();
             log.info("PaymentConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
@@ -99,6 +115,12 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
+            if (null != paymentConfirmation) {
+                idempotencyStore.remove(
+                        IdempotencyScope.PAYMENT,
+                        paymentConfirmation.getOrderReference()
+                );
+            }
             throw new RuntimeException("Payment notification processing failed", ex);
         } finally {
             MDC.clear();
@@ -117,12 +139,12 @@ public class NotificationConsumerImpl implements INotificationConsumer {
             final Acknowledgment acknowledgment
     ) {
         log.info("#Consuming the message from Order Topic:: {}", getTimeStampForLogs(record));
-
+        OrderConfirmation orderConfirmation = null;
         try {
             MDC.put("traceId", record.value() != null ? record.value().getTraceId() : "null record");
             MDC.put("spanId", "-");
 
-            final OrderConfirmation orderConfirmation = record.value();
+            orderConfirmation = record.value();
             // Null values can occur due to tombstone records or producer bugs.
             // These are non-recoverable and should be acknowledged to avoid retry loops.
             if (null == orderConfirmation) {
@@ -130,8 +152,28 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                 acknowledgment.acknowledge();
                 return;
             }
+            final String eventId = orderConfirmation.getOrderReference();
+            final boolean firstTime = idempotencyStore.markIfNotProcessed(
+                    IdempotencyScope.ORDER,
+                    eventId
+            );
+            // Avoid duplicate email
+            if (!firstTime) {
+                log.info("Duplicate order event skipped: {}", eventId);
+                acknowledgment.acknowledge();
+                return;
+            }
 
             log.info("Received OrderConfirmation: {}", orderConfirmation.getOrderReference());
+            // send order email
+            emailService.sendOrderConfirmationEmail(
+                    orderConfirmation.getCustomer().getEmail(),
+                    getCustomerName(orderConfirmation),
+                    fromBytes(orderConfirmation.getTotalAmount()),
+                    orderConfirmation.getOrderReference(),
+                    orderConfirmation.getProducts().stream().map(AvroMapper::toProduct).toList()
+            );
+            // save to DB
             notificationRepository.save(
                     Notification.builder()
                             .type(ORDER_CONFIRMATION)
@@ -139,14 +181,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                             .orderConfirmation(mapToOrderConfirmation(orderConfirmation))
                             .build()
             );
-            final var customerName = getCustomerName(orderConfirmation);
-            emailService.sendOrderConfirmationEmail(
-                    orderConfirmation.getCustomer().getEmail(),
-                    customerName,
-                    fromBytes(orderConfirmation.getTotalAmount()),
-                    orderConfirmation.getOrderReference(),
-                    orderConfirmation.getProducts().stream().map(AvroMapper::toProduct).toList()
-            );
+
             acknowledgment.acknowledge();
             log.info("OrderConfirmation has been sent successfully: {}", getTimeStampForLogs(record));
         } catch (Exception ex) {
@@ -161,6 +196,12 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
+            if (null != orderConfirmation) {
+                idempotencyStore.remove(
+                        IdempotencyScope.ORDER,
+                        orderConfirmation.getOrderReference()
+                );
+            }
             throw new RuntimeException("Order notification processing failed", ex);
         } finally {
             MDC.clear();
@@ -229,7 +270,14 @@ public class NotificationConsumerImpl implements INotificationConsumer {
     private LocalDateTime getTimeStampForLogs(final ConsumerRecord<String, ?> record) {
         return LocalDateTime.ofInstant(
                 java.time.Instant.ofEpochMilli(record.timestamp()),
-                ZoneId.of(kafkaProperties.timeZone())
+                zoneId()
         );
+    }
+
+    private ZoneId zoneId() {
+        if (zoneId == null) {
+            zoneId = ZoneId.of(kafkaProperties.timeZone());
+        }
+        return zoneId;
     }
 }
