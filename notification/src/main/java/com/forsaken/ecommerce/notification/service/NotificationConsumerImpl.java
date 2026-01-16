@@ -73,7 +73,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     IdempotencyScope.PAYMENT,
                     eventId
             );
-            //  Avoid duplicate email
+            // Avoid duplicate email
             if (!firstTime) {
                 log.info("Duplicate payment event skipped: {}", eventId);
                 acknowledgment.acknowledge();
