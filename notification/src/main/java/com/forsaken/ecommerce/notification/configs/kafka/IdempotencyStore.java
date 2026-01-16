@@ -17,9 +17,15 @@ public class IdempotencyStore {
     private final RedisTemplate<String, String> redis;
 
     /**
-     * Atomically marks the event as processed.
+     * Atomically marks the event as processed using a Redis-backed idempotency key.
+     * <p>
+     * A key is created for the given {@code scope} and {@code eventId} with a TTL of 24 hours.
+     * If Redis is unavailable or {@code setIfAbsent} returns {@code null}, this method treats
+     * the operation as not being the first time and returns {@code false}.
      *
-     * @return true if this is the FIRST time we see this event
+     * @param scope   the idempotency scope that groups related events
+     * @param eventId the unique identifier of the event within the given scope
+     * @return {@code true} if this is the first time this event is observed; {@code false} otherwise
      */
     public boolean markIfNotProcessed(
             final IdempotencyScope scope,
