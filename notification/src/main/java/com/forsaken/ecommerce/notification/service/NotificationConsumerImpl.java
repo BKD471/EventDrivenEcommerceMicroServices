@@ -197,10 +197,12 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
-            idempotencyStore.remove(
-                    IdempotencyScope.ORDER,
-                    null != orderConfirmation ? orderConfirmation.getOrderReference() : "unknown"
-            );
+            if (orderConfirmation != null) {
+                idempotencyStore.remove(
+                        IdempotencyScope.ORDER,
+                        orderConfirmation.getOrderReference()
+                );
+            }
             throw new RuntimeException("Order notification processing failed", ex);
         } finally {
             MDC.clear();
