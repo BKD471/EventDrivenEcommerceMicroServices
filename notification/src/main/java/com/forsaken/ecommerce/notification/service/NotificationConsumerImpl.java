@@ -158,7 +158,7 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     IdempotencyScope.ORDER,
                     eventId
             );
-            //  Avoid duplicate email
+            // Avoid duplicate email
             if (!firstTime) {
                 log.info("Duplicate order event skipped: {}", eventId);
                 acknowledgment.acknowledge();
