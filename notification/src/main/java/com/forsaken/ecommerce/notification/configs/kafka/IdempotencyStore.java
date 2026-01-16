@@ -37,6 +37,18 @@ public class IdempotencyStore {
         return Boolean.TRUE.equals(firstTime);
     }
 
+    /**
+     * Removes the idempotency marker for the given event.
+     * <p>
+     * This is typically used as part of a rollback/compensation flow when
+     * processing of an event fails after it has already been marked as processed
+     * by {@link #markIfNotProcessed(IdempotencyScope, String)}. Removing the
+     * marker allows the event to be safely retried and processed again.
+     *
+     * @param scope   logical scope used to namespace the idempotency key
+     * @param eventId unique identifier of the event whose idempotency marker
+     *                should be cleared
+     */
     public void remove(final IdempotencyScope scope, final String eventId) {
         redis.delete(buildKey(scope, eventId));
     }
