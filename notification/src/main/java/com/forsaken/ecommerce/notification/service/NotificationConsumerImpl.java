@@ -116,10 +116,12 @@ public class NotificationConsumerImpl implements INotificationConsumer {
                     getTimeStampForLogs(record),
                     ex
             );
-            idempotencyStore.remove(
-                    IdempotencyScope.PAYMENT,
-                    null != paymentConfirmation ? paymentConfirmation.getOrderReference() : "unknown"
-            );
+            if (null != paymentConfirmation) {
+                idempotencyStore.remove(
+                        IdempotencyScope.PAYMENT,
+                        paymentConfirmation.getOrderReference()
+                );
+            }
             throw new RuntimeException("Payment notification processing failed", ex);
         } finally {
             MDC.clear();
