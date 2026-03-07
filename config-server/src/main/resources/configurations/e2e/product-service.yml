@@ -51,7 +51,7 @@ aws:
     accessSecretName: EcommerceCredentials
     dbSecretName: ProductServiceSecrets
   s3:
-    bucketName: product-profile-images-e2e # gitguardian:ignore
+    bucketName: product-profile-images-ecommerce-e2e # gitguardian:ignore
     expiration: 30
 
 general:

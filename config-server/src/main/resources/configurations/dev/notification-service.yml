@@ -60,10 +60,10 @@ aws:
   secretsmanager:
     secretName: EcommerceCredentials
   s3:
-    bucketName: invoice-pdfs-dev # gitguardian:ignore
+    bucketName: invoice-pdfs-ecommerce-dev # gitguardian:ignore
     expiration: 30  # Pre-signed URL expiration (in minutes).
     dlq:
-      bucket: dlqs-bucket-dev # gitguardian:ignore
+      bucket: dlqs-bucket-ecommerce-dev # gitguardian:ignore
       paymentPrefix: payment-dlq
       orderPrefix: order-dlq
   dynamodb:
