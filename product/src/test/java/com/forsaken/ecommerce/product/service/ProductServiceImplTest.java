@@ -11,7 +11,10 @@ import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 import com.forsaken.ecommerce.product.model.Category;
 import com.forsaken.ecommerce.product.model.Product;
+import com.forsaken.ecommerce.product.model.ProductReservation;
+import com.forsaken.ecommerce.product.model.ReservationStatus;
 import com.forsaken.ecommerce.product.repository.ICategoryRepository;
+import com.forsaken.ecommerce.product.repository.IProductReservationRepository;
 import com.forsaken.ecommerce.product.repository.IProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,6 +67,9 @@ class ProductServiceImplTest {
 
     @Mock
     private ICategoryRepository categoryRepository;
+
+    @Mock
+    private IProductReservationRepository reservationRepository;
 
     @Mock
     private ProductProperties productProperties;
@@ -187,7 +193,7 @@ class ProductServiceImplTest {
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 1);
 
-        when(productRepository.findAllByIdInOrderById(List.of(1)))
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
                 .thenReturn(List.of()); // simulate missing product
 
         // WHEN / THEN
@@ -210,7 +216,7 @@ class ProductServiceImplTest {
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 5);
 
-        when(productRepository.findAllByIdInOrderById(List.of(1)))
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
                 .thenReturn(List.of(product));
 
         // WHEN / THEN
@@ -237,7 +243,7 @@ class ProductServiceImplTest {
 
         final ProductPurchaseRequest request =
                 new ProductPurchaseRequest(1, 2);
-        when(productRepository.findAllByIdInOrderById(List.of(1)))
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
                 .thenReturn(List.of(product));
         when(productRepository.save(product))
                 .thenReturn(product);
@@ -256,7 +262,7 @@ class ProductServiceImplTest {
 
         // stock reduced correctly
         assertEquals(3, product.getAvailableQuantity());
-        verify(productRepository).findAllByIdInOrderById(List.of(1));
+        verify(productRepository).findAllByIdInOrderByIdForUpdate(List.of(1));
         verify(productRepository).save(product);
     }
 
@@ -415,6 +421,76 @@ class ProductServiceImplTest {
 
         // No database interaction should occur
         verifyNoInteractions(productRepository);
+    }
+
+    @Test
+    void reserveProducts_ShouldDecreaseInventory_AndReturnReservedSnapshot() throws Exception {
+        final Product product = constructProduct();
+        product.setId(1);
+        product.setAvailableQuantity(5);
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-1"))
+                .thenReturn(List.of());
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
+                .thenReturn(List.of(product));
+
+        final List<ProductPurchaseResponse> result = service.reserveProducts(
+                new com.forsaken.ecommerce.product.dto.ProductReservationRequest(
+                        "ORD-1",
+                        List.of(new ProductPurchaseRequest(1, 2))
+                )
+        );
+
+        assertEquals(3, product.getAvailableQuantity());
+        assertEquals(1, result.size());
+        assertEquals(2, result.getFirst().quantity());
+        verify(reservationRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void reserveProducts_ShouldNotDecrementInventoryAgain_ForSameOrderReference() throws Exception {
+        final Product product = constructProduct();
+        product.setId(1);
+        product.setAvailableQuantity(3);
+        final ProductReservation existingReservation = new ProductReservation("ORD-1", product, 2);
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-1"))
+                .thenReturn(List.of(), List.of(existingReservation));
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
+                .thenReturn(List.of(product));
+        final com.forsaken.ecommerce.product.dto.ProductReservationRequest request =
+                new com.forsaken.ecommerce.product.dto.ProductReservationRequest(
+                        "ORD-1",
+                        List.of(new ProductPurchaseRequest(1, 2))
+                );
+
+        service.reserveProducts(request);
+        final List<ProductPurchaseResponse> result = service.reserveProducts(request);
+
+        assertEquals(1, product.getAvailableQuantity());
+        assertEquals(1, result.size());
+        verify(productRepository).findAllByIdInOrderByIdForUpdate(List.of(1));
+    }
+
+    @Test
+    void releaseReservation_ShouldRestoreInventoryOnlyOnce() {
+        final Product product = constructProduct();
+        product.setId(1);
+        product.setAvailableQuantity(3);
+        final ProductReservation reservation = new ProductReservation(
+                "ORD-1",
+                product,
+                2
+        );
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-1"))
+                .thenReturn(List.of(reservation), List.of(reservation));
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
+                .thenReturn(List.of(product));
+
+        service.releaseReservation("ORD-1");
+        service.releaseReservation("ORD-1");
+
+        assertEquals(5, product.getAvailableQuantity());
+        assertEquals(ReservationStatus.RELEASED, reservation.getStatus());
+        verify(productRepository).findAllByIdInOrderByIdForUpdate(List.of(1));
     }
 
     /**

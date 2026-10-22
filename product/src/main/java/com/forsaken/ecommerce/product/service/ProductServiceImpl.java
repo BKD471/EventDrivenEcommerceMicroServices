@@ -5,12 +5,16 @@ import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.product.configs.general.ProductProperties;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseRequest;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
+import com.forsaken.ecommerce.product.dto.ProductReservationRequest;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 import com.forsaken.ecommerce.product.model.Category;
 import com.forsaken.ecommerce.product.model.Product;
+import com.forsaken.ecommerce.product.model.ProductReservation;
+import com.forsaken.ecommerce.product.model.ReservationStatus;
 import com.forsaken.ecommerce.product.repository.ICategoryRepository;
+import com.forsaken.ecommerce.product.repository.IProductReservationRepository;
 import com.forsaken.ecommerce.product.repository.IProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +31,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.forsaken.ecommerce.product.dto.ProductRequest.Direction;
@@ -41,6 +47,7 @@ public class ProductServiceImpl implements IProductService {
 
     private final IProductRepository repository;
     private final ICategoryRepository categoryRepository;
+    private final IProductReservationRepository reservationRepository;
     private final IS3Service s3Service;
     private final ProductProperties productProperties;
     private final Class<?> className = ProductServiceImpl.class;
@@ -126,7 +133,7 @@ public class ProductServiceImpl implements IProductService {
                 .stream()
                 .map(ProductPurchaseRequest::productId)
                 .toList();
-        final var storedProducts = repository.findAllByIdInOrderById(productIds);
+        final var storedProducts = repository.findAllByIdInOrderByIdForUpdate(productIds);
         if (productIds.size() != storedProducts.size()) {
             throw new ProductNotFoundExceptions("One or more products does not exist",
                     "purchaseProducts(List<ProductPurchaseRequest> request) in " + className);
@@ -149,6 +156,117 @@ public class ProductServiceImpl implements IProductService {
             purchasedProducts.add(product.toproductPurchaseResponse(productRequest.quantity()));
         }
         return purchasedProducts;
+    }
+
+    @Override
+    @Transactional(rollbackFor = ProductNotFoundExceptions.class)
+    @Caching(evict = {
+            @CacheEvict(value = "productById", allEntries = true),
+            @CacheEvict(value = "products", allEntries = true)
+    })
+    public List<ProductPurchaseResponse> reserveProducts(final ProductReservationRequest request)
+            throws ProductNotFoundExceptions {
+        final Map<Integer, Double> requestedQuantities = new LinkedHashMap<>();
+        request.products().forEach(item -> {
+            if (item.quantity() <= 0) {
+                throw new IllegalArgumentException("Reservation quantities must be positive");
+            }
+            requestedQuantities.merge(item.productId(), item.quantity(), Double::sum);
+        });
+
+        final List<ProductReservation> existing =
+                reservationRepository.findAllByOrderReferenceOrderByProductId(request.orderReference());
+        if (!existing.isEmpty()) {
+            final boolean sameRequest = existing.size() == requestedQuantities.size()
+                    && existing.stream().allMatch(reservation ->
+                    requestedQuantities.containsKey(reservation.getProductId())
+                            && Double.compare(requestedQuantities.get(reservation.getProductId()),
+                            reservation.getQuantity()) == 0);
+            if (!sameRequest || existing.stream().anyMatch(
+                    reservation -> reservation.getStatus() != ReservationStatus.RESERVED)) {
+                throw new ProductNotFoundExceptions(
+                        "Order reference already has a different or released inventory reservation"
+                );
+            }
+            return existing.stream()
+                    .map(reservation -> new ProductPurchaseResponse(
+                            reservation.getProductId(),
+                            reservation.getName(),
+                            reservation.getDescription(),
+                            reservation.getPrice(),
+                            reservation.getQuantity()
+                    ))
+                    .toList();
+        }
+
+        final List<Integer> productIds = requestedQuantities.keySet().stream().sorted().toList();
+        final List<Product> products = repository.findAllByIdInOrderByIdForUpdate(productIds);
+        if (products.size() != productIds.size()) {
+            throw new ProductNotFoundExceptions("One or more products does not exist");
+        }
+
+        for (final Product product : products) {
+            final double quantity = requestedQuantities.get(product.getId());
+            if (product.getAvailableQuantity() < quantity) {
+                throw new ProductNotFoundExceptions(
+                        "Insufficient stock quantity for product with ID:: " + product.getId()
+                );
+            }
+        }
+
+        final List<ProductReservation> reservations = products.stream()
+                .map(product -> {
+                    final double quantity = requestedQuantities.get(product.getId());
+                    product.setAvailableQuantity(product.getAvailableQuantity() - quantity);
+                    return new ProductReservation(request.orderReference(), product, quantity);
+                })
+                .toList();
+        repository.saveAll(products);
+        reservationRepository.saveAll(reservations);
+        return reservations.stream()
+                .map(reservation -> new ProductPurchaseResponse(
+                        reservation.getProductId(),
+                        reservation.getName(),
+                        reservation.getDescription(),
+                        reservation.getPrice(),
+                        reservation.getQuantity()
+                ))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "productById", allEntries = true),
+            @CacheEvict(value = "products", allEntries = true)
+    })
+    public void releaseReservation(final String orderReference) {
+        final List<ProductReservation> reservations =
+                reservationRepository.findAllByOrderReferenceOrderByProductId(orderReference);
+        final List<ProductReservation> active = reservations.stream()
+                .filter(reservation -> reservation.getStatus() == ReservationStatus.RESERVED)
+                .toList();
+        if (active.isEmpty()) {
+            return;
+        }
+        final List<Integer> productIds = active.stream()
+                .map(ProductReservation::getProductId)
+                .toList();
+        final List<Product> products = repository.findAllByIdInOrderByIdForUpdate(productIds);
+        if (products.size() != active.size()) {
+            throw new IllegalStateException(
+                    "Cannot release inventory: a reserved product is missing for order " + orderReference
+            );
+        }
+        final Map<Integer, Product> productsById = products.stream()
+                .collect(java.util.stream.Collectors.toMap(Product::getId, product -> product));
+        active.forEach(reservation -> {
+            final Product product = productsById.get(reservation.getProductId());
+            product.setAvailableQuantity(product.getAvailableQuantity() + reservation.getQuantity());
+            reservation.release();
+        });
+        repository.saveAll(products);
+        reservationRepository.saveAll(active);
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
 import com.forsaken.ecommerce.payment.repository.IPaymentRepository;
 import com.forsaken.ecommerce.payment.repository.PaymentSummary;
 import io.micrometer.tracing.Tracer;
@@ -27,12 +28,14 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 /**
  * Unit tests for {@link PaymentServiceImpl}, validating core payment business logic
@@ -99,15 +102,19 @@ class PaymentServiceTest {
         final Payment payment = paymentRequest.toPayment();
         final ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
         doReturn(payment).when(repository).save(paymentCaptor.capture());
+        when(repository.findByOrderId(123))
+                .thenReturn(Optional.empty(), Optional.of(payment));
 
         // When
         final Integer result = service.createPayment(paymentRequest);
+        service.confirmPayment(123);
 
         // Then
         assertEquals(1, result);
         final Payment passedToSave = paymentCaptor.getValue();
         assertEquals(new BigDecimal("150.50"), passedToSave.getAmount());
         assertEquals(PaymentMethod.PAYPAL, passedToSave.getPaymentMethod());
+        assertEquals(PaymentStatus.COMPLETED, passedToSave.getStatus());
 
         // Capture notification
         final ArgumentCaptor<PaymentConfirmation> notifCaptor =
@@ -116,6 +123,49 @@ class PaymentServiceTest {
         final PaymentConfirmation paymentConfirmation = notifCaptor.getValue();
         assertEquals("order-123", paymentConfirmation.getOrderReference());
         assertEquals("John", paymentConfirmation.getCustomerFirstname());
+    }
+
+    @Test
+    void createPayment_ShouldReturnExistingPayment_WhenOrderIsRetried() {
+        final PaymentRequest request = constructPaymentRequest(1);
+        final Payment payment = request.toPayment();
+        when(repository.findByOrderId(request.orderId())).thenReturn(Optional.of(payment));
+
+        final Integer result = service.createPayment(request);
+
+        assertEquals(1, result);
+        verify(repository, never()).save(payment);
+        verify(notificationProducer, never()).sendNotification(
+                org.mockito.ArgumentMatchers.any(PaymentConfirmation.class)
+        );
+    }
+
+    @Test
+    void confirmPayment_ShouldTreatLegacyPaymentAsCompletedWithoutRepublishing() {
+        final Payment payment = constructPaymentRequest(1).toPayment();
+        payment.setStatus(null);
+        when(repository.findByOrderId(123)).thenReturn(Optional.of(payment));
+
+        service.confirmPayment(123);
+
+        assertEquals(PaymentStatus.COMPLETED, payment.getStatus());
+        verify(repository).save(payment);
+        verify(notificationProducer, never()).sendNotification(
+                org.mockito.ArgumentMatchers.any(PaymentConfirmation.class)
+        );
+    }
+
+    @Test
+    void cancelPayment_ShouldBeIdempotent() {
+        final Payment payment = constructPaymentRequest(1).toPayment();
+        payment.setStatus(PaymentStatus.COMPLETED);
+        when(repository.findByOrderId(123)).thenReturn(Optional.of(payment));
+
+        service.cancelPayment(123);
+        service.cancelPayment(123);
+
+        assertEquals(PaymentStatus.CANCELLED, payment.getStatus());
+        verify(repository).save(payment);
     }
 
     /**

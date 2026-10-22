@@ -13,11 +13,13 @@ import com.forsaken.ecommerce.order.customer.ICustomerService;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 import com.forsaken.ecommerce.order.order.model.Order;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import com.forsaken.ecommerce.order.order.repository.IOrderRepository;
 import com.forsaken.ecommerce.order.orderline.model.OrderLine;
 import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentRequest;
 import com.forsaken.ecommerce.order.product.IProductService;
+import com.forsaken.ecommerce.order.product.PurchaseRequest;
 import com.forsaken.ecommerce.order.product.PurchaseResponse;
 import io.micrometer.tracing.Tracer;
 import jakarta.persistence.EntityNotFoundException;
@@ -33,12 +35,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
-import java.util.concurrent.CompletableFuture;
+import java.util.List;
 import java.util.concurrent.CompletionException;
 
 @Service
@@ -54,14 +56,6 @@ public class OrderServiceImpl implements IOrderService {
     private final OrderProperties orderProperties;
     private final Tracer tracer;
 
-    @Transactional(
-            rollbackFor = {
-                    CustomerNotFoundExceptions.class,
-                    BusinessException.class,
-                    PaymentFailedExceptions.class,
-                    ProductNotFoundExceptions.class
-            }
-    )
     @Override
     @CacheEvict(
             value = {"orders", "orderById", "ordersByCustomer"},
@@ -73,30 +67,21 @@ public class OrderServiceImpl implements IOrderService {
             throws CustomerNotFoundExceptions, BusinessException,
             PaymentFailedExceptions, ProductNotFoundExceptions {
         log.info("Creating Order Request: {}", request);
-        final var fetchedCustomer = customerService.getCustomer(request.customerId());
-        final var fetchedPurchasedProducts = productService.purchaseProducts(request.products());
+        final CustomerResponse customer;
         try {
-            CompletableFuture.allOf(
-                    fetchedCustomer,
-                    fetchedPurchasedProducts
-            ).join();
+            customer = customerService.getCustomer(request.customerId()).join();
         } catch (CompletionException ex) {
             final Throwable cause = ex.getCause();
-
-            if (cause instanceof CustomerNotFoundExceptions e) throw e;
-            if (cause instanceof ProductNotFoundExceptions e) throw e;
-            if (cause instanceof BusinessException e) throw e;
-
-            log.error(
-                    "Unexpected async failure during order creation. Cause type={}",
-                    (cause != null ? cause.getClass().getName() : "null"),
-                    ex
+            if (cause instanceof CustomerNotFoundExceptions e) {
+                throw e;
+            }
+            throw new CustomerNotFoundExceptions(
+                    "Customer lookup failed",
+                    "createOrder(OrderRequest) in " + getClass().getSimpleName(),
+                    cause == null ? ex : cause
             );
-            throw ex;
         }
 
-        final var customer = fetchedCustomer.join();
-        final var purchasedProducts = fetchedPurchasedProducts.join();
         final Order order = request.toOrder();
         request.products().forEach(p -> {
             OrderLine orderLine = OrderLine.builder()
@@ -106,32 +91,159 @@ public class OrderServiceImpl implements IOrderService {
 
             order.addOrderLine(orderLine);
         });
-        final Order savedOrder = orderRepository.save(order);
-        final PaymentRequest paymentRequest = PaymentRequest.builder()
-                .amount(request.amount())
-                .paymentMethod(request.paymentMethod())
-                .orderId(savedOrder.getId())
-                .orderReference(savedOrder.getReference())
-                .customer(customer)
-                .build();
-        paymentService.pay(paymentRequest);
-        log.info("Sent Payment");
+        final Order savedOrder = orderRepository.saveAndFlush(order);
+        try {
+            final var reservedProducts = productService.reserveProducts(
+                    savedOrder.getReference(),
+                    request.products()
+            );
+            final PaymentRequest paymentRequest = PaymentRequest.builder()
+                    .amount(request.amount())
+                    .paymentMethod(request.paymentMethod())
+                    .orderId(savedOrder.getId())
+                    .orderReference(savedOrder.getReference())
+                    .customer(customer)
+                    .build();
+            paymentService.pay(paymentRequest);
+            paymentService.confirm(savedOrder.getId());
 
-        final String traceId = (null != tracer && null != tracer.currentSpan()) ?
-                tracer.currentSpan().context().traceId()
+            publishOrderConfirmation(savedOrder, customer, reservedProducts);
+            return savedOrder.getId();
+        } catch (Exception failure) {
+            log.error("Order saga failed for reference={}; starting compensation",
+                    savedOrder.getReference(), failure);
+            savedOrder.setSagaStatus(OrderSagaStatus.COMPENSATION_REQUIRED);
+            orderRepository.save(savedOrder);
+            final Exception compensationFailure = compensate(savedOrder);
+            if (compensationFailure == null) {
+                savedOrder.setSagaStatus(OrderSagaStatus.FAILED);
+                orderRepository.save(savedOrder);
+                rethrowSagaFailure(failure);
+            }
+            failure.addSuppressed(compensationFailure);
+            log.error("Compensation is incomplete for order reference={}; manual recovery is required",
+                    savedOrder.getReference(), compensationFailure);
+            throw new BusinessException(
+                    "Order saga failed and compensation requires recovery for order " + savedOrder.getReference(),
+                    "createOrder(OrderRequest) in " + getClass().getSimpleName(),
+                    failure
+            );
+        }
+    }
+
+    private Exception compensate(final Order order) {
+        Exception compensationFailure = null;
+        try {
+            paymentService.cancel(order.getId());
+        } catch (Exception ex) {
+            compensationFailure = ex;
+        }
+        try {
+            productService.releaseReservation(order.getReference());
+        } catch (Exception ex) {
+            if (compensationFailure == null) {
+                compensationFailure = ex;
+            } else {
+                compensationFailure.addSuppressed(ex);
+            }
+        }
+        return compensationFailure;
+    }
+
+    @Scheduled(fixedDelayString = "${order.saga.compensation-retry-delay:30000}")
+    public void retryIncompleteCompensations() {
+        orderRepository.findAllBySagaStatus(OrderSagaStatus.COMPENSATION_REQUIRED)
+                .forEach(order -> {
+                    final Exception compensationFailure = compensate(order);
+                    if (compensationFailure != null) {
+                        log.error("Saga compensation retry failed for order reference={}",
+                                order.getReference(), compensationFailure);
+                        return;
+                    }
+                    order.setSagaStatus(OrderSagaStatus.FAILED);
+                    orderRepository.save(order);
+                    log.info("Saga compensation completed for order reference={}", order.getReference());
+                });
+    }
+
+    @Scheduled(fixedDelayString = "${order.saga.recovery-delay:30000}")
+    public void recoverStaleOrders() {
+        final LocalDateTime staleBefore = LocalDateTime.now().minusMinutes(5);
+        final List<Order> staleOrders = orderRepository.findStaleOrdersBySagaStatus(
+                OrderSagaStatus.PENDING,
+                staleBefore
+        );
+        staleOrders.forEach(this::resumeOrCompensate);
+    }
+
+    private void resumeOrCompensate(final Order order) {
+        try {
+            final CustomerResponse customer = customerService.getCustomer(order.getCustomerId()).join();
+            final List<PurchaseRequest> requestedProducts = order.getOrderLines().stream()
+                    .map(line -> new PurchaseRequest(line.getProductId(), line.getQuantity()))
+                    .toList();
+            final List<PurchaseResponse> reservedProducts =
+                    productService.reserveProducts(order.getReference(), requestedProducts);
+            paymentService.pay(PaymentRequest.builder()
+                    .amount(order.getTotalAmount())
+                    .paymentMethod(order.getPaymentMethod())
+                    .orderId(order.getId())
+                    .orderReference(order.getReference())
+                    .customer(customer)
+                    .build());
+            paymentService.confirm(order.getId());
+            publishOrderConfirmation(order, customer, reservedProducts);
+            log.info("Recovered stale order saga for reference={}", order.getReference());
+        } catch (Exception failure) {
+            log.error("Unable to resume stale order saga for reference={}; compensating",
+                    order.getReference(), failure);
+            order.setSagaStatus(OrderSagaStatus.COMPENSATION_REQUIRED);
+            orderRepository.save(order);
+            final Exception compensationFailure = compensate(order);
+            if (compensationFailure == null) {
+                order.setSagaStatus(OrderSagaStatus.FAILED);
+                orderRepository.save(order);
+            } else {
+                log.error("Recovery compensation is incomplete for order reference={}",
+                        order.getReference(), compensationFailure);
+            }
+        }
+    }
+
+    private void publishOrderConfirmation(
+            final Order order,
+            final CustomerResponse customer,
+            final List<PurchaseResponse> products
+    ) {
+        final String traceId = (null != tracer && null != tracer.currentSpan())
+                ? tracer.currentSpan().context().traceId()
                 : "NO_TRACE";
         final OrderConfirmation orderConfirmation = OrderConfirmation.newBuilder()
-                .setOrderReference(request.reference())
-                .setTotalAmount(convertBigDecimalToBytes(request.amount()))
-                .setPaymentMethod(PaymentMethod.valueOf(request.paymentMethod().name()))
+                .setOrderReference(order.getReference())
+                .setTotalAmount(convertBigDecimalToBytes(order.getTotalAmount()))
+                .setPaymentMethod(PaymentMethod.valueOf(order.getPaymentMethod().name()))
                 .setCustomer(toAvroCustomer(customer))
-                .setProducts(purchasedProducts.stream().map(this::toAvroPurchase).toList())
+                .setProducts(products.stream().map(this::toAvroPurchase).toList())
                 .setTraceId(traceId)
                 .build();
-        log.info("Created Order Confirmation: {}", orderConfirmation);
         orderProducer.sendOrderConfirmation(orderConfirmation);
-        log.info("Sent Order Confirmation");
-        return savedOrder.getId();
+        order.setSagaStatus(OrderSagaStatus.COMPLETED);
+        orderRepository.save(order);
+    }
+
+    private void rethrowSagaFailure(final Exception failure)
+            throws CustomerNotFoundExceptions, BusinessException,
+            PaymentFailedExceptions, ProductNotFoundExceptions {
+        if (failure instanceof CustomerNotFoundExceptions exception) throw exception;
+        if (failure instanceof BusinessException exception) throw exception;
+        if (failure instanceof PaymentFailedExceptions exception) throw exception;
+        if (failure instanceof ProductNotFoundExceptions exception) throw exception;
+        if (failure instanceof RuntimeException exception) throw exception;
+        throw new BusinessException(
+                "Order saga failed",
+                "createOrder(OrderRequest) in " + getClass().getSimpleName(),
+                failure
+        );
     }
 
     @Override

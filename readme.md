@@ -30,7 +30,7 @@ Key goals:
 - Security best practices (OAuth2, JWT, encryption)
 - Error handling and retries
 - Database per service & Circuit breaker pattern
-- Saga pattern for managing distributed transactions
+- Saga orchestration and compensating actions for order transactions
 - Event sourcing and CQRS
 - API versioning & documentation with Swagger/OpenAPI
 - Unit and integration testing
@@ -62,7 +62,7 @@ Key goals:
 - **Error Handling & Retries** for robust event processing
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
-- **Saga Pattern** for managing distributed transactions (planned)
+- **Saga Pattern** for managing distributed order transactions
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -75,6 +75,29 @@ Key goals:
 3. Domain event is published to Kafka
 4. Other services consume the event asynchronously
 5. Each service reacts independently
+
+### Order Saga
+
+Order creation is orchestrated by the **order service** across the product and payment services. It is a sequence of
+local service transactions rather than a distributed database transaction:
+
+1. Validate the customer and persist the order with saga status `PENDING`.
+2. Reserve inventory in the product service. Reservations are keyed by order reference and lock product rows during
+   the stock check/decrement.
+3. Create an idempotent payment authorization keyed by order ID, then confirm it. The payment confirmation notification
+   is emitted only after confirmation.
+4. Publish the order confirmation and mark the order `COMPLETED`.
+5. On failure, cancel the payment and release the inventory reservation. Successful compensation marks the order
+   `FAILED`; a failed compensation leaves it `COMPENSATION_REQUIRED` and the order service retries it.
+
+The order API includes the saga status in `OrderResponse`. Stale `PENDING` orders are retried from their saved order
+lines; inventory and payment operations use order reference/order ID idempotency keys, and notification consumers
+deduplicate events by order reference. Product reservation history is stored in the product database and introduced
+with Flyway migration `V4__create_product_reservations.sql`.
+
+The orchestration uses synchronous HTTP calls between services, while order/payment notifications remain Kafka events.
+This provides compensating consistency, not atomic cross-service commits; downstream payment gateways and future
+side effects must support equivalent idempotent authorization/cancellation semantics.
 
 ---
 

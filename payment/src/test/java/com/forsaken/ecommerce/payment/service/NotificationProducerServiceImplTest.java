@@ -18,10 +18,12 @@ import org.springframework.messaging.Message;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 /**
  * Unit tests for {@link NotificationProducerServiceImpl}, validating that
@@ -81,6 +83,8 @@ class NotificationProducerServiceImplTest {
         final PaymentConfirmation confirmation = constructPaymentConfirmation();
         final String topic = "payment-topic";
         when(kafkaProperties.topicName()).thenReturn(topic);
+        when(kafkaTemplate.send(any(Message.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
         ArgumentCaptor<Message<PaymentConfirmation>> messageCaptor =
                 ArgumentCaptor.forClass(Message.class);
 

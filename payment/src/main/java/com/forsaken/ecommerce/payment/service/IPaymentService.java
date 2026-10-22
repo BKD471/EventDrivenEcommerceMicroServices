@@ -34,6 +34,10 @@ public interface IPaymentService {
      */
     Integer createPayment(final PaymentRequest request);
 
+    void confirmPayment(Integer orderId);
+
+    void cancelPayment(Integer orderId);
+
     /**
      * Retrieves a paginated summary of payments grouped by payment method
      * for the given date range.

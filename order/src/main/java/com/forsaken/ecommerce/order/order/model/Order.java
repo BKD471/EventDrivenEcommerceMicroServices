@@ -19,6 +19,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -56,6 +57,10 @@ public class Order {
     private PaymentMethod paymentMethod;
 
     private String customerId;
+
+    @Enumerated(EnumType.STRING)
+    @Setter
+    private OrderSagaStatus sagaStatus;
 
 
     @OneToMany(
@@ -96,6 +101,7 @@ public class Order {
                 .amount(this.getTotalAmount())
                 .paymentMethod(this.getPaymentMethod())
                 .customerId(this.getCustomerId())
+                .sagaStatus(this.getSagaStatus())
                 .build();
     }
 }

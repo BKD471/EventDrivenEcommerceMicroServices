@@ -1,9 +1,13 @@
 package com.forsaken.ecommerce.order.order.repository;
 
 import com.forsaken.ecommerce.order.order.model.Order;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,6 +20,18 @@ import java.util.List;
  * </p>
  */
 public interface IOrderRepository extends JpaRepository<Order, Integer> {
+
+    List<Order> findAllBySagaStatus(OrderSagaStatus sagaStatus);
+
+    @EntityGraph(attributePaths = "orderLines")
+    @Query("""
+            select distinct o from Order o
+            where o.sagaStatus = :status and o.createdDate < :createdBefore
+            """)
+    List<Order> findStaleOrdersBySagaStatus(
+            @Param("status") OrderSagaStatus status,
+            @Param("createdBefore") LocalDateTime createdBefore
+    );
 
     /**
      * Retrieves all {@link Order} records for the given customer within the specified date range.

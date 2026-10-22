@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.order.order.service;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
+import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.customer.CustomerResponse;
@@ -9,6 +10,7 @@ import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 import com.forsaken.ecommerce.order.order.model.Order;
 import com.forsaken.ecommerce.order.order.model.PaymentMethod;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import com.forsaken.ecommerce.order.order.repository.IOrderRepository;
 import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentRequest;
@@ -41,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
 
 
 /**
@@ -124,15 +127,16 @@ class OrderServiceImplTest {
         when(request.paymentMethod()).thenReturn(
                 PaymentMethod.CREDIT_CARD
         );
-        when(request.reference()).thenReturn("ORD-1");
         when(request.toOrder()).thenReturn(order);
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.completedFuture(customer));
-        when(productService.purchaseProducts(List.of()))
-                .thenReturn(CompletableFuture.completedFuture(List.of(product)));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
         when(order.getId()).thenReturn(10);
         when(order.getReference()).thenReturn("ORD-1");
+        when(order.getTotalAmount()).thenReturn(BigDecimal.TEN);
+        when(order.getPaymentMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
+        when(productService.reserveProducts("ORD-1", List.of()))
+                .thenReturn(List.of(product));
         when(tracer.currentSpan()).thenReturn(span);
         when(span.context()).thenReturn(traceContext);
         when(traceContext.traceId()).thenReturn("test-trace-id");
@@ -143,9 +147,10 @@ class OrderServiceImplTest {
         // then
         assertThat(result).isEqualTo(10);
         verify(customerService).getCustomer("C1");
-        verify(productService).purchaseProducts(List.of());
+        verify(productService).reserveProducts("ORD-1", List.of());
         verify(orderRepository).save(order);
         verify(paymentService).pay(any(PaymentRequest.class));
+        verify(paymentService).confirm(10);
         verify(orderProducer).sendOrderConfirmation(any());
     }
 
@@ -158,16 +163,43 @@ class OrderServiceImplTest {
         // given
         final OrderRequest request = mock(OrderRequest.class);
         when(request.customerId()).thenReturn("C1");
-        when(request.products()).thenReturn(List.of());
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.failedFuture(
                         new CustomerNotFoundExceptions("not found")));
-        when(productService.purchaseProducts(List.of()))
-                .thenReturn(CompletableFuture.completedFuture(List.of()));
 
         // when / then
         assertThatThrownBy(() -> orderService.createOrder(request))
                 .isInstanceOf(CustomerNotFoundExceptions.class);
+    }
+
+    @Test
+    void shouldCompensateInventoryAndPaymentWhenPaymentFails() throws Exception {
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder()
+                .id(11)
+                .reference("ORD-FAIL")
+                .build();
+        final CustomerResponse customer = new CustomerResponse(
+                "C1", "John", "Doe", "john@test.com"
+        );
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.amount()).thenReturn(BigDecimal.TEN);
+        when(request.paymentMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1"))
+                .thenReturn(CompletableFuture.completedFuture(customer));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(productService.reserveProducts("ORD-FAIL", List.of())).thenReturn(List.of());
+        doThrow(new PaymentFailedExceptions("payment declined"))
+                .when(paymentService).pay(any(PaymentRequest.class));
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(PaymentFailedExceptions.class);
+
+        verify(paymentService).cancel(11);
+        verify(productService).releaseReservation("ORD-FAIL");
+        assertThat(order.getSagaStatus()).isEqualTo(OrderSagaStatus.FAILED);
     }
 
     /**

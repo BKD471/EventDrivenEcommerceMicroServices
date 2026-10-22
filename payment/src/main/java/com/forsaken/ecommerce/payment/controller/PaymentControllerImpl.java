@@ -34,6 +34,24 @@ public class PaymentControllerImpl implements IPaymentController {
     }
 
     @Override
+    public ResponseEntity<ApiResponse<Void>> confirmPayment(final Integer orderId) {
+        paymentService.confirmPayment(orderId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(ApiResponse.Status.SUCCESS)
+                .message("Payment confirmed.")
+                .build());
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> cancelPayment(final Integer orderId) {
+        paymentService.cancelPayment(orderId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(ApiResponse.Status.SUCCESS)
+                .message("Payment cancelled.")
+                .build());
+    }
+
+    @Override
     public ResponseEntity<ApiResponse<PagedResponse<PaymentSummaryDto>>> getPaymentSummary(
             final LocalDateTime fromDate,
             final LocalDateTime toDate,

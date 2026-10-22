@@ -110,4 +110,55 @@ public class ProductServiceImpl implements IProductService {
             );
         }
     }
+
+    @Override
+    public List<PurchaseResponse> reserveProducts(
+            final String orderReference,
+            final List<PurchaseRequest> requestBody
+    ) throws ProductNotFoundExceptions, BusinessException {
+        final HttpHeaders headers = new HttpHeaders();
+        headers.set(CONTENT_TYPE, APPLICATION_JSON_VALUE);
+        final HttpEntity<ProductReservationRequest> requestEntity = new HttpEntity<>(
+                new ProductReservationRequest(orderReference, requestBody),
+                headers
+        );
+        final ParameterizedTypeReference<ApiResponse<List<PurchaseResponse>>> responseType =
+                new ParameterizedTypeReference<>() { };
+        try {
+            final ResponseEntity<ApiResponse<List<PurchaseResponse>>> response = productRestTemplate.exchange(
+                    productClientProperties.url() + "/reservations",
+                    POST,
+                    requestEntity,
+                    responseType
+            );
+            if (response.getBody() == null || response.getBody().data() == null) {
+                throw new BusinessException("Product service returned an invalid reservation response");
+            }
+            return response.getBody().data();
+        } catch (HttpClientErrorException.NotFound ex) {
+            throw new ProductNotFoundExceptions("Product not found or stock is insufficient",
+                    "reserveProducts(String, List<PurchaseRequest>) in " + className, ex);
+        } catch (HttpClientErrorException ex) {
+            throw new BusinessException("Product reservation was rejected",
+                    "reserveProducts(String, List<PurchaseRequest>) in " + className, ex);
+        } catch (ResourceAccessException ex) {
+            throw new BusinessException("Product reservation service is unavailable",
+                    "reserveProducts(String, List<PurchaseRequest>) in " + className, ex);
+        }
+    }
+
+    @Override
+    public void releaseReservation(final String orderReference) throws BusinessException {
+        try {
+            productRestTemplate.postForEntity(
+                    productClientProperties.url() + "/reservations/{orderReference}/release",
+                    null,
+                    Void.class,
+                    orderReference
+            );
+        } catch (Exception ex) {
+            throw new BusinessException("Product reservation compensation failed",
+                    "releaseReservation(String) in " + className, ex);
+        }
+    }
 }

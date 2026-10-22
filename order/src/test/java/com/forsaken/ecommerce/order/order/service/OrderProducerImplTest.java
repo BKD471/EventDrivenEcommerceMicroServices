@@ -17,12 +17,14 @@ import org.springframework.messaging.Message;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.kafka.support.KafkaHeaders.TOPIC;
 
 /**
@@ -161,6 +163,8 @@ class OrderProducerImplTest {
         // given
         final String topicName = "order-confirmation-topic";
         when(kafkaProperties.topicName()).thenReturn(topicName);
+        when(kafkaTemplate.send(any(Message.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
         final ArgumentCaptor<Message<OrderConfirmation>> messageCaptor =
                 ArgumentCaptor.forClass(Message.class);
 

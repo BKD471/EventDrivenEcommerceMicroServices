@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 /**
  * Repository interface for managing {@link Payment} entities.
@@ -20,6 +21,8 @@ import java.time.LocalDateTime;
  * pagination for efficient data retrieval.</p>
  */
 public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
+
+    Optional<Payment> findByOrderId(Integer orderId);
 
     /**
      * Retrieves a paginated summary of payments grouped by payment method, filtered
@@ -54,6 +57,8 @@ public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
     FROM Payment p
     WHERE (:fromDate IS NULL OR p.createdDate >= :fromDate)
       AND (:toDate   IS NULL OR p.createdDate <= :toDate)
+      AND (p.status IS NULL OR
+           p.status = com.forsaken.ecommerce.payment.model.PaymentStatus.COMPLETED)
     GROUP BY p.paymentMethod
     ORDER BY p.paymentMethod
     """,
@@ -62,6 +67,8 @@ public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
     FROM Payment p
     WHERE (:fromDate IS NULL OR p.createdDate >= :fromDate)
       AND (:toDate   IS NULL OR p.createdDate <= :toDate)
+      AND (p.status IS NULL OR
+           p.status = com.forsaken.ecommerce.payment.model.PaymentStatus.COMPLETED)
     """)
     Page<PaymentSummary> findPaymentSummaryBetween(
             @Param("fromDate") final LocalDateTime fromDate,

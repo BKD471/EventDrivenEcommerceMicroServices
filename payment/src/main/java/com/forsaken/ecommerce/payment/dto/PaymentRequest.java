@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.payment.dto;
 
 import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.payment.model.Payment;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -40,6 +41,11 @@ public record PaymentRequest(
                 .paymentMethod(this.paymentMethod())
                 .amount(this.amount())
                 .orderId(this.orderId())
+                .orderReference(this.orderReference())
+                .customerFirstname(this.customer().firstname())
+                .customerLastname(this.customer().lastname())
+                .customerEmail(this.customer().email())
+                .status(PaymentStatus.AUTHORIZED)
                 .build();
     }
 }

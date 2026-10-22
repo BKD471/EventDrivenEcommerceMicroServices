@@ -2,9 +2,11 @@ package com.forsaken.ecommerce.product.repository;
 
 import com.forsaken.ecommerce.product.model.Category;
 import com.forsaken.ecommerce.product.model.Product;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import java.math.BigDecimal;
@@ -30,6 +32,10 @@ public interface IProductRepository extends JpaRepository<Product, Integer> {
      * @return a list of {@link Product} ordered by ascending ID
      */
     List<Product> findAllByIdInOrderById(final List<Integer> ids);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.id in :ids order by p.id")
+    List<Product> findAllByIdInOrderByIdForUpdate(final List<Integer> ids);
 
     /**
      * Retrieves a paginated list of products along with their associated category,
