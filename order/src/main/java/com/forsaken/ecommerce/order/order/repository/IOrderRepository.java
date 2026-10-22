@@ -57,7 +57,7 @@ public interface IOrderRepository extends JpaRepository<Order, Integer> {
 
     /** Moves the saga to the next status only while the caller still holds an unexpired claim. */
     @Transactional
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("""
             update Order o set o.sagaStatus = :to
             where o.id = :id and o.sagaStatus = :from
