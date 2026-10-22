@@ -14,7 +14,12 @@ import com.forsaken.ecommerce.product.model.Product;
 import com.forsaken.ecommerce.product.model.ProductReservation;
 import com.forsaken.ecommerce.product.model.ReservationStatus;
 import com.forsaken.ecommerce.product.repository.ICategoryRepository;
+import com.forsaken.ecommerce.product.model.ReservationOrder;
 import com.forsaken.ecommerce.product.repository.IProductReservationRepository;
+import com.forsaken.ecommerce.product.repository.IReservationOrderRepository;
+import org.mockito.Spy;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.forsaken.ecommerce.product.repository.IProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,6 +75,13 @@ class ProductServiceImplTest {
 
     @Mock
     private IProductReservationRepository reservationRepository;
+
+    @Mock
+    private IReservationOrderRepository reservationOrderRepository;
+
+    @Spy
+    private TransactionTemplate transactionTemplate =
+            new TransactionTemplate(org.mockito.Mockito.mock(PlatformTransactionManager.class));
 
     @Mock
     private ProductProperties productProperties;
@@ -421,6 +433,45 @@ class ProductServiceImplTest {
 
         // No database interaction should occur
         verifyNoInteractions(productRepository);
+    }
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubReservationOrder() {
+        org.mockito.Mockito.lenient()
+                .when(reservationOrderRepository.findByOrderReferenceForUpdate("ORD-1"))
+                .thenReturn(java.util.Optional.of(new ReservationOrder("ORD-1", ReservationStatus.RESERVED)));
+    }
+
+    @Test
+    void reserveProducts_ShouldReject_WhenOrderWasAlreadyReleased() {
+        when(reservationOrderRepository.findByOrderReferenceForUpdate("ORD-1"))
+                .thenReturn(java.util.Optional.of(new ReservationOrder("ORD-1", ReservationStatus.RELEASED)));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions.class,
+                () -> service.reserveProducts(
+                        new com.forsaken.ecommerce.product.dto.ProductReservationRequest(
+                                "ORD-1",
+                                List.of(new ProductPurchaseRequest(1, 2))
+                        )
+                )
+        );
+        verify(productRepository, org.mockito.Mockito.never()).findAllByIdInOrderByIdForUpdate(
+                org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void releaseReservation_ShouldRecordTombstone_WhenNoReservationExistsYet() {
+        when(reservationOrderRepository.findByOrderReferenceForUpdate("ORD-9"))
+                .thenReturn(java.util.Optional.empty());
+        final ReservationOrder created = new ReservationOrder("ORD-9", ReservationStatus.RESERVED);
+        when(reservationOrderRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(ReservationOrder.class)))
+                .thenReturn(created);
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-9")).thenReturn(List.of());
+
+        service.releaseReservation("ORD-9");
+
+        assertEquals(ReservationStatus.RELEASED, created.getStatus());
     }
 
     @Test

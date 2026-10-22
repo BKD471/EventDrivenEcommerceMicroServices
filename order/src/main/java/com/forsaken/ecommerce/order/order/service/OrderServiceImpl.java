@@ -28,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,8 +38,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletionException;
 
 @Service
@@ -48,21 +49,18 @@ import java.util.concurrent.CompletionException;
 @Slf4j
 public class OrderServiceImpl implements IOrderService {
 
+    private static final Duration CLAIM_TTL = Duration.ofMinutes(5);
+
     private final IOrderRepository orderRepository;
     private final ICustomerService customerService;
     private final IProductService productService;
     private final IPaymentService paymentService;
     private final IOrderProducer orderProducer;
     private final OrderProperties orderProperties;
+    private final OrderCacheEvictor orderCacheEvictor;
     private final Tracer tracer;
 
     @Override
-    @CacheEvict(
-            value = {"orders", "orderById", "ordersByCustomer"},
-            allEntries = true
-    )
-    // Full eviction ensures consistency after order creation.
-    // Granular eviction can be introduced if cache pressure increases.
     public Integer createOrder(final OrderRequest request)
             throws CustomerNotFoundExceptions, BusinessException,
             PaymentFailedExceptions, ProductNotFoundExceptions {
@@ -82,7 +80,10 @@ public class OrderServiceImpl implements IOrderService {
             );
         }
 
+        final String owner = newClaimOwner();
         final Order order = request.toOrder();
+        order.setClaimOwner(owner);
+        order.setClaimExpiresAt(LocalDateTime.now().plus(CLAIM_TTL));
         request.products().forEach(p -> {
             OrderLine orderLine = OrderLine.builder()
                     .productId(p.productId())
@@ -93,42 +94,118 @@ public class OrderServiceImpl implements IOrderService {
         });
         final Order savedOrder = orderRepository.saveAndFlush(order);
         try {
-            final var reservedProducts = productService.reserveProducts(
-                    savedOrder.getReference(),
-                    request.products()
-            );
-            final PaymentRequest paymentRequest = PaymentRequest.builder()
-                    .amount(request.amount())
-                    .paymentMethod(request.paymentMethod())
-                    .orderId(savedOrder.getId())
-                    .orderReference(savedOrder.getReference())
-                    .customer(customer)
-                    .build();
-            paymentService.pay(paymentRequest);
-            paymentService.confirm(savedOrder.getId());
-
-            publishOrderConfirmation(savedOrder, customer, reservedProducts);
+            executeSaga(savedOrder, owner, customer, request.products());
             return savedOrder.getId();
+        } finally {
+            orderCacheEvictor.evictAll();
+        }
+    }
+
+    private void executeSaga(
+            final Order order,
+            final String owner,
+            final CustomerResponse customer,
+            final List<PurchaseRequest> products
+    ) throws CustomerNotFoundExceptions, BusinessException,
+            PaymentFailedExceptions, ProductNotFoundExceptions {
+        final List<PurchaseResponse> reservedProducts;
+        try {
+            reservedProducts = productService.reserveProducts(order.getReference(), products);
+            paymentService.pay(PaymentRequest.builder()
+                    .amount(order.getTotalAmount())
+                    .paymentMethod(order.getPaymentMethod())
+                    .orderId(order.getId())
+                    .orderReference(order.getReference())
+                    .customer(customer)
+                    .build());
+            paymentService.confirm(order.getId());
+            advance(order, owner, OrderSagaStatus.PENDING, OrderSagaStatus.CONFIRMING);
         } catch (Exception failure) {
-            log.error("Order saga failed for reference={}; starting compensation",
-                    savedOrder.getReference(), failure);
-            savedOrder.setSagaStatus(OrderSagaStatus.COMPENSATION_REQUIRED);
-            orderRepository.save(savedOrder);
-            final Exception compensationFailure = compensate(savedOrder);
-            if (compensationFailure == null) {
-                savedOrder.setSagaStatus(OrderSagaStatus.FAILED);
-                orderRepository.save(savedOrder);
-                rethrowSagaFailure(failure);
+            failSaga(order, owner, failure);
+            return;
+        }
+        publishAndComplete(order, owner, customer, reservedProducts);
+    }
+
+    /**
+     * Compensates a saga that failed before payment was confirmed and the confirmation phase began.
+     * Compensation only starts if this worker still owns the saga and it is still PENDING.
+     */
+    private void failSaga(final Order order, final String owner, final Exception failure)
+            throws CustomerNotFoundExceptions, BusinessException,
+            PaymentFailedExceptions, ProductNotFoundExceptions {
+        log.error("Order saga failed for reference={}; starting compensation",
+                order.getReference(), failure);
+        try {
+            advance(order, owner, OrderSagaStatus.PENDING, OrderSagaStatus.COMPENSATION_REQUIRED);
+        } catch (OrderOwnershipLostException lost) {
+            lost.addSuppressed(failure);
+            throw sagaBusinessException(
+                    "Order saga lost ownership of order " + order.getReference() + "; no compensation was run",
+                    lost
+            );
+        }
+        final Exception compensationFailure = compensate(order);
+        if (compensationFailure == null) {
+            try {
+                advance(order, owner, OrderSagaStatus.COMPENSATION_REQUIRED, OrderSagaStatus.FAILED);
+            } catch (OrderOwnershipLostException lost) {
+                log.warn("Ownership lost while finishing compensation for order reference={}",
+                        order.getReference());
             }
-            failure.addSuppressed(compensationFailure);
-            log.error("Compensation is incomplete for order reference={}; manual recovery is required",
-                    savedOrder.getReference(), compensationFailure);
-            throw new BusinessException(
-                    "Order saga failed and compensation requires recovery for order " + savedOrder.getReference(),
-                    "createOrder(OrderRequest) in " + getClass().getSimpleName(),
+            rethrowSagaFailure(failure);
+        }
+        failure.addSuppressed(compensationFailure);
+        orderRepository.releaseClaim(order.getId(), owner);
+        log.error("Compensation is incomplete for order reference={}; manual recovery is required",
+                order.getReference(), compensationFailure);
+        throw sagaBusinessException(
+                "Order saga failed and compensation requires recovery for order " + order.getReference(),
+                failure
+        );
+    }
+
+    /**
+     * Forward-only phase: payment is confirmed, so failures here are retried and never compensated.
+     */
+    private void publishAndComplete(
+            final Order order,
+            final String owner,
+            final CustomerResponse customer,
+            final List<PurchaseResponse> products
+    ) throws BusinessException {
+        try {
+            publishOrderConfirmation(order, customer, products);
+            advance(order, owner, OrderSagaStatus.CONFIRMING, OrderSagaStatus.COMPLETED);
+        } catch (Exception failure) {
+            log.error("Order confirmation for reference={} is not complete; it will be retried",
+                    order.getReference(), failure);
+            orderRepository.releaseClaim(order.getId(), owner);
+            throw sagaBusinessException(
+                    "Order " + order.getReference() + " is paid; confirmation publication will be retried",
                     failure
             );
         }
+    }
+
+    private void advance(
+            final Order order,
+            final String owner,
+            final OrderSagaStatus from,
+            final OrderSagaStatus to
+    ) {
+        if (orderRepository.transition(order.getId(), owner, LocalDateTime.now(), from, to) == 0) {
+            throw new OrderOwnershipLostException(order.getReference(), from, to);
+        }
+        order.setSagaStatus(to);
+    }
+
+    private BusinessException sagaBusinessException(final String message, final Throwable cause) {
+        return new BusinessException(
+                message,
+                "createOrder(OrderRequest) in " + getClass().getSimpleName(),
+                cause
+        );
     }
 
     private Exception compensate(final Order order) {
@@ -152,61 +229,102 @@ public class OrderServiceImpl implements IOrderService {
 
     @Scheduled(fixedDelayString = "${order.saga.compensation-retry-delay:30000}")
     public void retryIncompleteCompensations() {
-        orderRepository.findAllBySagaStatus(OrderSagaStatus.COMPENSATION_REQUIRED)
-                .forEach(order -> {
-                    final Exception compensationFailure = compensate(order);
-                    if (compensationFailure != null) {
-                        log.error("Saga compensation retry failed for order reference={}",
-                                order.getReference(), compensationFailure);
-                        return;
-                    }
-                    order.setSagaStatus(OrderSagaStatus.FAILED);
-                    orderRepository.save(order);
-                    log.info("Saga compensation completed for order reference={}", order.getReference());
-                });
+        claimable(List.of(OrderSagaStatus.COMPENSATION_REQUIRED)).forEach(candidate -> {
+            final String owner = newClaimOwner();
+            if (!claim(candidate, owner, List.of(OrderSagaStatus.COMPENSATION_REQUIRED))) {
+                return;
+            }
+            try {
+                final Exception compensationFailure = compensate(candidate);
+                if (compensationFailure != null) {
+                    log.error("Saga compensation retry failed for order reference={}",
+                            candidate.getReference(), compensationFailure);
+                    orderRepository.releaseClaim(candidate.getId(), owner);
+                    return;
+                }
+                advance(candidate, owner, OrderSagaStatus.COMPENSATION_REQUIRED, OrderSagaStatus.FAILED);
+                log.info("Saga compensation completed for order reference={}", candidate.getReference());
+            } catch (Exception ex) {
+                log.error("Saga compensation retry aborted for order reference={}",
+                        candidate.getReference(), ex);
+            } finally {
+                orderCacheEvictor.evictAll();
+            }
+        });
     }
 
     @Scheduled(fixedDelayString = "${order.saga.recovery-delay:30000}")
     public void recoverStaleOrders() {
-        final LocalDateTime staleBefore = LocalDateTime.now().minusMinutes(5);
-        final List<Order> staleOrders = orderRepository.findStaleOrdersBySagaStatus(
-                OrderSagaStatus.PENDING,
-                staleBefore
-        );
-        staleOrders.forEach(this::resumeOrCompensate);
+        final List<OrderSagaStatus> statuses = List.of(OrderSagaStatus.PENDING, OrderSagaStatus.CONFIRMING);
+        claimable(statuses).forEach(candidate -> {
+            final String owner = newClaimOwner();
+            if (!claim(candidate, owner, statuses)) {
+                return;
+            }
+            try {
+                final Order order = orderRepository.findDetailedById(candidate.getId()).orElseThrow();
+                resume(order, owner);
+            } catch (Exception ex) {
+                log.error("Unable to complete recovery of order saga for reference={}",
+                        candidate.getReference(), ex);
+            } finally {
+                orderCacheEvictor.evictAll();
+            }
+        });
     }
 
-    private void resumeOrCompensate(final Order order) {
+    private void resume(final Order order, final String owner)
+            throws CustomerNotFoundExceptions, BusinessException,
+            PaymentFailedExceptions, ProductNotFoundExceptions {
+        final List<PurchaseRequest> requestedProducts = order.getOrderLines().stream()
+                .map(line -> new PurchaseRequest(line.getProductId(), line.getQuantity()))
+                .toList();
+        final CustomerResponse customer;
         try {
-            final CustomerResponse customer = customerService.getCustomer(order.getCustomerId()).join();
-            final List<PurchaseRequest> requestedProducts = order.getOrderLines().stream()
-                    .map(line -> new PurchaseRequest(line.getProductId(), line.getQuantity()))
-                    .toList();
-            final List<PurchaseResponse> reservedProducts =
-                    productService.reserveProducts(order.getReference(), requestedProducts);
-            paymentService.pay(PaymentRequest.builder()
-                    .amount(order.getTotalAmount())
-                    .paymentMethod(order.getPaymentMethod())
-                    .orderId(order.getId())
-                    .orderReference(order.getReference())
-                    .customer(customer)
-                    .build());
-            paymentService.confirm(order.getId());
-            publishOrderConfirmation(order, customer, reservedProducts);
-            log.info("Recovered stale order saga for reference={}", order.getReference());
+            customer = customerService.getCustomer(order.getCustomerId()).join();
         } catch (Exception failure) {
-            log.error("Unable to resume stale order saga for reference={}; compensating",
-                    order.getReference(), failure);
-            order.setSagaStatus(OrderSagaStatus.COMPENSATION_REQUIRED);
-            orderRepository.save(order);
-            final Exception compensationFailure = compensate(order);
-            if (compensationFailure == null) {
-                order.setSagaStatus(OrderSagaStatus.FAILED);
-                orderRepository.save(order);
+            if (order.getSagaStatus() == OrderSagaStatus.PENDING) {
+                failSaga(order, owner, failure);
             } else {
-                log.error("Recovery compensation is incomplete for order reference={}",
-                        order.getReference(), compensationFailure);
+                orderRepository.releaseClaim(order.getId(), owner);
             }
+            return;
+        }
+        if (order.getSagaStatus() == OrderSagaStatus.PENDING) {
+            executeSaga(order, owner, customer, requestedProducts);
+            return;
+        }
+        final List<PurchaseResponse> reservedProducts;
+        try {
+            reservedProducts = productService.reserveProducts(order.getReference(), requestedProducts);
+        } catch (Exception failure) {
+            orderRepository.releaseClaim(order.getId(), owner);
+            throw sagaBusinessException("Unable to load reservation snapshot for " + order.getReference(), failure);
+        }
+        publishAndComplete(order, owner, customer, reservedProducts);
+        log.info("Recovered order saga for reference={}", order.getReference());
+    }
+
+    private List<Order> claimable(final List<OrderSagaStatus> statuses) {
+        return orderRepository.findClaimableBySagaStatus(statuses, LocalDateTime.now());
+    }
+
+    private boolean claim(final Order order, final String owner, final List<OrderSagaStatus> statuses) {
+        final LocalDateTime now = LocalDateTime.now();
+        return orderRepository.claim(order.getId(), owner, now, now.plus(CLAIM_TTL), statuses) == 1;
+    }
+
+    private static String newClaimOwner() {
+        return UUID.randomUUID().toString();
+    }
+
+    private static final class OrderOwnershipLostException extends RuntimeException {
+        private OrderOwnershipLostException(
+                final String reference,
+                final OrderSagaStatus from,
+                final OrderSagaStatus to
+        ) {
+            super("Saga ownership lost for order " + reference + " while moving " + from + " -> " + to);
         }
     }
 
@@ -227,8 +345,6 @@ public class OrderServiceImpl implements IOrderService {
                 .setTraceId(traceId)
                 .build();
         orderProducer.sendOrderConfirmation(orderConfirmation);
-        order.setSagaStatus(OrderSagaStatus.COMPLETED);
-        orderRepository.save(order);
     }
 
     private void rethrowSagaFailure(final Exception failure)

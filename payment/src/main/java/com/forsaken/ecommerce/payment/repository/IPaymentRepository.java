@@ -1,9 +1,11 @@
 package com.forsaken.ecommerce.payment.repository;
 
 import com.forsaken.ecommerce.payment.model.Payment;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,6 +25,11 @@ import java.util.Optional;
 public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
 
     Optional<Payment> findByOrderId(Integer orderId);
+
+    /** Row-locking lookup used for every payment state transition. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p where p.orderId = :orderId")
+    Optional<Payment> findByOrderIdForUpdate(@Param("orderId") Integer orderId);
 
     /**
      * Retrieves a paginated summary of payments grouped by payment method, filtered

@@ -62,6 +62,11 @@ public class Order {
     @Setter
     private OrderSagaStatus sagaStatus;
 
+    @Setter
+    private String claimOwner;
+
+    @Setter
+    private LocalDateTime claimExpiresAt;
 
     @OneToMany(
             mappedBy = "order",

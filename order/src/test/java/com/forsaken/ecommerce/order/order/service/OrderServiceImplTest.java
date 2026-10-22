@@ -40,6 +40,9 @@ import java.util.concurrent.CompletableFuture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -90,6 +93,8 @@ class OrderServiceImplTest {
     @Mock
     private OrderProperties orderProperties;
     @Mock
+    private OrderCacheEvictor orderCacheEvictor;
+    @Mock
     private Tracer tracer;
     @Mock
     private Tracer.SpanInScope spanInScope;
@@ -100,6 +105,11 @@ class OrderServiceImplTest {
 
     @InjectMocks
     private OrderServiceImpl orderService;
+
+    private void grantTransitions() {
+        org.mockito.Mockito.lenient().when(orderRepository.transition(
+                any(), any(), any(), any(), any())).thenReturn(1);
+    }
 
     /**
      * Verifies that an order is created successfully when:
@@ -113,6 +123,7 @@ class OrderServiceImplTest {
     @Test
     void shouldCreateOrderSuccessfully() throws Exception {
         // given
+        grantTransitions();
         final OrderRequest request = mock(OrderRequest.class);
         final Order order = mock(Order.class);
         final CustomerResponse customer = new CustomerResponse(
@@ -123,10 +134,6 @@ class OrderServiceImplTest {
         );
         when(request.customerId()).thenReturn("C1");
         when(request.products()).thenReturn(List.of());
-        when(request.amount()).thenReturn(BigDecimal.TEN);
-        when(request.paymentMethod()).thenReturn(
-                PaymentMethod.CREDIT_CARD
-        );
         when(request.toOrder()).thenReturn(order);
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.completedFuture(customer));
@@ -148,7 +155,11 @@ class OrderServiceImplTest {
         assertThat(result).isEqualTo(10);
         verify(customerService).getCustomer("C1");
         verify(productService).reserveProducts("ORD-1", List.of());
-        verify(orderRepository).save(order);
+        verify(orderRepository).transition(
+                eq(10), any(), any(), eq(OrderSagaStatus.PENDING), eq(OrderSagaStatus.CONFIRMING));
+        verify(orderRepository).transition(
+                eq(10), any(), any(), eq(OrderSagaStatus.CONFIRMING), eq(OrderSagaStatus.COMPLETED));
+        verify(orderCacheEvictor).evictAll();
         verify(paymentService).pay(any(PaymentRequest.class));
         verify(paymentService).confirm(10);
         verify(orderProducer).sendOrderConfirmation(any());
@@ -174,6 +185,7 @@ class OrderServiceImplTest {
 
     @Test
     void shouldCompensateInventoryAndPaymentWhenPaymentFails() throws Exception {
+        grantTransitions();
         final OrderRequest request = mock(OrderRequest.class);
         final Order order = Order.builder()
                 .id(11)
@@ -184,8 +196,6 @@ class OrderServiceImplTest {
         );
         when(request.customerId()).thenReturn("C1");
         when(request.products()).thenReturn(List.of());
-        when(request.amount()).thenReturn(BigDecimal.TEN);
-        when(request.paymentMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
         when(request.toOrder()).thenReturn(order);
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.completedFuture(customer));
@@ -200,6 +210,55 @@ class OrderServiceImplTest {
         verify(paymentService).cancel(11);
         verify(productService).releaseReservation("ORD-FAIL");
         assertThat(order.getSagaStatus()).isEqualTo(OrderSagaStatus.FAILED);
+    }
+
+    @Test
+    void shouldNotCompensateWhenOwnershipIsLost() throws Exception {
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder().id(12).reference("ORD-LOST").build();
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1")).thenReturn(CompletableFuture.completedFuture(
+                new CustomerResponse("C1", "John", "Doe", "john@test.com")));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(orderRepository.transition(any(), any(), any(), any(), any())).thenReturn(0);
+        when(productService.reserveProducts("ORD-LOST", List.of())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(paymentService, never()).cancel(any());
+        verify(productService, never()).releaseReservation(any());
+    }
+
+    @Test
+    void shouldNotCompensateWhenConfirmationPublicationFails() throws Exception {
+        grantTransitions();
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder()
+                .id(13)
+                .reference("ORD-PUB")
+                .totalAmount(BigDecimal.TEN)
+                .paymentMethod(com.forsaken.ecommerce.order.order.model.PaymentMethod.CREDIT_CARD)
+                .build();
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1")).thenReturn(CompletableFuture.completedFuture(
+                new CustomerResponse("C1", "John", "Doe", "john@test.com")));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(productService.reserveProducts("ORD-PUB", List.of())).thenReturn(List.of());
+        doThrow(new IllegalStateException("kafka down")).when(orderProducer).sendOrderConfirmation(any());
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(paymentService, never()).cancel(any());
+        verify(productService, never()).releaseReservation(any());
+        verify(orderRepository, never()).transition(
+                any(), any(), any(), eq(OrderSagaStatus.CONFIRMING), eq(OrderSagaStatus.COMPLETED));
+        verify(orderRepository).releaseClaim(eq(13), any());
     }
 
     /**

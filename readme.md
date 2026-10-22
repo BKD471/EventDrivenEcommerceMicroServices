@@ -84,16 +84,30 @@ local service transactions rather than a distributed database transaction:
 1. Validate the customer and persist the order with saga status `PENDING`.
 2. Reserve inventory in the product service. Reservations are keyed by order reference and lock product rows during
    the stock check/decrement.
-3. Create an idempotent payment authorization keyed by order ID, then confirm it. The payment confirmation notification
-   is emitted only after confirmation.
-4. Publish the order confirmation and mark the order `COMPLETED`.
-5. On failure, cancel the payment and release the inventory reservation. Successful compensation marks the order
-   `FAILED`; a failed compensation leaves it `COMPENSATION_REQUIRED` and the order service retries it.
+3. Create an idempotent payment authorization keyed by order ID, then confirm it. Confirmation and a
+   `payment_outbox_event` record commit in one transaction; a scheduled publisher sends the Kafka notification only
+   from committed records and retries until acknowledged.
+4. Move the order to `CONFIRMING` (payment confirmed), publish the order confirmation and mark it `COMPLETED`.
+   `CONFIRMING` is forward-only: publication failures are retried and never trigger compensation.
+5. On a failure before `CONFIRMING`, cancel the payment and release the inventory reservation. Successful compensation
+   marks the order `FAILED`; a failed compensation leaves it `COMPENSATION_REQUIRED` and the order service retries it.
 
-The order API includes the saga status in `OrderResponse`. Stale `PENDING` orders are retried from their saved order
-lines; inventory and payment operations use order reference/order ID idempotency keys, and notification consumers
-deduplicate events by order reference. Product reservation history is stored in the product database and introduced
-with Flyway migration `V4__create_product_reservations.sql`.
+Concurrency guarantees:
+
+- Each saga run (creation, recovery, compensation retry) holds a persisted, expiring claim on the order
+  (`claim_owner`, `claim_expires_at`); every state change is a conditional update that fails if the claim was lost or
+  the order is no longer in the expected state, so replicas and slow requests cannot overwrite each other.
+- Payment transitions lock the payment row. Cancelling an order with no payment yet stores a `CANCELLED` record that
+  rejects a late authorization.
+- Product reservations are serialized per order reference through `product_reservation_order` (migration
+  `V5__create_product_reservation_orders.sql`). Releasing first leaves a `RELEASED` tombstone that rejects a late
+  reservation, and reservation rows are locked before their status is checked.
+- Order caches are evicted after every committed saga change, including failed creations and scheduled recovery.
+
+The order API includes the saga status in `OrderResponse`. Stale `PENDING`/`CONFIRMING` orders are resumed from their
+saved order lines; inventory and payment operations use order reference/order ID idempotency keys, and notification
+consumers deduplicate events by order reference. Product reservation history is stored in the product database and
+introduced with Flyway migration `V4__create_product_reservations.sql`.
 
 The orchestration uses synchronous HTTP calls between services, while order/payment notifications remain Kafka events.
 This provides compensating consistency, not atomic cross-service commits; downstream payment gateways and future

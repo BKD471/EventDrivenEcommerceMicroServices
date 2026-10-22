@@ -4,12 +4,14 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableJpaAuditing
 @EnableCaching
+@EnableScheduling
 public class PaymentApplication {
     public static void main(String[] args) {
         SpringApplication.run(PaymentApplication.class, args);
