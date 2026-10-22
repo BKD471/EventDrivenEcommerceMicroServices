@@ -150,7 +150,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void createPayment_ShouldIgnoreClientSuppliedPaymentId() {
+    void createPayment_ShouldNotOverwriteTerminalPaymentWithClientSuppliedId() {
         final PaymentRequest request = PaymentRequest.builder()
                 .id(1)
                 .amount(new BigDecimal("150.50"))
@@ -158,6 +158,11 @@ class PaymentServiceTest {
                 .orderId(456)
                 .orderReference("order-456")
                 .customer(constructCustomer())
+                .build();
+        final Payment terminalPayment = Payment.builder()
+                .id(1)
+                .orderId(123)
+                .status(PaymentStatus.COMPLETED)
                 .build();
         final Payment persistedPayment = Payment.builder().id(2).build();
         final ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
@@ -168,6 +173,8 @@ class PaymentServiceTest {
 
         verify(repository).saveAndFlush(paymentCaptor.capture());
         assertNull(paymentCaptor.getValue().getId());
+        assertEquals(123, terminalPayment.getOrderId());
+        assertEquals(PaymentStatus.COMPLETED, terminalPayment.getStatus());
     }
 
     @Test
