@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -109,8 +110,8 @@ class PaymentServiceTest {
     @Test
     void testCreatePayment() {
         // Given
-        final PaymentRequest paymentRequest = constructPaymentRequest(1);
-        final Payment payment = paymentRequest.toPayment();
+        final PaymentRequest paymentRequest = constructPaymentRequest();
+        final Payment payment = constructPersistedPayment(1);
         final ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
         doReturn(payment).when(repository).saveAndFlush(paymentCaptor.capture());
         when(repository.findByOrderIdForUpdate(123))
@@ -137,8 +138,8 @@ class PaymentServiceTest {
 
     @Test
     void createPayment_ShouldReturnExistingPayment_WhenOrderIsRetried() {
-        final PaymentRequest request = constructPaymentRequest(1);
-        final Payment payment = request.toPayment();
+        final PaymentRequest request = constructPaymentRequest();
+        final Payment payment = constructPersistedPayment(1);
         when(repository.findByOrderIdForUpdate(request.orderId())).thenReturn(Optional.of(payment));
 
         final Integer result = service.createPayment(request);
@@ -149,8 +150,29 @@ class PaymentServiceTest {
     }
 
     @Test
+    void createPayment_ShouldIgnoreClientSuppliedPaymentId() {
+        final PaymentRequest request = PaymentRequest.builder()
+                .id(1)
+                .amount(new BigDecimal("150.50"))
+                .paymentMethod(PaymentMethod.PAYPAL)
+                .orderId(456)
+                .orderReference("order-456")
+                .customer(constructCustomer())
+                .build();
+        final Payment persistedPayment = Payment.builder().id(2).build();
+        final ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+        when(repository.findByOrderIdForUpdate(456)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(Payment.class))).thenReturn(persistedPayment);
+
+        assertEquals(2, service.createPayment(request));
+
+        verify(repository).saveAndFlush(paymentCaptor.capture());
+        assertNull(paymentCaptor.getValue().getId());
+    }
+
+    @Test
     void createPayment_ShouldAcceptLegacyPaymentWithoutOrderReference() {
-        final PaymentRequest request = constructPaymentRequest(1);
+        final PaymentRequest request = constructPaymentRequest();
         final Payment legacy = Payment.builder()
                 .id(1)
                 .orderId(123)
@@ -169,14 +191,14 @@ class PaymentServiceTest {
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalStateException.class,
-                () -> service.createPayment(constructPaymentRequest(1))
+                () -> service.createPayment(constructPaymentRequest())
         );
     }
 
     @Test
     void createPayment_ShouldRetryAfterConcurrentInsertConflict() {
-        final PaymentRequest request = constructPaymentRequest(1);
-        final Payment winner = request.toPayment();
+        final PaymentRequest request = constructPaymentRequest();
+        final Payment winner = constructPersistedPayment(1);
         when(repository.findByOrderIdForUpdate(123))
                 .thenReturn(Optional.empty(), Optional.of(winner));
         when(repository.saveAndFlush(any(Payment.class)))
@@ -199,7 +221,7 @@ class PaymentServiceTest {
 
     @Test
     void confirmPayment_ShouldTreatLegacyPaymentAsCompletedWithoutRepublishing() {
-        final Payment payment = constructPaymentRequest(1).toPayment();
+        final Payment payment = constructPersistedPayment(1);
         payment.setStatus(null);
         when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
 
@@ -212,7 +234,7 @@ class PaymentServiceTest {
 
     @Test
     void cancelPayment_ShouldRejectConfirmedPayment() {
-        final Payment payment = constructPaymentRequest(1).toPayment();
+        final Payment payment = constructPersistedPayment(1);
         payment.setStatus(PaymentStatus.COMPLETED);
         when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
 
@@ -238,7 +260,7 @@ class PaymentServiceTest {
 
     @Test
     void cancelPayment_ShouldBeIdempotent() {
-        final Payment payment = constructPaymentRequest(1).toPayment();
+        final Payment payment = constructPersistedPayment(1);
         payment.setStatus(PaymentStatus.AUTHORIZED);
         when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
 
@@ -319,8 +341,8 @@ class PaymentServiceTest {
         final LocalDateTime fromDate = LocalDateTime.now().minusDays(5);
         final LocalDateTime toDate = LocalDateTime.now();
         final PageRequest pageable = PageRequest.of(0, 5);
-        final Payment paymentOne = constructPaymentRequest(1).toPayment();
-        final Payment paymentTwo = constructPaymentRequest(2).toPayment();
+        final Payment paymentOne = constructPersistedPayment(1);
+        final Payment paymentTwo = constructPersistedPayment(2);
         final Page<Payment> page = new PageImpl<>(List.of(paymentOne, paymentTwo), pageable, 2);
         when(repository.findAllByCreatedDateBetween(eq(fromDate), eq(toDate), eq(pageable)))
                 .thenReturn(page);
@@ -340,18 +362,22 @@ class PaymentServiceTest {
      * Constructs a fully populated {@link PaymentRequest} object for convenient reuse
      * across test scenarios.
      *
-     * @param paymentId the ID to assign to the request
      * @return a populated {@link PaymentRequest}
      */
-    private PaymentRequest constructPaymentRequest(final int paymentId) {
+    private PaymentRequest constructPaymentRequest() {
         return PaymentRequest.builder()
-                .id(paymentId)
                 .amount(new BigDecimal("150.50"))
                 .paymentMethod(PaymentMethod.PAYPAL)
                 .orderId(123)
                 .orderReference("order-123")
                 .customer(constructCustomer())
                 .build();
+    }
+
+    private Payment constructPersistedPayment(final int paymentId) {
+        final Payment payment = constructPaymentRequest().toPayment();
+        payment.setId(paymentId);
+        return payment;
     }
 
     /**

@@ -37,7 +37,6 @@ public record PaymentRequest(
 
     public Payment toPayment() {
         return Payment.builder()
-                .id(this.id())
                 .paymentMethod(this.paymentMethod())
                 .amount(this.amount())
                 .orderId(this.orderId())
