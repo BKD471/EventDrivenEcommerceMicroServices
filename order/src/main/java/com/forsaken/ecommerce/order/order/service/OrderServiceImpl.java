@@ -114,6 +114,7 @@ public class OrderServiceImpl implements IOrderService {
         final List<PurchaseResponse> reservedProducts;
         try {
             reservedProducts = productService.reserveProducts(order.getReference(), products);
+            reservedProducts.forEach(this::toAvroPurchase);
             paymentService.pay(PaymentRequest.builder()
                     .amount(order.getTotalAmount())
                     .paymentMethod(order.getPaymentMethod())
