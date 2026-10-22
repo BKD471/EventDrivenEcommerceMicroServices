@@ -382,9 +382,18 @@ class PaymentServiceTest {
     }
 
     private Payment constructPersistedPayment(final int paymentId) {
-        final Payment payment = constructPaymentRequest().toPayment();
-        payment.setId(paymentId);
-        return payment;
+        final PaymentRequest request = constructPaymentRequest();
+        return Payment.builder()
+                .id(paymentId)
+                .amount(request.amount())
+                .paymentMethod(request.paymentMethod())
+                .orderId(request.orderId())
+                .orderReference(request.orderReference())
+                .customerFirstname(request.customer().firstname())
+                .customerLastname(request.customer().lastname())
+                .customerEmail(request.customer().email())
+                .status(PaymentStatus.AUTHORIZED)
+                .build();
     }
 
     /**
