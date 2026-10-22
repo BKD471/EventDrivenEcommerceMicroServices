@@ -58,6 +58,16 @@ public class Order {
 
     private String customerId;
 
+    // Snapshot used to publish the confirmation even if the customer is later deleted.
+    @Setter
+    private String customerFirstname;
+
+    @Setter
+    private String customerLastname;
+
+    @Setter
+    private String customerEmail;
+
     @Enumerated(EnumType.STRING)
     @Setter
     private OrderSagaStatus sagaStatus;

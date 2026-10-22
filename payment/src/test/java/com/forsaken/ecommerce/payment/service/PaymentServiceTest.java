@@ -211,9 +211,35 @@ class PaymentServiceTest {
     }
 
     @Test
-    void cancelPayment_ShouldBeIdempotent() {
+    void cancelPayment_ShouldRejectConfirmedPayment() {
         final Payment payment = constructPaymentRequest(1).toPayment();
         payment.setStatus(PaymentStatus.COMPLETED);
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> service.cancelPayment(123));
+        assertEquals(PaymentStatus.COMPLETED, payment.getStatus());
+    }
+
+    @Test
+    void createPayment_ShouldRejectAmountThatCannotBeEncodedInConfirmationEvent() {
+        final PaymentRequest request = PaymentRequest.builder()
+                .amount(new BigDecimal("10000000000000000.00"))
+                .paymentMethod(PaymentMethod.PAYPAL)
+                .orderId(123)
+                .orderReference("order-123")
+                .customer(constructCustomer())
+                .build();
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.createPayment(request));
+        verify(repository, never()).saveAndFlush(any(Payment.class));
+    }
+
+    @Test
+    void cancelPayment_ShouldBeIdempotent() {
+        final Payment payment = constructPaymentRequest(1).toPayment();
+        payment.setStatus(PaymentStatus.AUTHORIZED);
         when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
 
         service.cancelPayment(123);

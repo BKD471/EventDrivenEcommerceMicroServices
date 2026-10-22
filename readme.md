@@ -102,6 +102,10 @@ Concurrency guarantees:
 - Product reservations are serialized per order reference through `product_reservation_order` (migration
   `V5__create_product_reservation_orders.sql`). Releasing first leaves a `RELEASED` tombstone that rejects a late
   reservation, and reservation rows are locked before their status is checked.
+- Payment confirmation is retried (idempotently) from the `CONFIRMING` status, so an uncertain confirmation outcome is
+  reconciled instead of compensated. The order stores a customer snapshot for recovery, completed payments cannot be
+  cancelled, unencodable amounts are rejected up front, and outbox events that keep failing are quarantined after 10
+  attempts so they cannot block other notifications.
 - Order caches are evicted after every committed saga change, including failed creations and scheduled recovery.
 
 The order API includes the saga status in `OrderResponse`. Stale `PENDING`/`CONFIRMING` orders are resumed from their

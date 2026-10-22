@@ -92,6 +92,9 @@ public class OrderServiceImpl implements IOrderService {
 
             order.addOrderLine(orderLine);
         });
+        order.setCustomerFirstname(customer.firstname());
+        order.setCustomerLastname(customer.lastname());
+        order.setCustomerEmail(customer.email());
         final Order savedOrder = orderRepository.saveAndFlush(order);
         try {
             executeSaga(savedOrder, owner, customer, request.products());
@@ -118,7 +121,7 @@ public class OrderServiceImpl implements IOrderService {
                     .orderReference(order.getReference())
                     .customer(customer)
                     .build());
-            paymentService.confirm(order.getId());
+            // Durable confirmation intent: from here on the saga only moves forward.
             advance(order, owner, OrderSagaStatus.PENDING, OrderSagaStatus.CONFIRMING);
         } catch (Exception failure) {
             failSaga(order, owner, failure);
@@ -175,6 +178,8 @@ public class OrderServiceImpl implements IOrderService {
             final List<PurchaseResponse> products
     ) throws BusinessException {
         try {
+            // Idempotent; an uncertain earlier outcome (e.g. a lost response) is reconciled here.
+            paymentService.confirm(order.getId());
             publishOrderConfirmation(order, customer, products);
             advance(order, owner, OrderSagaStatus.CONFIRMING, OrderSagaStatus.COMPLETED);
         } catch (Exception failure) {
@@ -281,7 +286,7 @@ public class OrderServiceImpl implements IOrderService {
                 .toList();
         final CustomerResponse customer;
         try {
-            customer = customerService.getCustomer(order.getCustomerId()).join();
+            customer = customerFor(order);
         } catch (Exception failure) {
             if (order.getSagaStatus() == OrderSagaStatus.PENDING) {
                 failSaga(order, owner, failure);
@@ -303,6 +308,19 @@ public class OrderServiceImpl implements IOrderService {
         }
         publishAndComplete(order, owner, customer, reservedProducts);
         log.info("Recovered order saga for reference={}", order.getReference());
+    }
+
+    /** Uses the snapshot captured at creation so recovery survives customer deletion. */
+    private CustomerResponse customerFor(final Order order) {
+        if (order.getCustomerEmail() != null) {
+            return new CustomerResponse(
+                    order.getCustomerId(),
+                    order.getCustomerFirstname(),
+                    order.getCustomerLastname(),
+                    order.getCustomerEmail()
+            );
+        }
+        return customerService.getCustomer(order.getCustomerId()).join();
     }
 
     private List<Order> claimable(final List<OrderSagaStatus> statuses) {

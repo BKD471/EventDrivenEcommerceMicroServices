@@ -18,7 +18,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,6 +68,25 @@ class PaymentOutboxPublisherTest {
         publisher.publishPending();
 
         assertEquals(PaymentOutboxEvent.OutboxStatus.PENDING, event.getStatus());
-        verify(outboxRepository, never()).save(event);
+        assertEquals(1, event.getAttempts());
+    }
+
+    @Test
+    void publishPending_ShouldQuarantineUnpublishableEventAndContinueWithOthers() {
+        final PaymentOutboxEvent bad = event();
+        final PaymentOutboxEvent good = event();
+        for (int i = 0; i < 9; i++) {
+            bad.recordFailure(10);
+        }
+        when(outboxRepository.findTop50ByStatusOrderByIdAsc(PaymentOutboxEvent.OutboxStatus.PENDING))
+                .thenReturn(List.of(bad, good));
+        org.mockito.Mockito.doThrow(new IllegalStateException("unserializable"))
+                .doNothing()
+                .when(notificationProducer).sendNotification(any(PaymentConfirmation.class));
+
+        publisher.publishPending();
+
+        assertEquals(PaymentOutboxEvent.OutboxStatus.QUARANTINED, bad.getStatus());
+        assertEquals(PaymentOutboxEvent.OutboxStatus.SENT, good.getStatus());
     }
 }

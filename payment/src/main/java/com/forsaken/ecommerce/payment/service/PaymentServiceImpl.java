@@ -24,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -63,6 +65,7 @@ public class PaymentServiceImpl implements IPaymentService {
     }
 
     private Integer authorize(final PaymentRequest request) {
+        validateConfirmationAmount(request.amount());
         final Optional<Payment> existing = repository.findByOrderIdForUpdate(request.orderId());
         if (existing.isPresent()) {
             final Payment payment = existing.get();
@@ -125,6 +128,11 @@ public class PaymentServiceImpl implements IPaymentService {
                         .orderId(orderId)
                         .status(PaymentStatus.CANCELLED)
                         .build());
+            } else if (existing.get().getStatus() == null
+                    || existing.get().getStatus() == PaymentStatus.COMPLETED) {
+                throw new IllegalStateException(
+                        "Cannot cancel a confirmed payment for order " + orderId
+                );
             } else if (existing.get().getStatus() != PaymentStatus.CANCELLED) {
                 existing.get().setStatus(PaymentStatus.CANCELLED);
                 repository.save(existing.get());
@@ -132,6 +140,19 @@ public class PaymentServiceImpl implements IPaymentService {
             return null;
         });
         log.info("Cancelled payment for orderId={}", orderId);
+    }
+
+    /** Rejects amounts that could never be encoded in the Avro confirmation event. */
+    private void validateConfirmationAmount(final BigDecimal amount) {
+        try {
+            if (amount.setScale(2, RoundingMode.UNNECESSARY).precision() > 18) {
+                throw new ArithmeticException("precision");
+            }
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(
+                    "Payment amount must have at most 2 decimal places and 18 digits", ex
+            );
+        }
     }
 
     /**

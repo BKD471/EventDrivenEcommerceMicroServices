@@ -233,6 +233,31 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void shouldNotCompensateWhenPaymentConfirmationOutcomeIsUncertain() throws Exception {
+        grantTransitions();
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder().id(14).reference("ORD-CONF").build();
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1")).thenReturn(CompletableFuture.completedFuture(
+                new CustomerResponse("C1", "John", "Doe", "john@test.com")));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(productService.reserveProducts("ORD-CONF", List.of())).thenReturn(List.of());
+        doThrow(new IllegalStateException("timeout")).when(paymentService).confirm(14);
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(paymentService, never()).cancel(any());
+        verify(productService, never()).releaseReservation(any());
+        verify(orderRepository).transition(
+                eq(14), any(), any(), eq(OrderSagaStatus.PENDING), eq(OrderSagaStatus.CONFIRMING));
+        verify(orderRepository).releaseClaim(eq(14), any());
+        assertThat(order.getCustomerEmail()).isEqualTo("john@test.com");
+    }
+
+    @Test
     void shouldNotCompensateWhenConfirmationPublicationFails() throws Exception {
         grantTransitions();
         final OrderRequest request = mock(OrderRequest.class);

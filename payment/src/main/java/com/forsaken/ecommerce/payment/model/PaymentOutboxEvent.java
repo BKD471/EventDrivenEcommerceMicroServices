@@ -61,12 +61,23 @@ public class PaymentOutboxEvent {
         this.traceId = traceId;
     }
 
+    private int attempts;
+
     public void markSent() {
         this.status = OutboxStatus.SENT;
     }
 
+    /** Counts a failed publish; after maxAttempts the event is quarantined so it cannot block others. */
+    public void recordFailure(final int maxAttempts) {
+        this.attempts++;
+        if (this.attempts >= maxAttempts) {
+            this.status = OutboxStatus.QUARANTINED;
+        }
+    }
+
     public enum OutboxStatus {
         PENDING,
-        SENT
+        SENT,
+        QUARANTINED
     }
 }

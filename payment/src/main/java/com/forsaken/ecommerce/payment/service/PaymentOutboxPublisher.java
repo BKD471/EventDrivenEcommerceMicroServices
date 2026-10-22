@@ -23,6 +23,8 @@ import java.nio.ByteBuffer;
 @RequiredArgsConstructor
 public class PaymentOutboxPublisher {
 
+    private static final int MAX_ATTEMPTS = 10;
+
     private final IPaymentOutboxRepository outboxRepository;
     private final INotificationProducerService notificationProducer;
 
@@ -36,9 +38,10 @@ public class PaymentOutboxPublisher {
                 event.markSent();
                 outboxRepository.save(event);
             } catch (Exception ex) {
-                log.error("Unable to publish payment confirmation for order reference={}; will retry",
-                        event.getOrderReference(), ex);
-                return;
+                event.recordFailure(MAX_ATTEMPTS);
+                outboxRepository.save(event);
+                log.error("Unable to publish payment confirmation for order reference={} (attempt {}/{}, status {})",
+                        event.getOrderReference(), event.getAttempts(), MAX_ATTEMPTS, event.getStatus(), ex);
             }
         }
     }
@@ -62,6 +65,7 @@ public class PaymentOutboxPublisher {
         final Schema decimalSchema =
                 LogicalTypes.decimal(18, 2).addToSchema(Schema.create(Schema.Type.BYTES));
         return new Conversions.DecimalConversion()
-                .toBytes(value, decimalSchema, decimalSchema.getLogicalType());
+                .toBytes(value.setScale(2, java.math.RoundingMode.UNNECESSARY),
+                        decimalSchema, decimalSchema.getLogicalType());
     }
 }
