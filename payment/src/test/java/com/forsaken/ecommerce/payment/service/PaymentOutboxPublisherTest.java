@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -34,9 +35,13 @@ class PaymentOutboxPublisherTest {
     private PaymentOutboxPublisher publisher;
 
     private PaymentOutboxEvent event() {
+        return event(new BigDecimal("10.00"));
+    }
+
+    private PaymentOutboxEvent event(final BigDecimal amount) {
         final Payment payment = Payment.builder()
                 .orderReference("order-1")
-                .amount(new BigDecimal("10.00"))
+                .amount(amount)
                 .paymentMethod(PaymentMethod.PAYPAL)
                 .customerFirstname("John")
                 .customerLastname("Doe")
@@ -48,7 +53,8 @@ class PaymentOutboxPublisherTest {
     @Test
     void publishPending_ShouldSendAndMarkEventsSent() {
         final PaymentOutboxEvent event = event();
-        when(outboxRepository.findTop50ByStatusOrderByIdAsc(PaymentOutboxEvent.OutboxStatus.PENDING))
+        when(outboxRepository.findReadyToPublish(
+                any(), any(), any()))
                 .thenReturn(List.of(event));
 
         publisher.publishPending();
@@ -60,7 +66,11 @@ class PaymentOutboxPublisherTest {
     @Test
     void publishPending_ShouldKeepEventPending_WhenKafkaSendFails() {
         final PaymentOutboxEvent event = event();
-        when(outboxRepository.findTop50ByStatusOrderByIdAsc(PaymentOutboxEvent.OutboxStatus.PENDING))
+        for (int i = 0; i < 10; i++) {
+            event.recordFailure(Instant.now());
+        }
+        when(outboxRepository.findReadyToPublish(
+                any(), any(), any()))
                 .thenReturn(List.of(event));
         doThrow(new IllegalStateException("kafka down"))
                 .when(notificationProducer).sendNotification(any(PaymentConfirmation.class));
@@ -68,25 +78,22 @@ class PaymentOutboxPublisherTest {
         publisher.publishPending();
 
         assertEquals(PaymentOutboxEvent.OutboxStatus.PENDING, event.getStatus());
-        assertEquals(1, event.getAttempts());
+        assertEquals(11, event.getAttempts());
+        assertTrue(event.getNextAttemptAt().isAfter(Instant.now()));
     }
 
     @Test
-    void publishPending_ShouldQuarantineUnpublishableEventAndContinueWithOthers() {
-        final PaymentOutboxEvent bad = event();
+    void publishPending_ShouldQuarantineInvalidPayloadAndContinueWithOthers() {
+        final PaymentOutboxEvent bad = event(new BigDecimal("10.001"));
         final PaymentOutboxEvent good = event();
-        for (int i = 0; i < 9; i++) {
-            bad.recordFailure(10);
-        }
-        when(outboxRepository.findTop50ByStatusOrderByIdAsc(PaymentOutboxEvent.OutboxStatus.PENDING))
+        when(outboxRepository.findReadyToPublish(
+                any(), any(), any()))
                 .thenReturn(List.of(bad, good));
-        org.mockito.Mockito.doThrow(new IllegalStateException("unserializable"))
-                .doNothing()
-                .when(notificationProducer).sendNotification(any(PaymentConfirmation.class));
 
         publisher.publishPending();
 
         assertEquals(PaymentOutboxEvent.OutboxStatus.QUARANTINED, bad.getStatus());
         assertEquals(PaymentOutboxEvent.OutboxStatus.SENT, good.getStatus());
+        verify(notificationProducer).sendNotification(any(PaymentConfirmation.class));
     }
 }

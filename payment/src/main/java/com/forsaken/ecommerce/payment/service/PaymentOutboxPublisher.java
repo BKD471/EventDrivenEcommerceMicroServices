@@ -8,12 +8,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 /**
  * Publishes committed payment confirmation outbox records to Kafka, retrying until acknowledged.
@@ -23,25 +25,36 @@ import java.nio.ByteBuffer;
 @RequiredArgsConstructor
 public class PaymentOutboxPublisher {
 
-    private static final int MAX_ATTEMPTS = 10;
-
     private final IPaymentOutboxRepository outboxRepository;
     private final INotificationProducerService notificationProducer;
 
     @Scheduled(fixedDelayString = "${payment.outbox.publish-delay:2000}")
     @Transactional
     public void publishPending() {
+        final Instant now = Instant.now();
         for (final PaymentOutboxEvent event
-                : outboxRepository.findTop50ByStatusOrderByIdAsc(PaymentOutboxEvent.OutboxStatus.PENDING)) {
+                : outboxRepository.findReadyToPublish(
+                        PaymentOutboxEvent.OutboxStatus.PENDING, now, PageRequest.of(0, 50))) {
+            final PaymentConfirmation confirmation;
             try {
-                notificationProducer.sendNotification(toConfirmation(event));
+                confirmation = toConfirmation(event);
+            } catch (RuntimeException ex) {
+                event.quarantine();
+                outboxRepository.save(event);
+                log.error("Unable to build payment confirmation for order reference={}, quarantining event",
+                        event.getOrderReference(), ex);
+                continue;
+            }
+
+            try {
+                notificationProducer.sendNotification(confirmation);
                 event.markSent();
                 outboxRepository.save(event);
             } catch (Exception ex) {
-                event.recordFailure(MAX_ATTEMPTS);
+                event.recordFailure(Instant.now());
                 outboxRepository.save(event);
-                log.error("Unable to publish payment confirmation for order reference={} (attempt {}/{}, status {})",
-                        event.getOrderReference(), event.getAttempts(), MAX_ATTEMPTS, event.getStatus(), ex);
+                log.error("Unable to publish payment confirmation for order reference={} (attempt {}, retry at {})",
+                        event.getOrderReference(), event.getAttempts(), event.getNextAttemptAt(), ex);
             }
         }
     }

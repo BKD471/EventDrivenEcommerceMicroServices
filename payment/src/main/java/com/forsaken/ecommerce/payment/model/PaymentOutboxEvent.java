@@ -63,16 +63,20 @@ public class PaymentOutboxEvent {
 
     private int attempts;
 
+    private Instant nextAttemptAt;
+
     public void markSent() {
         this.status = OutboxStatus.SENT;
     }
 
-    /** Counts a failed publish; after maxAttempts the event is quarantined so it cannot block others. */
-    public void recordFailure(final int maxAttempts) {
+    public void recordFailure(final Instant failedAt) {
         this.attempts++;
-        if (this.attempts >= maxAttempts) {
-            this.status = OutboxStatus.QUARANTINED;
-        }
+        final long backoffSeconds = Math.min(60L, 1L << Math.min(this.attempts - 1, 6));
+        this.nextAttemptAt = failedAt.plusSeconds(backoffSeconds);
+    }
+
+    public void quarantine() {
+        this.status = OutboxStatus.QUARANTINED;
     }
 
     public enum OutboxStatus {
