@@ -4,6 +4,7 @@ import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.order.configs.client_configurations.payment.PaymentFeignConfiguration;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 
 /**
@@ -54,4 +55,10 @@ public interface IPaymentClient {
      */
     @PostMapping
     ApiResponse<Integer> requestOrderPayment(@RequestBody final PaymentRequest request);
+
+    @PostMapping("/{orderId}/confirm")
+    ApiResponse<Void> confirmOrderPayment(@PathVariable("orderId") Integer orderId);
+
+    @PostMapping("/{orderId}/cancel")
+    ApiResponse<Void> cancelOrderPayment(@PathVariable("orderId") Integer orderId);
 }

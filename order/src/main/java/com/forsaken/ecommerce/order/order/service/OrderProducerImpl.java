@@ -27,6 +27,7 @@ public class OrderProducerImpl implements IOrderProducer {
                 .setHeader(TOPIC, kafkaProperties.topicName())
                 .build();
 
-        kafkaTemplate.send(message);
+        kafkaTemplate.send(message).join();
+        log.info("Order confirmation acknowledged by Kafka");
     }
 }

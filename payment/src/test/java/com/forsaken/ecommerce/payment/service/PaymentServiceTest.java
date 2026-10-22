@@ -9,7 +9,12 @@ import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
+import com.forsaken.ecommerce.payment.model.PaymentOutboxEvent;
+import com.forsaken.ecommerce.payment.repository.IPaymentOutboxRepository;
 import com.forsaken.ecommerce.payment.repository.IPaymentRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.forsaken.ecommerce.payment.repository.PaymentSummary;
 import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,12 +32,17 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 /**
  * Unit tests for {@link PaymentServiceImpl}, validating core payment business logic
@@ -62,7 +72,7 @@ class PaymentServiceTest {
     private IPaymentRepository repository;
 
     @Mock
-    private INotificationProducerService notificationProducer;
+    private IPaymentOutboxRepository outboxRepository;
 
     @Mock
     private Tracer tracer;
@@ -77,7 +87,12 @@ class PaymentServiceTest {
      */
     @BeforeEach
     void setup() {
-        service = new PaymentServiceImpl(repository, notificationProducer, tracer);
+        service = new PaymentServiceImpl(
+                repository,
+                outboxRepository,
+                tracer,
+                new TransactionTemplate(mock(PlatformTransactionManager.class))
+        );
     }
 
     /**
@@ -95,27 +110,172 @@ class PaymentServiceTest {
     @Test
     void testCreatePayment() {
         // Given
-        final PaymentRequest paymentRequest = constructPaymentRequest(1);
-        final Payment payment = paymentRequest.toPayment();
+        final PaymentRequest paymentRequest = constructPaymentRequest();
+        final Payment payment = constructPersistedPayment(1);
         final ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
-        doReturn(payment).when(repository).save(paymentCaptor.capture());
+        doReturn(payment).when(repository).saveAndFlush(paymentCaptor.capture());
+        when(repository.findByOrderIdForUpdate(123))
+                .thenReturn(Optional.empty(), Optional.of(payment));
 
         // When
         final Integer result = service.createPayment(paymentRequest);
+        service.confirmPayment(123);
 
         // Then
         assertEquals(1, result);
         final Payment passedToSave = paymentCaptor.getValue();
         assertEquals(new BigDecimal("150.50"), passedToSave.getAmount());
         assertEquals(PaymentMethod.PAYPAL, passedToSave.getPaymentMethod());
+        assertEquals(PaymentStatus.AUTHORIZED, passedToSave.getStatus());
+        assertEquals(PaymentStatus.COMPLETED, payment.getStatus());
 
-        // Capture notification
-        final ArgumentCaptor<PaymentConfirmation> notifCaptor =
-                ArgumentCaptor.forClass(PaymentConfirmation.class);
-        verify(notificationProducer).sendNotification(notifCaptor.capture());
-        final PaymentConfirmation paymentConfirmation = notifCaptor.getValue();
-        assertEquals("order-123", paymentConfirmation.getOrderReference());
-        assertEquals("John", paymentConfirmation.getCustomerFirstname());
+        final ArgumentCaptor<PaymentOutboxEvent> outboxCaptor =
+                ArgumentCaptor.forClass(PaymentOutboxEvent.class);
+        verify(outboxRepository).save(outboxCaptor.capture());
+        assertEquals("order-123", outboxCaptor.getValue().getOrderReference());
+        assertEquals("John", outboxCaptor.getValue().getCustomerFirstname());
+    }
+
+    @Test
+    void createPayment_ShouldReturnExistingPayment_WhenOrderIsRetried() {
+        final PaymentRequest request = constructPaymentRequest();
+        final Payment payment = constructPersistedPayment(1);
+        when(repository.findByOrderIdForUpdate(request.orderId())).thenReturn(Optional.of(payment));
+
+        final Integer result = service.createPayment(request);
+
+        assertEquals(1, result);
+        verify(repository, never()).saveAndFlush(payment);
+        verify(outboxRepository, never()).save(any(PaymentOutboxEvent.class));
+    }
+
+    @Test
+    void createPayment_ShouldNotOverwriteTerminalPaymentWithClientSuppliedId() {
+        final PaymentRequest request = PaymentRequest.builder()
+                .id(1)
+                .amount(new BigDecimal("150.50"))
+                .paymentMethod(PaymentMethod.PAYPAL)
+                .orderId(456)
+                .orderReference("order-456")
+                .customer(constructCustomer())
+                .build();
+        final Payment terminalPayment = Payment.builder()
+                .id(1)
+                .orderId(123)
+                .status(PaymentStatus.COMPLETED)
+                .build();
+        final Payment persistedPayment = Payment.builder().id(2).build();
+        final ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+        when(repository.findByOrderIdForUpdate(456)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(Payment.class))).thenReturn(persistedPayment);
+
+        assertEquals(2, service.createPayment(request));
+
+        verify(repository).saveAndFlush(paymentCaptor.capture());
+        assertNull(paymentCaptor.getValue().getId());
+        assertEquals(123, terminalPayment.getOrderId());
+        assertEquals(PaymentStatus.COMPLETED, terminalPayment.getStatus());
+    }
+
+    @Test
+    void createPayment_ShouldAcceptLegacyPaymentWithoutOrderReference() {
+        final PaymentRequest request = constructPaymentRequest();
+        final Payment legacy = Payment.builder()
+                .id(1)
+                .orderId(123)
+                .amount(new BigDecimal("150.5"))
+                .paymentMethod(PaymentMethod.PAYPAL)
+                .build();
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(legacy));
+
+        assertEquals(1, service.createPayment(request));
+    }
+
+    @Test
+    void createPayment_ShouldRejectAuthorization_WhenOrderWasCancelled() {
+        final Payment tombstone = Payment.builder().orderId(123).status(PaymentStatus.CANCELLED).build();
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(tombstone));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> service.createPayment(constructPaymentRequest())
+        );
+    }
+
+    @Test
+    void createPayment_ShouldRetryAfterConcurrentInsertConflict() {
+        final PaymentRequest request = constructPaymentRequest();
+        final Payment winner = constructPersistedPayment(1);
+        when(repository.findByOrderIdForUpdate(123))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+        when(repository.saveAndFlush(any(Payment.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate"));
+
+        assertEquals(1, service.createPayment(request));
+    }
+
+    @Test
+    void cancelPayment_ShouldPersistCancellationIntent_WhenPaymentDoesNotExist() {
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.empty());
+
+        service.cancelPayment(123);
+
+        final ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(repository).saveAndFlush(captor.capture());
+        assertEquals(PaymentStatus.CANCELLED, captor.getValue().getStatus());
+        assertEquals(123, captor.getValue().getOrderId());
+    }
+
+    @Test
+    void confirmPayment_ShouldTreatLegacyPaymentAsCompletedWithoutRepublishing() {
+        final Payment payment = constructPersistedPayment(1);
+        payment.setStatus(null);
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
+
+        service.confirmPayment(123);
+
+        assertEquals(PaymentStatus.COMPLETED, payment.getStatus());
+        verify(repository).save(payment);
+        verify(outboxRepository, never()).save(any(PaymentOutboxEvent.class));
+    }
+
+    @Test
+    void cancelPayment_ShouldRejectConfirmedPayment() {
+        final Payment payment = constructPersistedPayment(1);
+        payment.setStatus(PaymentStatus.COMPLETED);
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> service.cancelPayment(123));
+        assertEquals(PaymentStatus.COMPLETED, payment.getStatus());
+    }
+
+    @Test
+    void createPayment_ShouldRejectAmountThatCannotBeEncodedInConfirmationEvent() {
+        final PaymentRequest request = PaymentRequest.builder()
+                .amount(new BigDecimal("10000000000000000.00"))
+                .paymentMethod(PaymentMethod.PAYPAL)
+                .orderId(123)
+                .orderReference("order-123")
+                .customer(constructCustomer())
+                .build();
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.createPayment(request));
+        verify(repository, never()).saveAndFlush(any(Payment.class));
+    }
+
+    @Test
+    void cancelPayment_ShouldBeIdempotent() {
+        final Payment payment = constructPersistedPayment(1);
+        payment.setStatus(PaymentStatus.AUTHORIZED);
+        when(repository.findByOrderIdForUpdate(123)).thenReturn(Optional.of(payment));
+
+        service.cancelPayment(123);
+        service.cancelPayment(123);
+
+        assertEquals(PaymentStatus.CANCELLED, payment.getStatus());
+        verify(repository).save(payment);
     }
 
     /**
@@ -188,8 +348,8 @@ class PaymentServiceTest {
         final LocalDateTime fromDate = LocalDateTime.now().minusDays(5);
         final LocalDateTime toDate = LocalDateTime.now();
         final PageRequest pageable = PageRequest.of(0, 5);
-        final Payment paymentOne = constructPaymentRequest(1).toPayment();
-        final Payment paymentTwo = constructPaymentRequest(2).toPayment();
+        final Payment paymentOne = constructPersistedPayment(1);
+        final Payment paymentTwo = constructPersistedPayment(2);
         final Page<Payment> page = new PageImpl<>(List.of(paymentOne, paymentTwo), pageable, 2);
         when(repository.findAllByCreatedDateBetween(eq(fromDate), eq(toDate), eq(pageable)))
                 .thenReturn(page);
@@ -209,17 +369,30 @@ class PaymentServiceTest {
      * Constructs a fully populated {@link PaymentRequest} object for convenient reuse
      * across test scenarios.
      *
-     * @param paymentId the ID to assign to the request
      * @return a populated {@link PaymentRequest}
      */
-    private PaymentRequest constructPaymentRequest(final int paymentId) {
+    private PaymentRequest constructPaymentRequest() {
         return PaymentRequest.builder()
-                .id(paymentId)
                 .amount(new BigDecimal("150.50"))
                 .paymentMethod(PaymentMethod.PAYPAL)
                 .orderId(123)
                 .orderReference("order-123")
                 .customer(constructCustomer())
+                .build();
+    }
+
+    private Payment constructPersistedPayment(final int paymentId) {
+        final PaymentRequest request = constructPaymentRequest();
+        return Payment.builder()
+                .id(paymentId)
+                .amount(request.amount())
+                .paymentMethod(request.paymentMethod())
+                .orderId(request.orderId())
+                .orderReference(request.orderReference())
+                .customerFirstname(request.customer().firstname())
+                .customerLastname(request.customer().lastname())
+                .customerEmail(request.customer().email())
+                .status(PaymentStatus.AUTHORIZED)
                 .build();
     }
 

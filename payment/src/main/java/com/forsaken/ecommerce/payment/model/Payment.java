@@ -38,7 +38,16 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     private PaymentMethod paymentMethod;
 
+    @Column(unique = true)
     private Integer orderId;
+
+    private String orderReference;
+    private String customerFirstname;
+    private String customerLastname;
+    private String customerEmail;
+
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus status;
 
     @CreatedDate
     @Column(updatable = false, nullable = false)
@@ -47,4 +56,8 @@ public class Payment {
     @LastModifiedDate
     @Column(insertable = false)
     private LocalDateTime lastModifiedDate;
+
+    public void setStatus(final PaymentStatus status) {
+        this.status = status;
+    }
 }

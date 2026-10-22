@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.order.order.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.forsaken.ecommerce.order.order.model.PaymentMethod;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -13,8 +14,8 @@ public record OrderResponse(
         String reference,
         BigDecimal amount,
         PaymentMethod paymentMethod,
-        String customerId
+        String customerId,
+        OrderSagaStatus sagaStatus
 ) {
 
 }
-

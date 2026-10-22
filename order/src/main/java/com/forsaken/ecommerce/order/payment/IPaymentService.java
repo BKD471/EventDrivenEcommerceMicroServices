@@ -69,4 +69,8 @@ public interface IPaymentService {
      * @throws PaymentFailedExceptions if payment processing fails for any reason
      */
     Integer pay(final PaymentRequest request) throws PaymentFailedExceptions;
+
+    void confirm(Integer orderId) throws PaymentFailedExceptions;
+
+    void cancel(Integer orderId) throws PaymentFailedExceptions;
 }

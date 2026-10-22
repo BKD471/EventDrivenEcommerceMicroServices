@@ -6,6 +6,7 @@ import com.forsaken.ecommerce.product.dto.ProductPurchaseRequest;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
+import com.forsaken.ecommerce.product.dto.ProductReservationRequest;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 
 import java.math.BigDecimal;
@@ -93,6 +94,11 @@ public interface IProductService {
     List<ProductPurchaseResponse> purchaseProducts(
             final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions;
+
+    List<ProductPurchaseResponse> reserveProducts(ProductReservationRequest request)
+            throws ProductNotFoundExceptions;
+
+    void releaseReservation(String orderReference);
 
 
     /**

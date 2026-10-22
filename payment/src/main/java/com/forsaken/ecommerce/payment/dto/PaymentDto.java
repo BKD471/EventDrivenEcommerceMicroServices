@@ -2,6 +2,7 @@ package com.forsaken.ecommerce.payment.dto;
 
 import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.payment.model.Payment;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -21,7 +22,8 @@ public record PaymentDto(
         BigDecimal amount,
         PaymentMethod paymentMethod,
         Integer orderId,
-        LocalDateTime createdDate
+        LocalDateTime createdDate,
+        PaymentStatus status
 ) {
 
     /**
@@ -36,7 +38,8 @@ public record PaymentDto(
                 payment.getAmount(),
                 payment.getPaymentMethod(),
                 payment.getOrderId(),
-                payment.getCreatedDate()
+                payment.getCreatedDate(),
+                payment.getStatus()
         );
     }
 }

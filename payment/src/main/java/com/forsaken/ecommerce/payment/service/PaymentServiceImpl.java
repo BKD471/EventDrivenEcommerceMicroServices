@@ -1,43 +1,49 @@
 package com.forsaken.ecommerce.payment.service;
 
 
-import com.forsaken.ecommerce.avro.PaymentConfirmation;
-import com.forsaken.ecommerce.avro.PaymentMethod;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.payment.dto.PaymentDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
+import com.forsaken.ecommerce.payment.model.PaymentOutboxEvent;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
+import com.forsaken.ecommerce.payment.repository.IPaymentOutboxRepository;
 import com.forsaken.ecommerce.payment.repository.IPaymentRepository;
 import com.forsaken.ecommerce.payment.repository.PaymentSummary;
 import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.nio.ByteBuffer;
-import java.time.Instant;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements IPaymentService {
 
+    private static final int MAX_CONFLICT_ATTEMPTS = 3;
+
     private final IPaymentRepository repository;
-    private final INotificationProducerService notificationProducer;
+    private final IPaymentOutboxRepository outboxRepository;
     private final Tracer tracer;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * Payment creation mutates the underlying dataset in a way that affects
@@ -55,27 +61,114 @@ public class PaymentServiceImpl implements IPaymentService {
             allEntries = true
     )
     public Integer createPayment(final PaymentRequest request) {
-        final Payment payment = this.repository.save(request.toPayment());
-        final LocalDateTime localDateTime = LocalDateTime.now();
-        final Instant instant = localDateTime.atZone(ZoneId.of("UTC")).toInstant();
+        return executeWithConflictRetry(() -> authorize(request));
+    }
+
+    private Integer authorize(final PaymentRequest request) {
+        validateConfirmationAmount(request.amount());
+        final Optional<Payment> existing = repository.findByOrderIdForUpdate(request.orderId());
+        if (existing.isPresent()) {
+            final Payment payment = existing.get();
+            if (payment.getStatus() == PaymentStatus.CANCELLED) {
+                throw new IllegalStateException("Payment for order " + request.orderId() + " was cancelled");
+            }
+            if (payment.getAmount().compareTo(request.amount()) != 0
+                    || payment.getPaymentMethod() != request.paymentMethod()
+                    || (payment.getOrderReference() != null
+                    && !payment.getOrderReference().equals(request.orderReference()))) {
+                throw new IllegalArgumentException("Order ID already has a different payment request");
+            }
+            return payment.getId();
+        }
+        final Payment payment = this.repository.saveAndFlush(request.toPayment());
+        log.info("Authorized payment for orderId={}", request.orderId());
+        return payment.getId();
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"paymentSummaries", "paymentsByDate"}, allEntries = true)
+    public void confirmPayment(final Integer orderId) {
+        final Payment payment = repository.findByOrderIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("No payment found for order " + orderId));
+        if (payment.getStatus() == null) {
+            // Payments created before saga status tracking were confirmed on creation.
+            payment.setStatus(PaymentStatus.COMPLETED);
+            repository.save(payment);
+            return;
+        }
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            return;
+        }
+        if (payment.getStatus() != PaymentStatus.AUTHORIZED) {
+            throw new IllegalStateException("Cannot confirm payment in state " + payment.getStatus());
+        }
+        payment.setStatus(PaymentStatus.COMPLETED);
+        repository.save(payment);
+
         final String traceId = (null != tracer && null != tracer.currentSpan())
                 ? tracer.currentSpan().context().traceId()
                 : "NO_TRACE";
+        outboxRepository.save(new PaymentOutboxEvent(
+                payment,
+                LocalDateTime.now().atZone(ZoneId.of("UTC")).toInstant(),
+                traceId
+        ));
+        log.info("Confirmed payment for orderId={}", orderId);
+    }
 
-        this.notificationProducer.sendNotification(
-                new PaymentConfirmation(
-                        request.orderReference(),
-                        convertBigDecimalToBytes(request.amount()),
-                        PaymentMethod.valueOf(request.paymentMethod().name()),
-                        request.customer().firstname(),
-                        request.customer().lastname(),
-                        request.customer().email(),
-                        instant,
-                        traceId
-                )
-        );
-        log.info("Created Payment Request: {}", request);
-        return payment.getId();
+    @Override
+    @CacheEvict(value = {"paymentSummaries", "paymentsByDate"}, allEntries = true)
+    public void cancelPayment(final Integer orderId) {
+        executeWithConflictRetry(() -> {
+            final Optional<Payment> existing = repository.findByOrderIdForUpdate(orderId);
+            if (existing.isEmpty()) {
+                // Durable cancellation intent: a late authorization for this order will be rejected.
+                repository.saveAndFlush(Payment.builder()
+                        .orderId(orderId)
+                        .status(PaymentStatus.CANCELLED)
+                        .build());
+            } else if (existing.get().getStatus() == null
+                    || existing.get().getStatus() == PaymentStatus.COMPLETED) {
+                throw new IllegalStateException(
+                        "Cannot cancel a confirmed payment for order " + orderId
+                );
+            } else if (existing.get().getStatus() != PaymentStatus.CANCELLED) {
+                existing.get().setStatus(PaymentStatus.CANCELLED);
+                repository.save(existing.get());
+            }
+            return null;
+        });
+        log.info("Cancelled payment for orderId={}", orderId);
+    }
+
+    /** Rejects amounts that could never be encoded in the Avro confirmation event. */
+    private void validateConfirmationAmount(final BigDecimal amount) {
+        try {
+            if (amount.setScale(2, RoundingMode.UNNECESSARY).precision() > 18) {
+                throw new ArithmeticException("precision");
+            }
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(
+                    "Payment amount must have at most 2 decimal places and 18 digits", ex
+            );
+        }
+    }
+
+    /**
+     * Runs the work in a transaction. A concurrent first insert for the same order ID surfaces
+     * as a unique-key violation; the retry then finds and locks the winning row.
+     */
+    private <T> T executeWithConflictRetry(final Supplier<T> work) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return transactionTemplate.execute(status -> work.get());
+            } catch (DataIntegrityViolationException ex) {
+                if (attempt >= MAX_CONFLICT_ATTEMPTS) {
+                    throw ex;
+                }
+            }
+        }
     }
 
     @Override
@@ -150,17 +243,5 @@ public class PaymentServiceImpl implements IPaymentService {
                 .totalElements(paymentPage.getTotalElements())
                 .totalPages(paymentPage.getTotalPages())
                 .build();
-    }
-
-    private ByteBuffer convertBigDecimalToBytes(final BigDecimal value) {
-        if (null == value) return null;
-
-        final Schema DECIMAL_SCHEMA =
-                LogicalTypes.decimal(18, 2)
-                        .addToSchema(Schema.create(Schema.Type.BYTES));
-        final Conversions.DecimalConversion DECIMAL_CONVERSION =
-                new Conversions.DecimalConversion();
-
-        return DECIMAL_CONVERSION.toBytes(value, DECIMAL_SCHEMA, DECIMAL_SCHEMA.getLogicalType());
     }
 }

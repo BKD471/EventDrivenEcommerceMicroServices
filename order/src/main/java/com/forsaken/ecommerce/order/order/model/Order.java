@@ -19,6 +19,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -57,6 +58,25 @@ public class Order {
 
     private String customerId;
 
+    // Snapshot used to publish the confirmation even if the customer is later deleted.
+    @Setter
+    private String customerFirstname;
+
+    @Setter
+    private String customerLastname;
+
+    @Setter
+    private String customerEmail;
+
+    @Enumerated(EnumType.STRING)
+    @Setter
+    private OrderSagaStatus sagaStatus;
+
+    @Setter
+    private String claimOwner;
+
+    @Setter
+    private LocalDateTime claimExpiresAt;
 
     @OneToMany(
             mappedBy = "order",
@@ -96,6 +116,7 @@ public class Order {
                 .amount(this.getTotalAmount())
                 .paymentMethod(this.getPaymentMethod())
                 .customerId(this.getCustomerId())
+                .sagaStatus(this.getSagaStatus())
                 .build();
     }
 }

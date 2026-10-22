@@ -5,6 +5,7 @@ import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseRequest;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
+import com.forsaken.ecommerce.product.dto.ProductReservationRequest;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
@@ -108,6 +109,16 @@ public interface IProductController {
     ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> purchaseProducts(
             @RequestBody @Valid final List<ProductPurchaseRequest> request
     ) throws ProductNotFoundExceptions;
+
+    @PostMapping("/reservations")
+    ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> reserveProducts(
+            @RequestBody @Valid final ProductReservationRequest request
+    ) throws ProductNotFoundExceptions;
+
+    @PostMapping("/reservations/{orderReference}/release")
+    ResponseEntity<ApiResponse<Void>> releaseReservation(
+            @PathVariable("orderReference") @NotBlank final String orderReference
+    );
 
 
     /**

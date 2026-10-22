@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.order.order.service;
 
 import com.forsaken.ecommerce.common.exceptions.CustomerNotFoundExceptions;
+import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.customer.CustomerResponse;
@@ -9,6 +10,7 @@ import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
 import com.forsaken.ecommerce.order.order.model.Order;
 import com.forsaken.ecommerce.order.order.model.PaymentMethod;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import com.forsaken.ecommerce.order.order.repository.IOrderRepository;
 import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentRequest;
@@ -38,9 +40,13 @@ import java.util.concurrent.CompletableFuture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import com.forsaken.ecommerce.common.exceptions.BusinessException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
 
 
 /**
@@ -87,6 +93,8 @@ class OrderServiceImplTest {
     @Mock
     private OrderProperties orderProperties;
     @Mock
+    private OrderCacheEvictor orderCacheEvictor;
+    @Mock
     private Tracer tracer;
     @Mock
     private Tracer.SpanInScope spanInScope;
@@ -97,6 +105,11 @@ class OrderServiceImplTest {
 
     @InjectMocks
     private OrderServiceImpl orderService;
+
+    private void grantTransitions() {
+        org.mockito.Mockito.lenient().when(orderRepository.transition(
+                any(), any(), any(), any(), any())).thenReturn(1);
+    }
 
     /**
      * Verifies that an order is created successfully when:
@@ -110,6 +123,7 @@ class OrderServiceImplTest {
     @Test
     void shouldCreateOrderSuccessfully() throws Exception {
         // given
+        grantTransitions();
         final OrderRequest request = mock(OrderRequest.class);
         final Order order = mock(Order.class);
         final CustomerResponse customer = new CustomerResponse(
@@ -120,19 +134,16 @@ class OrderServiceImplTest {
         );
         when(request.customerId()).thenReturn("C1");
         when(request.products()).thenReturn(List.of());
-        when(request.amount()).thenReturn(BigDecimal.TEN);
-        when(request.paymentMethod()).thenReturn(
-                PaymentMethod.CREDIT_CARD
-        );
-        when(request.reference()).thenReturn("ORD-1");
         when(request.toOrder()).thenReturn(order);
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.completedFuture(customer));
-        when(productService.purchaseProducts(List.of()))
-                .thenReturn(CompletableFuture.completedFuture(List.of(product)));
-        when(orderRepository.save(order)).thenReturn(order);
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
         when(order.getId()).thenReturn(10);
         when(order.getReference()).thenReturn("ORD-1");
+        when(order.getTotalAmount()).thenReturn(BigDecimal.TEN);
+        when(order.getPaymentMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
+        when(productService.reserveProducts("ORD-1", List.of()))
+                .thenReturn(List.of(product));
         when(tracer.currentSpan()).thenReturn(span);
         when(span.context()).thenReturn(traceContext);
         when(traceContext.traceId()).thenReturn("test-trace-id");
@@ -143,9 +154,14 @@ class OrderServiceImplTest {
         // then
         assertThat(result).isEqualTo(10);
         verify(customerService).getCustomer("C1");
-        verify(productService).purchaseProducts(List.of());
-        verify(orderRepository).save(order);
+        verify(productService).reserveProducts("ORD-1", List.of());
+        verify(orderRepository).transition(
+                eq(10), any(), any(), eq(OrderSagaStatus.PENDING), eq(OrderSagaStatus.CONFIRMING));
+        verify(orderRepository).transition(
+                eq(10), any(), any(), eq(OrderSagaStatus.CONFIRMING), eq(OrderSagaStatus.COMPLETED));
+        verify(orderCacheEvictor).evictAll();
         verify(paymentService).pay(any(PaymentRequest.class));
+        verify(paymentService).confirm(10);
         verify(orderProducer).sendOrderConfirmation(any());
     }
 
@@ -158,16 +174,116 @@ class OrderServiceImplTest {
         // given
         final OrderRequest request = mock(OrderRequest.class);
         when(request.customerId()).thenReturn("C1");
-        when(request.products()).thenReturn(List.of());
         when(customerService.getCustomer("C1"))
                 .thenReturn(CompletableFuture.failedFuture(
                         new CustomerNotFoundExceptions("not found")));
-        when(productService.purchaseProducts(List.of()))
-                .thenReturn(CompletableFuture.completedFuture(List.of()));
 
         // when / then
         assertThatThrownBy(() -> orderService.createOrder(request))
                 .isInstanceOf(CustomerNotFoundExceptions.class);
+    }
+
+    @Test
+    void shouldCompensateInventoryAndPaymentWhenPaymentFails() throws Exception {
+        grantTransitions();
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder()
+                .id(11)
+                .reference("ORD-FAIL")
+                .build();
+        final CustomerResponse customer = new CustomerResponse(
+                "C1", "John", "Doe", "john@test.com"
+        );
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1"))
+                .thenReturn(CompletableFuture.completedFuture(customer));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(productService.reserveProducts("ORD-FAIL", List.of())).thenReturn(List.of());
+        doThrow(new PaymentFailedExceptions("payment declined"))
+                .when(paymentService).pay(any(PaymentRequest.class));
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(PaymentFailedExceptions.class);
+
+        verify(paymentService).cancel(11);
+        verify(productService).releaseReservation("ORD-FAIL");
+        assertThat(order.getSagaStatus()).isEqualTo(OrderSagaStatus.FAILED);
+    }
+
+    @Test
+    void shouldNotCompensateWhenOwnershipIsLost() throws Exception {
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder().id(12).reference("ORD-LOST").build();
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1")).thenReturn(CompletableFuture.completedFuture(
+                new CustomerResponse("C1", "John", "Doe", "john@test.com")));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(orderRepository.transition(any(), any(), any(), any(), any())).thenReturn(0);
+        when(productService.reserveProducts("ORD-LOST", List.of())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(paymentService, never()).cancel(any());
+        verify(productService, never()).releaseReservation(any());
+    }
+
+    @Test
+    void shouldNotCompensateWhenPaymentConfirmationOutcomeIsUncertain() throws Exception {
+        grantTransitions();
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder().id(14).reference("ORD-CONF").build();
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1")).thenReturn(CompletableFuture.completedFuture(
+                new CustomerResponse("C1", "John", "Doe", "john@test.com")));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(productService.reserveProducts("ORD-CONF", List.of())).thenReturn(List.of());
+        doThrow(new IllegalStateException("timeout")).when(paymentService).confirm(14);
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(paymentService, never()).cancel(any());
+        verify(productService, never()).releaseReservation(any());
+        verify(orderRepository).transition(
+                eq(14), any(), any(), eq(OrderSagaStatus.PENDING), eq(OrderSagaStatus.CONFIRMING));
+        verify(orderRepository).releaseClaim(eq(14), any());
+        assertThat(order.getCustomerEmail()).isEqualTo("john@test.com");
+    }
+
+    @Test
+    void shouldNotCompensateWhenConfirmationPublicationFails() throws Exception {
+        grantTransitions();
+        final OrderRequest request = mock(OrderRequest.class);
+        final Order order = Order.builder()
+                .id(13)
+                .reference("ORD-PUB")
+                .totalAmount(BigDecimal.TEN)
+                .paymentMethod(com.forsaken.ecommerce.order.order.model.PaymentMethod.CREDIT_CARD)
+                .build();
+        when(request.customerId()).thenReturn("C1");
+        when(request.products()).thenReturn(List.of());
+        when(request.toOrder()).thenReturn(order);
+        when(customerService.getCustomer("C1")).thenReturn(CompletableFuture.completedFuture(
+                new CustomerResponse("C1", "John", "Doe", "john@test.com")));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        when(productService.reserveProducts("ORD-PUB", List.of())).thenReturn(List.of());
+        doThrow(new IllegalStateException("kafka down")).when(orderProducer).sendOrderConfirmation(any());
+
+        assertThatThrownBy(() -> orderService.createOrder(request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(paymentService, never()).cancel(any());
+        verify(productService, never()).releaseReservation(any());
+        verify(orderRepository, never()).transition(
+                any(), any(), any(), eq(OrderSagaStatus.CONFIRMING), eq(OrderSagaStatus.COMPLETED));
+        verify(orderRepository).releaseClaim(eq(13), any());
     }
 
     /**

@@ -27,6 +27,7 @@ public class NotificationProducerServiceImpl implements INotificationProducerSer
                 .withPayload(request)
                 .setHeader(TOPIC, kafkaProperties.topicName())
                 .build();
-        kafkaTemplate.send(message);
+        kafkaTemplate.send(message).join();
+        log.info("Payment notification acknowledged by Kafka");
     }
 }

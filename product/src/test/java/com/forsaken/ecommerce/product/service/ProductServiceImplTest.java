@@ -11,7 +11,15 @@ import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 import com.forsaken.ecommerce.product.model.Category;
 import com.forsaken.ecommerce.product.model.Product;
+import com.forsaken.ecommerce.product.model.ProductReservation;
+import com.forsaken.ecommerce.product.model.ReservationStatus;
 import com.forsaken.ecommerce.product.repository.ICategoryRepository;
+import com.forsaken.ecommerce.product.model.ReservationOrder;
+import com.forsaken.ecommerce.product.repository.IProductReservationRepository;
+import com.forsaken.ecommerce.product.repository.IReservationOrderRepository;
+import org.mockito.Spy;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.forsaken.ecommerce.product.repository.IProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,6 +72,16 @@ class ProductServiceImplTest {
 
     @Mock
     private ICategoryRepository categoryRepository;
+
+    @Mock
+    private IProductReservationRepository reservationRepository;
+
+    @Mock
+    private IReservationOrderRepository reservationOrderRepository;
+
+    @Spy
+    private TransactionTemplate transactionTemplate =
+            new TransactionTemplate(org.mockito.Mockito.mock(PlatformTransactionManager.class));
 
     @Mock
     private ProductProperties productProperties;
@@ -187,7 +205,7 @@ class ProductServiceImplTest {
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 1);
 
-        when(productRepository.findAllByIdInOrderById(List.of(1)))
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
                 .thenReturn(List.of()); // simulate missing product
 
         // WHEN / THEN
@@ -210,7 +228,7 @@ class ProductServiceImplTest {
         final ProductPurchaseRequest req =
                 new ProductPurchaseRequest(1, 5);
 
-        when(productRepository.findAllByIdInOrderById(List.of(1)))
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
                 .thenReturn(List.of(product));
 
         // WHEN / THEN
@@ -237,7 +255,7 @@ class ProductServiceImplTest {
 
         final ProductPurchaseRequest request =
                 new ProductPurchaseRequest(1, 2);
-        when(productRepository.findAllByIdInOrderById(List.of(1)))
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
                 .thenReturn(List.of(product));
         when(productRepository.save(product))
                 .thenReturn(product);
@@ -256,7 +274,7 @@ class ProductServiceImplTest {
 
         // stock reduced correctly
         assertEquals(3, product.getAvailableQuantity());
-        verify(productRepository).findAllByIdInOrderById(List.of(1));
+        verify(productRepository).findAllByIdInOrderByIdForUpdate(List.of(1));
         verify(productRepository).save(product);
     }
 
@@ -415,6 +433,115 @@ class ProductServiceImplTest {
 
         // No database interaction should occur
         verifyNoInteractions(productRepository);
+    }
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubReservationOrder() {
+        org.mockito.Mockito.lenient()
+                .when(reservationOrderRepository.findByOrderReferenceForUpdate("ORD-1"))
+                .thenReturn(java.util.Optional.of(new ReservationOrder("ORD-1", ReservationStatus.RESERVED)));
+    }
+
+    @Test
+    void reserveProducts_ShouldReject_WhenOrderWasAlreadyReleased() {
+        when(reservationOrderRepository.findByOrderReferenceForUpdate("ORD-1"))
+                .thenReturn(java.util.Optional.of(new ReservationOrder("ORD-1", ReservationStatus.RELEASED)));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.forsaken.ecommerce.common.exceptions.ProductNotFoundExceptions.class,
+                () -> service.reserveProducts(
+                        new com.forsaken.ecommerce.product.dto.ProductReservationRequest(
+                                "ORD-1",
+                                List.of(new ProductPurchaseRequest(1, 2))
+                        )
+                )
+        );
+        verify(productRepository, org.mockito.Mockito.never()).findAllByIdInOrderByIdForUpdate(
+                org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void releaseReservation_ShouldRecordTombstone_WhenNoReservationExistsYet() {
+        when(reservationOrderRepository.findByOrderReferenceForUpdate("ORD-9"))
+                .thenReturn(java.util.Optional.empty());
+        final ReservationOrder created = new ReservationOrder("ORD-9", ReservationStatus.RESERVED);
+        when(reservationOrderRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(ReservationOrder.class)))
+                .thenReturn(created);
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-9")).thenReturn(List.of());
+
+        service.releaseReservation("ORD-9");
+
+        assertEquals(ReservationStatus.RELEASED, created.getStatus());
+    }
+
+    @Test
+    void reserveProducts_ShouldDecreaseInventory_AndReturnReservedSnapshot() throws Exception {
+        final Product product = constructProduct();
+        product.setId(1);
+        product.setAvailableQuantity(5);
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-1"))
+                .thenReturn(List.of());
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
+                .thenReturn(List.of(product));
+
+        final List<ProductPurchaseResponse> result = service.reserveProducts(
+                new com.forsaken.ecommerce.product.dto.ProductReservationRequest(
+                        "ORD-1",
+                        List.of(new ProductPurchaseRequest(1, 2))
+                )
+        );
+
+        assertEquals(3, product.getAvailableQuantity());
+        assertEquals(1, result.size());
+        assertEquals(2, result.getFirst().quantity());
+        verify(reservationRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void reserveProducts_ShouldNotDecrementInventoryAgain_ForSameOrderReference() throws Exception {
+        final Product product = constructProduct();
+        product.setId(1);
+        product.setAvailableQuantity(3);
+        final ProductReservation existingReservation = new ProductReservation("ORD-1", product, 2);
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-1"))
+                .thenReturn(List.of(), List.of(existingReservation));
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
+                .thenReturn(List.of(product));
+        final com.forsaken.ecommerce.product.dto.ProductReservationRequest request =
+                new com.forsaken.ecommerce.product.dto.ProductReservationRequest(
+                        "ORD-1",
+                        List.of(new ProductPurchaseRequest(1, 2))
+                );
+
+        service.reserveProducts(request);
+        final List<ProductPurchaseResponse> result = service.reserveProducts(request);
+
+        assertEquals(1, product.getAvailableQuantity());
+        assertEquals(1, result.size());
+        verify(productRepository).findAllByIdInOrderByIdForUpdate(List.of(1));
+    }
+
+    @Test
+    void releaseReservation_ShouldRestoreInventoryOnlyOnce() {
+        final Product product = constructProduct();
+        product.setId(1);
+        product.setAvailableQuantity(3);
+        final ProductReservation reservation = new ProductReservation(
+                "ORD-1",
+                product,
+                2
+        );
+        when(reservationRepository.findAllByOrderReferenceOrderByProductId("ORD-1"))
+                .thenReturn(List.of(reservation), List.of(reservation));
+        when(productRepository.findAllByIdInOrderByIdForUpdate(List.of(1)))
+                .thenReturn(List.of(product));
+
+        service.releaseReservation("ORD-1");
+        service.releaseReservation("ORD-1");
+
+        assertEquals(5, product.getAvailableQuantity());
+        assertEquals(ReservationStatus.RELEASED, reservation.getStatus());
+        verify(productRepository).findAllByIdInOrderByIdForUpdate(List.of(1));
     }
 
     /**

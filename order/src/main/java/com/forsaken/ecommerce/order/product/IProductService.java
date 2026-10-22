@@ -64,4 +64,9 @@ public interface IProductService {
      * </ul>
      */
     CompletableFuture<List<PurchaseResponse>> purchaseProducts(final List<PurchaseRequest> requestBody);
+
+    List<PurchaseResponse> reserveProducts(String orderReference, List<PurchaseRequest> requestBody)
+            throws ProductNotFoundExceptions, BusinessException;
+
+    void releaseReservation(String orderReference) throws BusinessException;
 }

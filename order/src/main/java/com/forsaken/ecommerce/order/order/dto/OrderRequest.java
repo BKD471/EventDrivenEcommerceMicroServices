@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.order.order.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.forsaken.ecommerce.order.order.model.Order;
 import com.forsaken.ecommerce.order.order.model.PaymentMethod;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import com.forsaken.ecommerce.order.product.PurchaseRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -36,10 +37,11 @@ public record OrderRequest(
 
     public Order toOrder() {
         return Order.builder()
-                .id(this.id())
                 .reference(this.reference())
                 .paymentMethod(this.paymentMethod())
                 .customerId(this.customerId())
+                .totalAmount(this.amount())
+                .sagaStatus(OrderSagaStatus.PENDING)
                 .build();
     }
 }

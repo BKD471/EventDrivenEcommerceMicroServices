@@ -5,6 +5,7 @@ import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseRequest;
 import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
+import com.forsaken.ecommerce.product.dto.ProductReservationRequest;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
@@ -78,6 +79,26 @@ public class ProductControllerImpl implements IProductController {
                                 .message("Product Purchased.")
                                 .build()
                 );
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<List<ProductPurchaseResponse>>> reserveProducts(
+            final ProductReservationRequest request
+    ) throws ProductNotFoundExceptions {
+        return ResponseEntity.ok(ApiResponse.<List<ProductPurchaseResponse>>builder()
+                .status(ApiResponse.Status.SUCCESS)
+                .data(service.reserveProducts(request))
+                .message("Product inventory reserved.")
+                .build());
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> releaseReservation(final String orderReference) {
+        service.releaseReservation(orderReference);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(ApiResponse.Status.SUCCESS)
+                .message("Product reservation released.")
+                .build());
     }
 
     @Override
