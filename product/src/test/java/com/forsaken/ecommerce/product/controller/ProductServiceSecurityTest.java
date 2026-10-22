@@ -48,9 +48,19 @@ class ProductServiceSecurityTest {
     @Test
     void orderServiceCanReleaseReservation() throws Exception {
         mockMvc.perform(post("/api/v1/products/reservations/order-42/release")
-                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
+                        .header("X-CSRF-TOKEN", "test-secret"))
                 .andExpect(status().isOk());
 
         verify(productService).releaseReservation("order-42");
+    }
+
+    @Test
+    void orderServiceCannotReleaseWithoutCsrfToken() throws Exception {
+        mockMvc.perform(post("/api/v1/products/reservations/order-42/release")
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(productService);
     }
 }

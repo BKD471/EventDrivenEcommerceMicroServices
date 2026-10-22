@@ -40,6 +40,7 @@ public class ProductRestConfiguration {
                 new HttpComponentsClientHttpRequestFactory(productHttpClient);
         return builder
                 .basicAuthentication("order-service", password)
+                .defaultHeader("X-CSRF-TOKEN", password)
                 .requestFactory(() -> factory)
                 .build();
     }

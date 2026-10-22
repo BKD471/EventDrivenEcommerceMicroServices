@@ -34,6 +34,11 @@ public class PaymentFeignConfiguration {
     public RequestInterceptor paymentServiceAuthentication(
             @Value("${ORDER_SERVICE_PASSWORD}") final String password
     ) {
-        return new BasicAuthRequestInterceptor("order-service", password);
+        final BasicAuthRequestInterceptor basicAuthentication =
+                new BasicAuthRequestInterceptor("order-service", password);
+        return template -> {
+            basicAuthentication.apply(template);
+            template.header("X-CSRF-TOKEN", password);
+        };
     }
 }

@@ -44,13 +44,24 @@ class PaymentServiceSecurityTest {
     @Test
     void orderServiceCanConfirmAndCancelPayment() throws Exception {
         mockMvc.perform(post("/api/v1/payments/42/confirm")
-                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
+                        .header("X-CSRF-TOKEN", "test-secret"))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/payments/42/cancel")
-                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
+                        .header("X-CSRF-TOKEN", "test-secret"))
                 .andExpect(status().isOk());
 
         verify(paymentService).confirmPayment(42);
         verify(paymentService).cancelPayment(42);
+    }
+
+    @Test
+    void orderServiceCannotMutateWithoutCsrfToken() throws Exception {
+        mockMvc.perform(post("/api/v1/payments/42/confirm")
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentService);
     }
 }
