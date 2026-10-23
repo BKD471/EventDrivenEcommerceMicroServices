@@ -25,6 +25,9 @@ import java.util.Optional;
  */
 public interface IOrderRepository extends JpaRepository<Order, Integer> {
 
+    @Query("select o.sagaStatus from Order o where o.reference = :reference")
+    Optional<OrderSagaStatus> findSagaStatusByReference(@Param("reference") String reference);
+
     /** Keyset page of claimable saga ids, so batch runs stay stable while statuses change underneath them. */
     @Query("""
             select o.id from Order o

@@ -8,6 +8,7 @@ import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -192,5 +193,14 @@ public interface IOrderController {
     @GetMapping("/id/{order-id}")
     ResponseEntity<ApiResponse<OrderResponse>> findById(
             @PathVariable("order-id") @Positive final Integer orderId
+    );
+
+    /**
+     * Returns the saga status of the order with the given reference; {@code data} is null when no such order exists.
+     * Used by the product service to decide whether a stale inventory reservation can be released.
+     */
+    @GetMapping("/reference/{reference}/saga-status")
+    ResponseEntity<ApiResponse<OrderSagaStatus>> findSagaStatusByReference(
+            @PathVariable("reference") @NotBlank final String reference
     );
 }

@@ -8,6 +8,7 @@ import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import com.forsaken.ecommerce.order.order.service.IOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -78,6 +79,18 @@ public class OrderControllerImpl implements IOrderController {
                                 .status(ApiResponse.Status.SUCCESS)
                                 .data(orderService.findById(orderId))
                                 .message("Find By Order Id.")
+                                .build()
+                );
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<OrderSagaStatus>> findSagaStatusByReference(final String reference) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(
+                        ApiResponse.<OrderSagaStatus>builder()
+                                .status(ApiResponse.Status.SUCCESS)
+                                .data(orderService.findSagaStatusByReference(reference))
+                                .message("Find Order Saga Status By Reference.")
                                 .build()
                 );
     }

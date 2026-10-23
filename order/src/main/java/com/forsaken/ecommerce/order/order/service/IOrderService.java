@@ -8,6 +8,7 @@ import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.order.configs.general.OrderProperties;
 import com.forsaken.ecommerce.order.order.dto.OrderRequest;
 import com.forsaken.ecommerce.order.order.dto.OrderResponse;
+import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.ExecutionException;
@@ -110,6 +111,14 @@ public interface IOrderService {
      * @throws jakarta.persistence.EntityNotFoundException if the order does not exist.
      */
     OrderResponse findById(final Integer id);
+
+    /**
+     * Looks up the saga status of an order by its reference.
+     *
+     * @param reference the order reference.
+     * @return the saga status, or {@code null} when no such order exists.
+     */
+    OrderSagaStatus findSagaStatusByReference(final String reference);
 
     /**
      * Retrieves a paginated list of orders associated with a specific customer.
