@@ -63,7 +63,7 @@ Key goals:
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
-- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance and product reservation cleanup
+- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup and nightly cross-service reconciliation
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -131,6 +131,18 @@ keyset-paged and restartable, and share `payment.outbox.batch.chunk-size` (defau
 `skip-limit` (100). They run on `payment.outbox.purge-delay` / `payment.outbox.reprocess-delay` (default 1 hour), emit
 the Micrometer counter `payment.outbox.batch.items` (tags `job`, `outcome`), and can be disabled with
 `payment.outbox.batch.enabled=false`. Batch metadata tables are created automatically.
+
+Cross-service reconciliation runs nightly (`order.reconciliation.cron`, default `0 0 2 * * *`) as two read-only Spring Batch
+jobs in the order service, launched by `ReconciliationScheduler`. `orderPaymentReconciliationJob` flags `COMPLETED` orders
+that have no payment or no `COMPLETED` payment. `paymentOrderReconciliationJob` pages the payment service's
+`GET /api/v1/payments/reconciliation` endpoint and flags `AUTHORIZED` payments whose order is missing or `FAILED` (a leaked
+authorization hold). Orders and payments younger than `order.reconciliation.batch.min-age` (default `1h`) are ignored so
+in-flight sagas are not reported. Findings are never auto-repaired: each is logged at WARN and counted in
+`order.reconciliation.findings{type}`, alongside per-run `order.reconciliation.batch.items` counters. A failed payment lookup
+is retried and then skipped, never reported as a finding. Jobs are keyset-paged and restartable (`chunk-size` 100,
+`retry-limit` 3, `skip-limit` 100), and an interrupted run is resumed by an hourly check
+(`order.reconciliation.restart-delay`). Disable with `order.reconciliation.batch.enabled=false`. Order-to-reservation checks
+are not included yet.
 
 Product reservation cleanup runs as two Spring Batch jobs in the product service, launched by
 `ReservationCleanupScheduler`. `reservationExpiryJob` examines `RESERVED` reservations older than

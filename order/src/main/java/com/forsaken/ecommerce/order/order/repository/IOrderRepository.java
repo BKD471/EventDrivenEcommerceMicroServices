@@ -43,6 +43,22 @@ public interface IOrderRepository extends JpaRepository<Order, Integer> {
             Pageable pageable
     );
 
+    /** Keyset page of order ids in a saga status created before the cutoff, for reconciliation. */
+    @Query("""
+            select o.id from Order o
+            where o.sagaStatus = :status and o.createdDate < :before and o.id > :afterId
+            order by o.id asc
+            """)
+    List<Integer> findIdsBySagaStatusCreatedBefore(
+            @Param("status") OrderSagaStatus status,
+            @Param("before") LocalDateTime before,
+            @Param("afterId") Integer afterId,
+            Pageable pageable
+    );
+
+    @Query("select o.sagaStatus from Order o where o.id = :id")
+    Optional<OrderSagaStatus> findSagaStatusById(@Param("id") Integer id);
+
     @EntityGraph(attributePaths = "orderLines")
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findDetailedById(@Param("id") Integer id);

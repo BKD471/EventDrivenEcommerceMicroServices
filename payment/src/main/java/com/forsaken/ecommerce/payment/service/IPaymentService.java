@@ -2,11 +2,14 @@ package com.forsaken.ecommerce.payment.service;
 
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.payment.dto.PaymentDto;
+import com.forsaken.ecommerce.payment.dto.PaymentReconciliationDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Service interface defining the core business operations for managing payments.
@@ -37,6 +40,13 @@ public interface IPaymentService {
     void confirmPayment(Integer orderId);
 
     void cancelPayment(Integer orderId);
+
+    /** Status of the payment for an order, or {@code null} when none exists. */
+    PaymentStatus findStatusByOrderId(Integer orderId);
+
+    /** Keyset page of payments in {@code status} created before {@code olderThan}, ordered by id. */
+    List<PaymentReconciliationDto> findForReconciliation(
+            PaymentStatus status, LocalDateTime olderThan, Integer afterId, int size);
 
     /**
      * Retrieves a paginated summary of payments grouped by payment method

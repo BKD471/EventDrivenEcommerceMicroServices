@@ -3,9 +3,13 @@ package com.forsaken.ecommerce.order.payment;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.order.configs.client_configurations.payment.PaymentFeignConfiguration;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+
+import java.util.List;
 
 /**
  * Feign client for communicating with the Payment Service.
@@ -61,4 +65,15 @@ public interface IPaymentClient {
 
     @PostMapping("/{orderId}/cancel")
     ApiResponse<Void> cancelOrderPayment(@PathVariable("orderId") Integer orderId);
+
+    @GetMapping("/{orderId}/status")
+    ApiResponse<String> getPaymentStatus(@PathVariable("orderId") Integer orderId);
+
+    @GetMapping("/reconciliation")
+    ApiResponse<List<PaymentReconciliationItem>> getPaymentsForReconciliation(
+            @RequestParam("status") String status,
+            @RequestParam("olderThan") String olderThan,
+            @RequestParam("afterId") Integer afterId,
+            @RequestParam("size") int size
+    );
 }

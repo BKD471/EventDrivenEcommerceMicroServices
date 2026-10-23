@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.payment.service;
 
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.payment.dto.PaymentDto;
+import com.forsaken.ecommerce.payment.dto.PaymentReconciliationDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
@@ -243,5 +244,26 @@ public class PaymentServiceImpl implements IPaymentService {
                 .totalElements(paymentPage.getTotalElements())
                 .totalPages(paymentPage.getTotalPages())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaymentStatus findStatusByOrderId(final Integer orderId) {
+        return repository.findByOrderId(orderId).map(Payment::getStatus).orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PaymentReconciliationDto> findForReconciliation(
+            final PaymentStatus status,
+            final LocalDateTime olderThan,
+            final Integer afterId,
+            final int size
+    ) {
+        final int safeSize = Math.min(Math.max(size, 1), 500);
+        return repository.findByStatusCreatedBefore(status, olderThan, afterId, PageRequest.of(0, safeSize))
+                .stream()
+                .map(PaymentReconciliationDto::from)
+                .toList();
     }
 }
