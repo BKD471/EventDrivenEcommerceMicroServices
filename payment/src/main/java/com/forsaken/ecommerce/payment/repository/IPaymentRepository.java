@@ -1,6 +1,7 @@
 package com.forsaken.ecommerce.payment.repository;
 
 import com.forsaken.ecommerce.payment.model.Payment;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -25,6 +27,19 @@ import java.util.Optional;
 public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
 
     Optional<Payment> findByOrderId(Integer orderId);
+
+    /** Keyset page of payments in a status that were created before the cutoff, for reconciliation. */
+    @Query("""
+            select p from Payment p
+            where p.status = :status and p.createdDate < :before and p.id > :afterId
+            order by p.id asc
+            """)
+    List<Payment> findByStatusCreatedBefore(
+            @Param("status") PaymentStatus status,
+            @Param("before") LocalDateTime before,
+            @Param("afterId") Integer afterId,
+            Pageable pageable
+    );
 
     /** Row-locking lookup used for every payment state transition. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

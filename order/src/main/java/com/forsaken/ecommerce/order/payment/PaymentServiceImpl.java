@@ -7,6 +7,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
 import static feign.FeignException.BadRequest;
 import static feign.FeignException.NotFound;
 
@@ -94,6 +98,42 @@ public class PaymentServiceImpl implements IPaymentService {
                     "invokePaymentAction(Integer, boolean) in " + CLASS,
                     ex
             );
+        }
+    }
+
+    @Override
+    public Optional<String> findStatus(final Integer orderId) {
+        try {
+            final ApiResponse<String> response = paymentClient.getPaymentStatus(orderId);
+            if (response == null) {
+                throw new PaymentLookupException("Empty payment status response for order " + orderId, null);
+            }
+            return Optional.ofNullable(response.data());
+        } catch (PaymentLookupException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new PaymentLookupException("Payment status lookup failed for order " + orderId, ex);
+        }
+    }
+
+    @Override
+    public List<PaymentReconciliationItem> findByStatusCreatedBefore(
+            final String status,
+            final LocalDateTime olderThan,
+            final Integer afterId,
+            final int size
+    ) {
+        try {
+            final ApiResponse<List<PaymentReconciliationItem>> response =
+                    paymentClient.getPaymentsForReconciliation(status, olderThan.toString(), afterId, size);
+            if (response == null || response.data() == null) {
+                throw new PaymentLookupException("Empty payment reconciliation response", null);
+            }
+            return response.data();
+        } catch (PaymentLookupException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new PaymentLookupException("Payment reconciliation lookup failed", ex);
         }
     }
 }

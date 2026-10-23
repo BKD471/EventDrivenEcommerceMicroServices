@@ -2,6 +2,10 @@ package com.forsaken.ecommerce.order.payment;
 
 import com.forsaken.ecommerce.common.exceptions.PaymentFailedExceptions;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
 /**
  * Service interface for handling payment processing operations.
  *
@@ -73,4 +77,11 @@ public interface IPaymentService {
     void confirm(Integer orderId) throws PaymentFailedExceptions;
 
     void cancel(Integer orderId) throws PaymentFailedExceptions;
+
+    /** Payment status for an order, or empty when the payment service has no payment for it. */
+    Optional<String> findStatus(Integer orderId);
+
+    /** Keyset page (by payment id) of payments in {@code status} created before {@code olderThan}. */
+    List<PaymentReconciliationItem> findByStatusCreatedBefore(
+            String status, LocalDateTime olderThan, Integer afterId, int size);
 }

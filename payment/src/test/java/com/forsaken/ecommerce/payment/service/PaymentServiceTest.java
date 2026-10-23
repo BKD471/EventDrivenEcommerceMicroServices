@@ -409,4 +409,35 @@ class PaymentServiceTest {
                 .email("john@doe.com")
                 .build();
     }
+
+    @Test
+    void findStatusByOrderId_ShouldReturnNullWhenNoPayment() {
+        when(repository.findByOrderId(5)).thenReturn(Optional.empty());
+
+        assertNull(service.findStatusByOrderId(5));
+    }
+
+    @Test
+    void findStatusByOrderId_ShouldReturnPaymentStatus() {
+        final Payment payment = constructPersistedPayment(1);
+        payment.setStatus(PaymentStatus.COMPLETED);
+        when(repository.findByOrderId(123)).thenReturn(Optional.of(payment));
+
+        assertEquals(PaymentStatus.COMPLETED, service.findStatusByOrderId(123));
+    }
+
+    @Test
+    void findForReconciliation_ShouldMapAndCapPageSize() {
+        final Payment payment = constructPersistedPayment(7);
+        payment.setStatus(PaymentStatus.AUTHORIZED);
+        final LocalDateTime cutoff = LocalDateTime.now();
+        when(repository.findByStatusCreatedBefore(
+                eq(PaymentStatus.AUTHORIZED), eq(cutoff), eq(0), eq(PageRequest.of(0, 500))))
+                .thenReturn(List.of(payment));
+
+        final var result = service.findForReconciliation(PaymentStatus.AUTHORIZED, cutoff, 0, 10_000);
+
+        assertEquals(1, result.size());
+        assertEquals(PaymentStatus.AUTHORIZED, result.get(0).status());
+    }
 }

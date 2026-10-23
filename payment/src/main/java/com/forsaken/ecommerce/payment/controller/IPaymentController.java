@@ -4,7 +4,9 @@ package com.forsaken.ecommerce.payment.controller;
 import com.forsaken.ecommerce.common.responses.ApiResponse;
 import com.forsaken.ecommerce.common.responses.PagedResponse;
 import com.forsaken.ecommerce.payment.dto.PaymentDto;
+import com.forsaken.ecommerce.payment.dto.PaymentReconciliationDto;
 import com.forsaken.ecommerce.payment.dto.PaymentRequest;
+import com.forsaken.ecommerce.payment.model.PaymentStatus;
 import com.forsaken.ecommerce.payment.dto.PaymentSummaryDto;
 import com.forsaken.ecommerce.payment.model.Payment;
 import jakarta.validation.Valid;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * REST controller contract for managing payment operations.
@@ -118,5 +121,18 @@ public interface IPaymentController {
 
             @RequestParam(name = "page", defaultValue = "1") final int page,
             @RequestParam(name = "size", defaultValue = "3") final int size
+    );
+
+    /** Status of the payment for an order; {@code data} is null when the order has no payment. */
+    @GetMapping("/{orderId}/status")
+    ResponseEntity<ApiResponse<PaymentStatus>> getPaymentStatus(@PathVariable Integer orderId);
+
+    /** Keyset page (ordered by payment id) of payments in a status created before {@code olderThan}. */
+    @GetMapping("/reconciliation")
+    ResponseEntity<ApiResponse<List<PaymentReconciliationDto>>> getPaymentsForReconciliation(
+            @RequestParam final PaymentStatus status,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) final LocalDateTime olderThan,
+            @RequestParam(defaultValue = "0") final Integer afterId,
+            @RequestParam(defaultValue = "100") final int size
     );
 }
