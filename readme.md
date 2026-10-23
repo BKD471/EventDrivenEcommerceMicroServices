@@ -63,7 +63,7 @@ Key goals:
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
-- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup nightly cross-service reconciliation, daily payment/sales reports and product catalog import/export with low-stock alerts and invoice backfill
+- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup nightly cross-service reconciliation, daily payment/sales reports and product catalog import/export with low-stock alerts, invoice backfill and data-retention purges
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -196,6 +196,17 @@ job does not run without it. The notification URL is `payment.invoice.batch.noti
 `http://localhost:8040/api/v1/invoices`). The job is chunked and restartable (`chunk-size` 50, `retry-limit` 3,
 `skip-limit` 100) and emits `payment.invoice.batch.items` (tags `job`, `outcome`). The notification service's IAM role
 needs `s3:GetObject` on the invoice bucket for the existence check.
+
+Data retention. Every scheduled job run adds rows to the Spring Batch metadata tables, so the order, payment and
+product services each purge them daily (`batch.metadata.purge.cron`, default `0 30 4 * * *`; `retention`, default
+`30d`; `enabled`, default `true`). The shared `BatchMetadataPurger` in `common` deletes only `COMPLETED` and `ABANDONED`
+executions that ended before the cutoff, with their steps, contexts, parameters and orphaned job instances; `FAILED`,
+`STOPPED` and running executions are kept because the schedulers restart them. The product service also deletes old
+catalog files from S3 (`CatalogFilePurgeScheduler`, `product.catalog.purge-cron`, default `0 0 5 * * *`): exports after
+`product.catalog.purge.export-retention` (`14d`), processed imports after `processed-retention` (`30d`) and failed
+imports after `failed-retention` (`90d`), counted in `product.catalog.files.purged`. Not covered: notification records
+in DynamoDB (use a DynamoDB TTL attribute) and the DLQ bucket (use an S3 lifecycle rule), since neither has a batch
+runtime; the daily summary tables only gain one row per day and payment method.
 
 The orchestration uses synchronous HTTP calls between services, while order/payment notifications remain Kafka events.
 This provides compensating consistency, not atomic cross-service commits; downstream payment gateways and future

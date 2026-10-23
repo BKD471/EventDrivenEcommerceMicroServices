@@ -51,4 +51,10 @@ public class S3ProductFileStorage implements ProductFileStorage {
         s3Client.deleteObject(DeleteObjectRequest.builder()
                 .bucket(s3Properties.bucketName()).key(fromKey).build());
     }
+
+    @Override
+    public void delete(final String key) {
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(s3Properties.bucketName()).key(key).build());
+    }
 }
