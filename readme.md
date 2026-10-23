@@ -63,7 +63,7 @@ Key goals:
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
-- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup nightly cross-service reconciliation and daily payment/sales reports
+- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup nightly cross-service reconciliation, daily payment/sales reports and product catalog import/export with low-stock alerts
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -168,6 +168,20 @@ restartable (`chunk-size` 100, `retry-limit` 3, `skip-limit` 100), run on `produ
 `product.reservation.batch.items` (tags `job`, `outcome`) and can be disabled with `product.reservation.batch.enabled=false`.
 The order service URL comes from `application.config.order.url` (default `http://localhost:8222/api/v1/orders`). Migration
 `V6__add_reservation_order_timestamps.sql` adds the `created_at`, `released_at` and `confirmed_at` columns.
+
+Product catalog jobs run in the product service, launched by `CatalogScheduler`. `productExportJob` (cron
+`product.catalog.export-cron`, default `0 0 3 * * *`) writes every product to a CSV (columns
+`id,name,description,availableQuantity,price,categoryId,imageUrl`) and uploads it to S3 under `exports/`.
+`productImportJob` is driven by polling the S3 prefix `imports/incoming/` (`product.catalog.import-delay`, default 15
+minutes) rather than an HTTP endpoint: a blank `id` creates a product, an existing `id` updates name, description, price,
+category and image, and invalid rows (unknown id or category, bad numbers) are skipped and logged. Stock of existing
+products is never overwritten, because it is owned by purchases and reservations. Completed files move to
+`imports/processed/`; files that still fail after `product.catalog.batch.max-import-attempts` (default 3) move to
+`imports/failed/`, and interrupted runs resume where they stopped. `lowStockAlertJob` (cron
+`product.catalog.low-stock-cron`, default `0 0 8 * * *`) logs a warning and increments `product.low_stock.alerts` for
+products below `product.catalog.batch.low-stock-threshold` (default 10); there is no notification channel yet. All jobs
+are keyset-paged and restartable (`chunk-size` 100, `retry-limit` 3, `skip-limit` 100), emit
+`product.catalog.batch.items` (tags `job`, `outcome`) and can be disabled with `product.catalog.batch.enabled=false`.
 
 The orchestration uses synchronous HTTP calls between services, while order/payment notifications remain Kafka events.
 This provides compensating consistency, not atomic cross-service commits; downstream payment gateways and future

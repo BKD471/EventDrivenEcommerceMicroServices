@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -101,5 +102,21 @@ public interface IProductRepository extends JpaRepository<Product, Integer> {
             final Category category,
             final BigDecimal price,
             final Pageable pageable
+    );
+
+    /** Keyset page of products (with category) in ascending id order, for catalog export. */
+    @Query("select p from Product p left join fetch p.category where p.id > :afterId order by p.id")
+    List<Product> findPageAfterId(@Param("afterId") Integer afterId, Pageable pageable);
+
+    /** Keyset page of products whose stock is below the threshold, for low-stock alerts. */
+    @Query("""
+            select p from Product p left join fetch p.category
+            where p.availableQuantity < :threshold and p.id > :afterId
+            order by p.id
+            """)
+    List<Product> findLowStockPageAfterId(
+            @Param("threshold") double threshold,
+            @Param("afterId") Integer afterId,
+            Pageable pageable
     );
 }
