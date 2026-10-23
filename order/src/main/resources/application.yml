@@ -5,3 +5,8 @@ spring:
     name: order-service
   profiles:
     active: dev
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always

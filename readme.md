@@ -108,6 +108,15 @@ Concurrency guarantees:
   attempts so they cannot block other notifications.
 - Order caches are evicted after every committed saga change, including failed creations and scheduled recovery.
 
+Saga recovery runs as two Spring Batch jobs in the order service (`compensationRetryJob` for `COMPENSATION_REQUIRED`
+and `staleOrderRecoveryJob` for `PENDING`/`CONFIRMING`), launched by `SagaRecoveryScheduler` on the existing
+`order.saga.compensation-retry-delay` / `order.saga.recovery-delay` intervals. Each job reads claimable order ids in
+keyset-paged chunks (`order.saga.batch.chunk-size`, default 50), retries transient database errors
+(`retry-limit`, default 3), skips orders whose recovery fails (`skip-limit`, default 100) and is restarted from its last
+processed id when a run fails. Per-run counts and duration are logged and exposed as the Micrometer counter
+`order.saga.batch.items` (tags `job`, `outcome`). Batch metadata tables are created automatically
+(`spring.batch.jdbc.initialize-schema: always`); set `order.saga.batch.enabled=false` to disable the schedulers.
+
 The order API includes the saga status in `OrderResponse`. Stale `PENDING`/`CONFIRMING` orders are resumed from their
 saved order lines; inventory and payment operations use order reference/order ID idempotency keys, and notification
 consumers deduplicate events by order reference. Product reservation history is stored in the product database and
