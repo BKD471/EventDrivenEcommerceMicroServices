@@ -19,4 +19,6 @@ public interface ProductFileStorage {
     void upload(String key, Path file);
 
     void move(String fromKey, String toKey);
+
+    void delete(String key);
 }
