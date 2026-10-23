@@ -34,7 +34,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.scheduling.annotation.Scheduled;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -47,7 +46,7 @@ import java.util.concurrent.CompletionException;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class OrderServiceImpl implements IOrderService {
+public class OrderServiceImpl implements IOrderService, IOrderSagaRecoveryService {
 
     private static final Duration CLAIM_TTL = Duration.ofMinutes(5);
 
@@ -233,53 +232,60 @@ public class OrderServiceImpl implements IOrderService {
         return compensationFailure;
     }
 
-    @Scheduled(fixedDelayString = "${order.saga.compensation-retry-delay:30000}")
-    public void retryIncompleteCompensations() {
-        claimable(List.of(OrderSagaStatus.COMPENSATION_REQUIRED)).forEach(candidate -> {
-            final String owner = newClaimOwner();
-            if (!claim(candidate, owner, List.of(OrderSagaStatus.COMPENSATION_REQUIRED))) {
-                return;
+    @Override
+    public SagaRecoveryOutcome retryCompensation(final Integer orderId) {
+        final Order candidate = orderRepository.findById(orderId).orElse(null);
+        if (candidate == null) {
+            return SagaRecoveryOutcome.NOT_CLAIMED;
+        }
+        final String owner = newClaimOwner();
+        if (!claim(candidate, owner, OrderSagaStatus.COMPENSATION_PENDING)) {
+            return SagaRecoveryOutcome.NOT_CLAIMED;
+        }
+        try {
+            final Exception compensationFailure = compensate(candidate);
+            if (compensationFailure != null) {
+                orderRepository.releaseClaim(candidate.getId(), owner);
+                throw new SagaRecoveryException(
+                        "Saga compensation retry failed for order reference=" + candidate.getReference(),
+                        compensationFailure
+                );
             }
-            try {
-                final Exception compensationFailure = compensate(candidate);
-                if (compensationFailure != null) {
-                    log.error("Saga compensation retry failed for order reference={}",
-                            candidate.getReference(), compensationFailure);
-                    orderRepository.releaseClaim(candidate.getId(), owner);
-                    return;
-                }
-                advance(candidate, owner, OrderSagaStatus.COMPENSATION_REQUIRED, OrderSagaStatus.FAILED);
-                log.info("Saga compensation completed for order reference={}", candidate.getReference());
-            } catch (Exception ex) {
-                log.error("Saga compensation retry aborted for order reference={}",
-                        candidate.getReference(), ex);
-            } finally {
-                orderCacheEvictor.evictAll();
-            }
-        });
+            advance(candidate, owner, OrderSagaStatus.COMPENSATION_REQUIRED, OrderSagaStatus.FAILED);
+            log.info("Saga compensation completed for order reference={}", candidate.getReference());
+            return SagaRecoveryOutcome.RECOVERED;
+        } catch (SagaRecoveryException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SagaRecoveryException(
+                    "Saga compensation retry aborted for order reference=" + candidate.getReference(), ex);
+        } finally {
+            orderCacheEvictor.evictAll();
+        }
     }
 
-    @Scheduled(fixedDelayString = "${order.saga.recovery-delay:30000}")
-    public void recoverStaleOrders() {
-        final List<OrderSagaStatus> statuses = List.of(OrderSagaStatus.PENDING, OrderSagaStatus.CONFIRMING);
-        claimable(statuses).forEach(candidate -> {
-            final String owner = newClaimOwner();
-            if (!claim(candidate, owner, statuses)) {
-                return;
-            }
-            try {
-                final Order order = orderRepository.findDetailedById(candidate.getId()).orElseThrow();
-                resume(order, owner);
-            } catch (Exception ex) {
-                log.error("Unable to complete recovery of order saga for reference={}",
-                        candidate.getReference(), ex);
-            } finally {
-                orderCacheEvictor.evictAll();
-            }
-        });
+    @Override
+    public SagaRecoveryOutcome recover(final Integer orderId) {
+        final Order candidate = orderRepository.findById(orderId).orElse(null);
+        if (candidate == null) {
+            return SagaRecoveryOutcome.NOT_CLAIMED;
+        }
+        final String owner = newClaimOwner();
+        if (!claim(candidate, owner, OrderSagaStatus.RECOVERABLE)) {
+            return SagaRecoveryOutcome.NOT_CLAIMED;
+        }
+        try {
+            final Order order = orderRepository.findDetailedById(candidate.getId()).orElseThrow();
+            return resume(order, owner);
+        } catch (Exception ex) {
+            throw new SagaRecoveryException(
+                    "Unable to complete recovery of order saga for reference=" + candidate.getReference(), ex);
+        } finally {
+            orderCacheEvictor.evictAll();
+        }
     }
 
-    private void resume(final Order order, final String owner)
+    private SagaRecoveryOutcome resume(final Order order, final String owner)
             throws CustomerNotFoundExceptions, BusinessException,
             PaymentFailedExceptions, ProductNotFoundExceptions {
         final List<PurchaseRequest> requestedProducts = order.getOrderLines().stream()
@@ -293,12 +299,13 @@ public class OrderServiceImpl implements IOrderService {
                 failSaga(order, owner, failure);
             } else {
                 orderRepository.releaseClaim(order.getId(), owner);
+                return SagaRecoveryOutcome.DEFERRED;
             }
-            return;
+            return SagaRecoveryOutcome.RECOVERED;
         }
         if (order.getSagaStatus() == OrderSagaStatus.PENDING) {
             executeSaga(order, owner, customer, requestedProducts);
-            return;
+            return SagaRecoveryOutcome.RECOVERED;
         }
         final List<PurchaseResponse> reservedProducts;
         try {
@@ -309,6 +316,7 @@ public class OrderServiceImpl implements IOrderService {
         }
         publishAndComplete(order, owner, customer, reservedProducts);
         log.info("Recovered order saga for reference={}", order.getReference());
+        return SagaRecoveryOutcome.RECOVERED;
     }
 
     /** Uses the snapshot captured at creation so recovery survives customer deletion. */
@@ -322,10 +330,6 @@ public class OrderServiceImpl implements IOrderService {
             );
         }
         return customerService.getCustomer(order.getCustomerId()).join();
-    }
-
-    private List<Order> claimable(final List<OrderSagaStatus> statuses) {
-        return orderRepository.findClaimableBySagaStatus(statuses, LocalDateTime.now());
     }
 
     private boolean claim(final Order order, final String owner, final List<OrderSagaStatus> statuses) {

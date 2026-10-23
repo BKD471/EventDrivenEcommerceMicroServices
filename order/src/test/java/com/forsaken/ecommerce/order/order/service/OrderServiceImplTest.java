@@ -286,6 +286,53 @@ class OrderServiceImplTest {
         verify(orderRepository).releaseClaim(eq(13), any());
     }
 
+    @Test
+    void shouldReportNotClaimedWhenAnotherWorkerHoldsTheOrder() {
+        final Order order = Order.builder().id(20).reference("ORD-CLAIMED").build();
+        when(orderRepository.findById(20)).thenReturn(java.util.Optional.of(order));
+        when(orderRepository.claim(eq(20), any(), any(), any(), any())).thenReturn(0);
+
+        assertThat(orderService.recover(20)).isEqualTo(SagaRecoveryOutcome.NOT_CLAIMED);
+        assertThat(orderService.retryCompensation(20)).isEqualTo(SagaRecoveryOutcome.NOT_CLAIMED);
+
+        verify(orderRepository, never()).findDetailedById(any());
+    }
+
+    @Test
+    void shouldReportNotClaimedWhenOrderIsGone() {
+        when(orderRepository.findById(21)).thenReturn(java.util.Optional.empty());
+
+        assertThat(orderService.recover(21)).isEqualTo(SagaRecoveryOutcome.NOT_CLAIMED);
+    }
+
+    @Test
+    void shouldCompleteCompensationRetryAndMarkOrderFailed() {
+        grantTransitions();
+        final Order order = Order.builder().id(22).reference("ORD-COMP").build();
+        when(orderRepository.findById(22)).thenReturn(java.util.Optional.of(order));
+        when(orderRepository.claim(eq(22), any(), any(), any(), any())).thenReturn(1);
+
+        assertThat(orderService.retryCompensation(22)).isEqualTo(SagaRecoveryOutcome.RECOVERED);
+
+        verify(orderRepository).transition(
+                eq(22), any(), any(), eq(OrderSagaStatus.COMPENSATION_REQUIRED), eq(OrderSagaStatus.FAILED));
+    }
+
+    @Test
+    void shouldFailRecoveryAndReleaseClaimWhenCompensationStillFails() throws Exception {
+        final Order order = Order.builder().id(23).reference("ORD-COMP-FAIL").build();
+        when(orderRepository.findById(23)).thenReturn(java.util.Optional.of(order));
+        when(orderRepository.claim(eq(23), any(), any(), any(), any())).thenReturn(1);
+        doThrow(new IllegalStateException("payment down")).when(paymentService).cancel(23);
+
+        assertThatThrownBy(() -> orderService.retryCompensation(23))
+                .isInstanceOf(SagaRecoveryException.class);
+
+        verify(orderRepository).releaseClaim(eq(23), any());
+        verify(orderRepository, never()).transition(
+                any(), any(), any(), eq(OrderSagaStatus.COMPENSATION_REQUIRED), eq(OrderSagaStatus.FAILED));
+    }
+
     /**
      * Verifies that all orders are returned in a paginated response
      * when no page or size parameters are provided.

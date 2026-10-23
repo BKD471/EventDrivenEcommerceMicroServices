@@ -25,14 +25,19 @@ import java.util.Optional;
  */
 public interface IOrderRepository extends JpaRepository<Order, Integer> {
 
+    /** Keyset page of claimable saga ids, so batch runs stay stable while statuses change underneath them. */
     @Query("""
-            select o from Order o
+            select o.id from Order o
             where o.sagaStatus in :statuses
               and (o.claimOwner is null or o.claimExpiresAt < :now)
+              and o.id > :afterId
+            order by o.id asc
             """)
-    List<Order> findClaimableBySagaStatus(
+    List<Integer> findClaimableIdsBySagaStatus(
             @Param("statuses") Collection<OrderSagaStatus> statuses,
-            @Param("now") LocalDateTime now
+            @Param("now") LocalDateTime now,
+            @Param("afterId") Integer afterId,
+            Pageable pageable
     );
 
     @EntityGraph(attributePaths = "orderLines")
