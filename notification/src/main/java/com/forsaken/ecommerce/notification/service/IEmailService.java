@@ -84,6 +84,21 @@ public interface IEmailService {
      * @param orderReference   unique order reference
      * @param productList      list of purchased products
      */
+    /**
+     * Synchronous variant of {@link #sendPaymentSuccessEmail}. The invoice is stored under a key derived from the
+     * order reference, so calling it again overwrites the same object.
+     *
+     * @return {@code true} when the invoice was stored and the email handed to the mail server
+     */
+    boolean sendPaymentInvoice(
+            final String destinationEmail,
+            final String customerName,
+            final BigDecimal amount,
+            final String orderReference,
+            final PaymentMethod paymentMethod,
+            final LocalDateTime paymentDate
+    );
+
     void sendOrderConfirmationEmail(
             final String destinationEmail,
             final String customerName,

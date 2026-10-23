@@ -27,7 +27,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 
 import static com.forsaken.ecommerce.notification.models.EmailTemplates.ORDER_CONFIRMATION;
@@ -55,10 +54,23 @@ public class EmailServiceImpl implements IEmailService {
             final PaymentMethod paymentMethod,
             final LocalDateTime paymentDate
     ) {
+        sendPaymentInvoice(destinationEmail, customerName, amount, orderReference, paymentMethod, paymentDate);
+    }
+
+    @Override
+    public boolean sendPaymentInvoice(
+            final String destinationEmail,
+            final String customerName,
+            final BigDecimal amount,
+            final String orderReference,
+            final PaymentMethod paymentMethod,
+            final LocalDateTime paymentDate
+    ) {
         log.info("Payment Success email to: {}", destinationEmail);
 
         final String templateName = PAYMENT_CONFIRMATION.getTemplate();
-        final String invoiceNumber = UUID.randomUUID().toString();
+        // Deterministic so that a retry overwrites the same S3 object instead of creating a duplicate.
+        final String invoiceNumber = orderReference;
 
         final Map<PdfConstants, Object> dataSource = new HashMap<>();
         dataSource.put(PdfConstants.INVOICE_NUM, invoiceNumber);
@@ -101,6 +113,7 @@ public class EmailServiceImpl implements IEmailService {
 
             mailSender.send(mimeMessage);
             log.info("Payment Email successfully sent to {} with template {} ", destinationEmail, templateName);
+            return true;
         } catch (IllegalArgumentException e) {
             log.error(
                     "Invalid input while sending payment email to {}. OrderRef={}, reason={}",
@@ -119,6 +132,7 @@ public class EmailServiceImpl implements IEmailService {
         } catch (MessagingException | MailException | JRException | IOException e) {
             log.warn("Cannot send Payment Email to {} ", destinationEmail, e);
         }
+        return false;
     }
 
 
