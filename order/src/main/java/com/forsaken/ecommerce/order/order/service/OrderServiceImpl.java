@@ -415,6 +415,11 @@ public class OrderServiceImpl implements IOrderService, IOrderSagaRecoveryServic
     }
 
     @Override
+    public OrderSagaStatus findSagaStatusByReference(final String reference) {
+        return orderRepository.findSagaStatusByReference(reference).orElse(null);
+    }
+
+    @Override
     @Cacheable(value = "orderById", key = "#id")
     public OrderResponse findById(final Integer id) {
         log.info("Finding Order by ID: {}", id);

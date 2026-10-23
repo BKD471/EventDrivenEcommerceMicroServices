@@ -63,7 +63,7 @@ Key goals:
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
-- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries and payment outbox maintenance
+- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance and product reservation cleanup
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -131,6 +131,21 @@ keyset-paged and restartable, and share `payment.outbox.batch.chunk-size` (defau
 `skip-limit` (100). They run on `payment.outbox.purge-delay` / `payment.outbox.reprocess-delay` (default 1 hour), emit
 the Micrometer counter `payment.outbox.batch.items` (tags `job`, `outcome`), and can be disabled with
 `payment.outbox.batch.enabled=false`. Batch metadata tables are created automatically.
+
+Product reservation cleanup runs as two Spring Batch jobs in the product service, launched by
+`ReservationCleanupScheduler`. `reservationExpiryJob` examines `RESERVED` reservations older than
+`product.reservation.batch.expiry-age` (default `1h`) and asks the order service (`GET
+/api/v1/orders/reference/{reference}/saga-status`) for the order state. Because `RESERVED` is also the permanent state of
+a completed order, stock is released only when the order is `FAILED` or unknown; in-flight and compensating orders are
+left alone, `COMPLETED` orders are marked confirmed (`confirmed_at`) and never examined again, and a failed lookup never
+releases anything. `reservationTombstonePurgeJob` deletes `RELEASED` tombstones (and their reservation rows) older than
+`product.reservation.batch.tombstone-retention` (default `30d`); since a tombstone blocks late reservations for its order
+reference, keep this longer than the longest time a saga can still be retried. Both jobs are keyset-paged and
+restartable (`chunk-size` 100, `retry-limit` 3, `skip-limit` 100), run on `product.reservation.expiry-delay` (default
+10 minutes) / `product.reservation.purge-delay` (default 1 day), emit the Micrometer counter
+`product.reservation.batch.items` (tags `job`, `outcome`) and can be disabled with `product.reservation.batch.enabled=false`.
+The order service URL comes from `application.config.order.url` (default `http://localhost:8222/api/v1/orders`). Migration
+`V6__add_reservation_order_timestamps.sql` adds the `created_at`, `released_at` and `confirmed_at` columns.
 
 The orchestration uses synchronous HTTP calls between services, while order/payment notifications remain Kafka events.
 This provides compensating consistency, not atomic cross-service commits; downstream payment gateways and future
