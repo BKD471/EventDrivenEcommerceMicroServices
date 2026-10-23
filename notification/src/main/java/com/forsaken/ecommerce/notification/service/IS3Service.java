@@ -67,4 +67,11 @@ public interface IS3Service {
      * @throws IllegalArgumentException if {@code key} is {@code null} or blank
      */
     URL generatePresignedUrl(final String key) throws IllegalArgumentException;
+
+    /**
+     * Checks whether an invoice object exists for the given invoice id.
+     *
+     * @throws IllegalArgumentException if {@code invoiceId} is {@code null} or blank
+     */
+    boolean invoiceExists(final String invoiceId) throws IllegalArgumentException;
 }

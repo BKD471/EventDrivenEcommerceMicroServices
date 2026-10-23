@@ -8,6 +8,8 @@ import org.springframework.util.StringUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -47,6 +49,21 @@ public class S3ServiceImpl implements IS3Service {
         s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
         log.debug("Uploaded invoice with id {}", invoiceId);
         return key;
+    }
+
+    @Override
+    public boolean invoiceExists(final String invoiceId) throws IllegalArgumentException {
+        if (!StringUtils.hasText(invoiceId))
+            throw new IllegalArgumentException("Invoice id must not be null or blank");
+        try {
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(s3Properties.bucketName())
+                    .key("invoices/" + invoiceId + ".pdf")
+                    .build());
+            return true;
+        } catch (NoSuchKeyException ex) {
+            return false;
+        }
     }
 
     @Override

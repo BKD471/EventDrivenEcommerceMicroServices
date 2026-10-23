@@ -54,6 +54,20 @@ public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
             Pageable pageable
     );
 
+    /** Keyset page of ids of COMPLETED payments created in [from, to), for the invoice backfill. */
+    @Query("""
+            select p.id from Payment p
+            where p.status = com.forsaken.ecommerce.payment.model.PaymentStatus.COMPLETED
+              and p.createdDate >= :from and p.createdDate < :to and p.id > :afterId
+            order by p.id asc
+            """)
+    List<Integer> findCompletedIdsBetween(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("afterId") Integer afterId,
+            Pageable pageable
+    );
+
     /** Row-locking lookup used for every payment state transition. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.orderId = :orderId")
