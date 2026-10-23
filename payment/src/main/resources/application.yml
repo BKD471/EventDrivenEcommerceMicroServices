@@ -5,6 +5,11 @@ spring:
     name: payment-service
   profiles:
     active: dev
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
 management:
   metrics:
     tags:

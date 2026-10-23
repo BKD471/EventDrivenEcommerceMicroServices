@@ -63,7 +63,7 @@ Key goals:
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
-- **Spring Batch** jobs for chunked, restartable saga recovery and compensation retries
+- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries and payment outbox maintenance
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -87,7 +87,7 @@ local service transactions rather than a distributed database transaction:
    the stock check/decrement.
 3. Create an idempotent payment authorization keyed by order ID, then confirm it. Confirmation and a
    `payment_outbox_event` record commit in one transaction; a scheduled publisher sends the Kafka notification only
-   from committed records and retries until acknowledged.
+   from committed records and retries until acknowledged. Published events are purged and quarantined ones re-queued by the outbox maintenance batch jobs (see below).
 4. Move the order to `CONFIRMING` (payment confirmed), publish the order confirmation and mark it `COMPLETED`.
    `CONFIRMING` is forward-only: publication failures are retried and never trigger compensation.
 5. On a failure before `CONFIRMING`, cancel the payment and release the inventory reservation. Successful compensation
@@ -122,6 +122,15 @@ The order API includes the saga status in `OrderResponse`. Stale `PENDING`/`CONF
 saved order lines by the batch jobs above; inventory and payment operations use order reference/order ID idempotency keys, and notification
 consumers deduplicate events by order reference. Product reservation history is stored in the product database and
 introduced with Flyway migration `V4__create_product_reservations.sql`.
+
+Payment outbox maintenance runs as two Spring Batch jobs in the payment service, launched by
+`OutboxMaintenanceScheduler`: `outboxPurgeJob` deletes `SENT` events older than `payment.outbox.batch.retention`
+(default `7d`) in chunks, and `outboxReprocessQuarantinedJob` returns `QUARANTINED` events to `PENDING` (with a fresh
+retry budget) once their payload can be encoded again; events that are still unpublishable stay quarantined. Both are
+keyset-paged and restartable, and share `payment.outbox.batch.chunk-size` (default 500), `retry-limit` (3) and
+`skip-limit` (100). They run on `payment.outbox.purge-delay` / `payment.outbox.reprocess-delay` (default 1 hour), emit
+the Micrometer counter `payment.outbox.batch.items` (tags `job`, `outcome`), and can be disabled with
+`payment.outbox.batch.enabled=false`. Batch metadata tables are created automatically.
 
 The orchestration uses synchronous HTTP calls between services, while order/payment notifications remain Kafka events.
 This provides compensating consistency, not atomic cross-service commits; downstream payment gateways and future
