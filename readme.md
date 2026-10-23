@@ -87,7 +87,7 @@ local service transactions rather than a distributed database transaction:
    the stock check/decrement.
 3. Create an idempotent payment authorization keyed by order ID, then confirm it. Confirmation and a
    `payment_outbox_event` record commit in one transaction; a scheduled publisher sends the Kafka notification only
-   from committed records and retries until acknowledged.
+   from committed records and retries until acknowledged. Published events are purged and quarantined ones re-queued by the outbox maintenance batch jobs (see below).
 4. Move the order to `CONFIRMING` (payment confirmed), publish the order confirmation and mark it `COMPLETED`.
    `CONFIRMING` is forward-only: publication failures are retried and never trigger compensation.
 5. On a failure before `CONFIRMING`, cancel the payment and release the inventory reservation. Successful compensation
