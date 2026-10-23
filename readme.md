@@ -64,7 +64,6 @@ Key goals:
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
 - **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup nightly cross-service reconciliation, daily payment/sales reports and product catalog import/export with low-stock alerts, invoice backfill and data-retention purges
-- **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
 - **Health Checks & Alerts** for proactive monitoring
