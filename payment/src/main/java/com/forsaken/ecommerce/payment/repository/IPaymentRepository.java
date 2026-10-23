@@ -28,6 +28,19 @@ public interface IPaymentRepository extends JpaRepository<Payment, Integer> {
 
     Optional<Payment> findByOrderId(Integer orderId);
 
+    /** COMPLETED payments created in [from, to), aggregated per payment method. */
+    @Query("""
+            SELECT p.paymentMethod AS paymentMethod,
+                   COUNT(p) AS count,
+                   SUM(CAST(p.amount AS BIGDECIMAL)) AS totalAmount
+            FROM Payment p
+            WHERE p.status = com.forsaken.ecommerce.payment.model.PaymentStatus.COMPLETED
+              AND p.createdDate >= :from AND p.createdDate < :to
+            GROUP BY p.paymentMethod
+            """)
+    List<PaymentSummary> summarizeCompletedBetween(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     /** Keyset page of payments in a status that were created before the cutoff, for reconciliation. */
     @Query("""
             select p from Payment p

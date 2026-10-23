@@ -63,7 +63,7 @@ Key goals:
 - **Circuit Breaker Patterns** for resilience
 - **Database per Service** pattern for data isolation
 - **Saga Pattern** for managing distributed order transactions
-- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup and nightly cross-service reconciliation
+- **Spring Batch** jobs for chunked, restartable saga recovery, compensation retries, payment outbox maintenance, product reservation cleanup nightly cross-service reconciliation and daily payment/sales reports
 - **Event Sourcing & CQRS** (planned)
 - **API Versioning** for backward compatibility
 - **Rate Limiting & Throttling** at the API Gateway
@@ -143,6 +143,16 @@ is retried and then skipped, never reported as a finding. Jobs are keyset-paged 
 `retry-limit` 3, `skip-limit` 100), and an interrupted run is resumed by an hourly check
 (`order.reconciliation.restart-delay`). Disable with `order.reconciliation.batch.enabled=false`. Order-to-reservation checks
 are not included yet.
+
+Daily reporting runs as two Spring Batch jobs that pre-aggregate `COMPLETED` records per day and payment method:
+`dailyPaymentSummaryJob` (payment service, table `payment_daily_summary`) and `dailyOrderSalesJob` (order service, table
+`order_daily_sales`). They run after midnight (`payment.report.cron` / `order.report.cron`, default `0 30 0 * * *`) and
+regenerate the last `*.report.batch.lookback-days` complete days (default 3), so late confirmations are picked up; each day
+is replaced in its own transaction, which makes reruns idempotent. A day is read from its `createdDate`. Jobs are
+restartable (an interrupted run resumes via an hourly check, `*.report.restart-delay`), emit `*.report.batch.items`
+counters and can be disabled with `*.report.batch.enabled=false`. Read the results with
+`GET /api/v1/payments/reports/daily?from=&to=` and `GET /api/v1/orders/reports/daily?from=&to=` (ISO dates, inclusive).
+The tables are created by Hibernate `ddl-auto: update`.
 
 Product reservation cleanup runs as two Spring Batch jobs in the product service, launched by
 `ReservationCleanupScheduler`. `reservationExpiryJob` examines `RESERVED` reservations older than

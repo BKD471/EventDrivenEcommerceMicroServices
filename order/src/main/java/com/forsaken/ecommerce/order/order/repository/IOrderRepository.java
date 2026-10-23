@@ -43,6 +43,17 @@ public interface IOrderRepository extends JpaRepository<Order, Integer> {
             Pageable pageable
     );
 
+    /** COMPLETED orders created in [from, to), aggregated per payment method. */
+    @Query("""
+            select o.paymentMethod as paymentMethod, count(o) as count, sum(o.totalAmount) as totalAmount
+            from Order o
+            where o.sagaStatus = com.forsaken.ecommerce.order.order.model.OrderSagaStatus.COMPLETED
+              and o.createdDate >= :from and o.createdDate < :to
+            group by o.paymentMethod
+            """)
+    List<OrderSalesSummary> summarizeCompletedBetween(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     /** Keyset page of order ids in a saga status created before the cutoff, for reconciliation. */
     @Query("""
             select o.id from Order o
