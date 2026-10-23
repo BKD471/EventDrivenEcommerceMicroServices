@@ -79,6 +79,13 @@ public class PaymentOutboxEvent {
         this.status = OutboxStatus.QUARANTINED;
     }
 
+    /** Puts a quarantined event back in the publish queue with a fresh retry budget. */
+    public void requeue() {
+        this.status = OutboxStatus.PENDING;
+        this.attempts = 0;
+        this.nextAttemptAt = null;
+    }
+
     public enum OutboxStatus {
         PENDING,
         SENT,
