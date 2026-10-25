@@ -8,8 +8,10 @@ import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
 import com.forsaken.ecommerce.product.dto.ProductReservationRequest;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
+import com.forsaken.ecommerce.product.dto.ReservationReconciliationItem;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -118,6 +121,18 @@ public interface IProductController {
     @PostMapping("/reservations/{orderReference}/release")
     ResponseEntity<ApiResponse<Void>> releaseReservation(
             @PathVariable("orderReference") @NotBlank final String orderReference
+    );
+
+    @GetMapping("/reservations/{orderReference}/reconciliation")
+    ResponseEntity<ApiResponse<ReservationReconciliationItem>> getReservationForReconciliation(
+            @PathVariable("orderReference") @NotBlank final String orderReference
+    );
+
+    @GetMapping("/reservations/reconciliation")
+    ResponseEntity<ApiResponse<List<ReservationReconciliationItem>>> getReservationsForReconciliation(
+            @RequestParam("olderThan") final Instant olderThan,
+            @RequestParam(name = "afterReference", defaultValue = "") final String afterReference,
+            @RequestParam(name = "size", defaultValue = "100") @Min(1) final Integer size
     );
 
 

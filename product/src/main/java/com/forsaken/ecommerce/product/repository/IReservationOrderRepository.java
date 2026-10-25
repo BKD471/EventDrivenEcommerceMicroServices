@@ -1,5 +1,6 @@
 package com.forsaken.ecommerce.product.repository;
 
+import com.forsaken.ecommerce.product.dto.ReservationReconciliationItem;
 import com.forsaken.ecommerce.product.model.ReservationOrder;
 import com.forsaken.ecommerce.product.model.ReservationStatus;
 import jakarta.persistence.LockModeType;
@@ -25,6 +26,20 @@ public interface IReservationOrderRepository extends JpaRepository<ReservationOr
     @Query("select r.orderReference from ReservationOrder r where r.status = :status "
             + "and r.createdAt < :cutoff and r.confirmedAt is null and r.orderReference > :after order by r.orderReference asc")
     List<String> findReferencesByStatusCreatedBefore(
+            @Param("status") ReservationStatus status,
+            @Param("cutoff") Instant cutoff,
+            @Param("after") String after,
+            Pageable pageable);
+
+    /** Keyset page of all reserved orders created before a cutoff, including confirmed reservations. */
+    @Query("""
+            select new com.forsaken.ecommerce.product.dto.ReservationReconciliationItem(
+                r.orderReference, r.status, r.createdAt, r.confirmedAt, r.releasedAt)
+            from ReservationOrder r
+            where r.status = :status and r.createdAt < :cutoff and r.orderReference > :after
+            order by r.orderReference asc
+            """)
+    List<ReservationReconciliationItem> findReservationsCreatedBefore(
             @Param("status") ReservationStatus status,
             @Param("cutoff") Instant cutoff,
             @Param("after") String after,

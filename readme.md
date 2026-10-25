@@ -132,17 +132,21 @@ keyset-paged and restartable, and share `payment.outbox.batch.chunk-size` (defau
 the Micrometer counter `payment.outbox.batch.items` (tags `job`, `outcome`), and can be disabled with
 `payment.outbox.batch.enabled=false`. Batch metadata tables are created automatically.
 
-Cross-service reconciliation runs nightly (`order.reconciliation.cron`, default `0 0 2 * * *`) as two read-only Spring Batch
+Cross-service reconciliation runs nightly (`order.reconciliation.cron`, default `0 0 2 * * *`) as five read-only Spring Batch
 jobs in the order service, launched by `ReconciliationScheduler`. `orderPaymentReconciliationJob` flags `COMPLETED` orders
 that have no payment or no `COMPLETED` payment. `paymentOrderReconciliationJob` pages the payment service's
 `GET /api/v1/payments/reconciliation` endpoint and flags `AUTHORIZED` payments whose order is missing or `FAILED` (a leaked
 authorization hold). Orders and payments younger than `order.reconciliation.batch.min-age` (default `1h`) are ignored so
 in-flight sagas are not reported. Findings are never auto-repaired: each is logged at WARN and counted in
 `order.reconciliation.findings{type}`, alongside per-run `order.reconciliation.batch.items` counters. A failed payment lookup
-is retried and then skipped, never reported as a finding. Jobs are keyset-paged and restartable (`chunk-size` 100,
-`retry-limit` 3, `skip-limit` 100), and an interrupted run is resumed by an hourly check
-(`order.reconciliation.restart-delay`). Disable with `order.reconciliation.batch.enabled=false`. Order-to-reservation checks
-are not included yet.
+is retried and then skipped, never reported as a finding. Three additional read-only jobs use the same schedule to compare
+completed orders with confirmed product reservations, failed orders with unreleased reservations, and old active product
+reservations with existing orders. The product service exposes these reservation views only to the authenticated
+`ORDER_SERVICE`; the order service reports findings through the same `order.reconciliation.findings{type}` counter and
+WARN logs. Product lookup failures are retried and then skipped, never reported as findings. All five jobs are
+keyset-paged and restartable (`chunk-size` 100, `retry-limit` 3, `skip-limit` 100), and an interrupted run is resumed by
+an hourly check (`order.reconciliation.restart-delay`). Reconciliation is read-only and never changes orders,
+reservations, or stock. Disable with `order.reconciliation.batch.enabled=false`.
 
 Daily reporting runs as two Spring Batch jobs that pre-aggregate `COMPLETED` records per day and payment method:
 `dailyPaymentSummaryJob` (payment service, table `payment_daily_summary`) and `dailyOrderSalesJob` (order service, table

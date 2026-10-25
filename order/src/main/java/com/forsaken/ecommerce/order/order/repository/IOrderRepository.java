@@ -70,6 +70,9 @@ public interface IOrderRepository extends JpaRepository<Order, Integer> {
     @Query("select o.sagaStatus from Order o where o.id = :id")
     Optional<OrderSagaStatus> findSagaStatusById(@Param("id") Integer id);
 
+    @Query("select o.reference from Order o where o.id = :id")
+    Optional<String> findReferenceById(@Param("id") Integer id);
+
     @EntityGraph(attributePaths = "orderLines")
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findDetailedById(@Param("id") Integer id);
