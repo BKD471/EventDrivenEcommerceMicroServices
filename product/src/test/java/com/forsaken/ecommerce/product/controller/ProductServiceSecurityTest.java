@@ -3,6 +3,7 @@ package com.forsaken.ecommerce.product.controller;
 import com.forsaken.ecommerce.product.configs.security.ServiceSecurityConfiguration;
 import com.forsaken.ecommerce.product.service.IProductService;
 import com.forsaken.ecommerce.product.service.IS3Service;
+import com.forsaken.ecommerce.product.service.ReservationReconciliationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -18,11 +19,15 @@ import java.util.Base64;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ProductControllerImpl.class)
 @Import(ServiceSecurityConfiguration.class)
-@TestPropertySource(properties = "ORDER_SERVICE_PASSWORD=test-secret")
+@TestPropertySource(properties = {
+        "ORDER_SERVICE_PASSWORD=test-secret",
+        "batch.metadata.purge.enabled=false"
+})
 class ProductServiceSecurityTest {
 
     private static final String AUTHORIZATION = "Basic " + Base64.getEncoder()
@@ -36,6 +41,9 @@ class ProductServiceSecurityTest {
 
     @MockBean
     private IS3Service s3Service;
+
+    @MockBean
+    private ReservationReconciliationService reservationReconciliationService;
 
     @Test
     void releaseRequiresOrderServiceCredentials() throws Exception {
@@ -62,5 +70,42 @@ class ProductServiceSecurityTest {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(productService);
+    }
+
+    @Test
+    void reservationReconciliationRequiresOrderServiceCredentials() throws Exception {
+        mockMvc.perform(get("/api/v1/products/reservations/order-42/reconciliation"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(reservationReconciliationService);
+    }
+
+    @Test
+    void orderServiceCanReadReservationReconciliation() throws Exception {
+        mockMvc.perform(get("/api/v1/products/reservations/order-42/reconciliation")
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isOk());
+
+        verify(reservationReconciliationService).findByOrderReference("order-42");
+    }
+
+    @Test
+    void reservationReconciliationPageRequiresOrderServiceCredentials() throws Exception {
+        mockMvc.perform(get("/api/v1/products/reservations/reconciliation")
+                        .param("olderThan", "2026-01-01T00:00:00Z"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(reservationReconciliationService);
+    }
+
+    @Test
+    void orderServiceCanReadReservationReconciliationPage() throws Exception {
+        mockMvc.perform(get("/api/v1/products/reservations/reconciliation")
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
+                        .param("olderThan", "2026-01-01T00:00:00Z"))
+                .andExpect(status().isOk());
+
+        verify(reservationReconciliationService)
+                .findReservedCreatedBefore(java.time.Instant.parse("2026-01-01T00:00:00Z"), "", 100);
     }
 }

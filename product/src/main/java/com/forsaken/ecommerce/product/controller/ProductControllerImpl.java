@@ -8,8 +8,10 @@ import com.forsaken.ecommerce.product.dto.ProductPurchaseResponse;
 import com.forsaken.ecommerce.product.dto.ProductReservationRequest;
 import com.forsaken.ecommerce.product.dto.ProductRequest;
 import com.forsaken.ecommerce.product.dto.ProductResponse;
+import com.forsaken.ecommerce.product.dto.ReservationReconciliationItem;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 import com.forsaken.ecommerce.product.service.IProductService;
+import com.forsaken.ecommerce.product.service.ReservationReconciliationService;
 import com.forsaken.ecommerce.product.service.IS3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +33,7 @@ public class ProductControllerImpl implements IProductController {
 
     private final IProductService service;
     private final IS3Service s3Service;
+    private final ReservationReconciliationService reservationReconciliationService;
 
     @Override
     public ResponseEntity<ApiResponse<Map<String, String>>> getPresignedUrl(final String fileName, final String contentType) {
@@ -98,6 +102,30 @@ public class ProductControllerImpl implements IProductController {
         return ResponseEntity.ok(ApiResponse.<Void>builder()
                 .status(ApiResponse.Status.SUCCESS)
                 .message("Product reservation released.")
+                .build());
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<ReservationReconciliationItem>> getReservationForReconciliation(
+            final String orderReference
+    ) {
+        return ResponseEntity.ok(ApiResponse.<ReservationReconciliationItem>builder()
+                .status(ApiResponse.Status.SUCCESS)
+                .data(reservationReconciliationService.findByOrderReference(orderReference).orElse(null))
+                .message("Fetched reservation reconciliation state.")
+                .build());
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<List<ReservationReconciliationItem>>> getReservationsForReconciliation(
+            final Instant olderThan,
+            final String afterReference,
+            final Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.<List<ReservationReconciliationItem>>builder()
+                .status(ApiResponse.Status.SUCCESS)
+                .data(reservationReconciliationService.findReservedCreatedBefore(olderThan, afterReference, size))
+                .message("Fetched reservations for reconciliation.")
                 .build());
     }
 

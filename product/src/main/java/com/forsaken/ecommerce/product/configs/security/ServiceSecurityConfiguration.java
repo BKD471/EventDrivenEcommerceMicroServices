@@ -43,6 +43,10 @@ public class ServiceSecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/reservations/*/release")
                         .hasRole("ORDER_SERVICE")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/products/reservations/*/reconciliation",
+                                "/api/v1/products/reservations/reconciliation")
+                        .hasRole("ORDER_SERVICE")
                         .anyRequest().permitAll()
                 )
                 .httpBasic(Customizer.withDefaults())

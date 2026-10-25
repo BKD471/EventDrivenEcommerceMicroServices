@@ -10,6 +10,8 @@ import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.batch.core.launch.JobLauncher;
 
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,7 +23,8 @@ class ReconciliationSchedulerTest {
     private final JobLauncher launcher = mock(JobLauncher.class);
     private final JobExplorer explorer = mock(JobExplorer.class);
     private final Job job = mock(Job.class);
-    private final ReconciliationScheduler scheduler = new ReconciliationScheduler(launcher, explorer, job, job);
+    private final ReconciliationScheduler scheduler =
+            new ReconciliationScheduler(launcher, explorer, job, job, job, job, job);
 
     private JobParameters lastRunWas(final BatchStatus status) {
         when(job.getName()).thenReturn("j");

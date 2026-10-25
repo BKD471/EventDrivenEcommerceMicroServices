@@ -11,6 +11,7 @@ import com.forsaken.ecommerce.product.dto.ProductResponse;
 import com.forsaken.ecommerce.product.exceptions.CategoryNotFoundExceptions;
 import com.forsaken.ecommerce.product.service.IProductService;
 import com.forsaken.ecommerce.product.service.IS3Service;
+import com.forsaken.ecommerce.product.service.ReservationReconciliationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -55,6 +56,9 @@ class ProductControllerImplTest {
 
     @Mock
     private IS3Service s3Service;
+
+    @Mock
+    private ReservationReconciliationService reservationReconciliationService;
 
     @InjectMocks
     private ProductControllerImpl controller;

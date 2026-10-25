@@ -4,13 +4,15 @@ import com.forsaken.ecommerce.order.order.model.OrderSagaStatus;
 import com.forsaken.ecommerce.order.order.repository.IOrderRepository;
 import com.forsaken.ecommerce.order.payment.IPaymentService;
 import com.forsaken.ecommerce.order.payment.PaymentReconciliationItem;
+import com.forsaken.ecommerce.order.product.ProductReconciliationClient;
+import com.forsaken.ecommerce.order.product.ProductReservationReconciliationItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
 /**
- * Read-only consistency checks between orders and payments. A lookup failure propagates as an exception so
+ * Read-only consistency checks across orders, payments, and inventory. A remote lookup failure propagates so
  * the batch step retries or skips the item; it never produces a finding.
  */
 @Service
@@ -18,9 +20,11 @@ import java.util.Optional;
 public class OrderReconciliationService {
 
     private static final String PAYMENT_COMPLETED = "COMPLETED";
+    private static final String RESERVATION_RESERVED = "RESERVED";
 
     private final IOrderRepository orderRepository;
     private final IPaymentService paymentService;
+    private final ProductReconciliationClient productReconciliationClient;
 
     /** A COMPLETED order must have a COMPLETED payment. */
     public Optional<ReconciliationFinding> checkCompletedOrder(final Integer orderId) {
@@ -57,6 +61,61 @@ public class OrderReconciliationService {
             return Optional.of(new ReconciliationFinding(
                     ReconciliationFinding.Type.AUTHORIZED_PAYMENT_FOR_FAILED_ORDER, payment.orderId(), payment.id(),
                     "Payment is AUTHORIZED but the order FAILED"));
+        }
+        return Optional.empty();
+    }
+
+    /** A completed order must have an inventory reservation confirmed by the product service. */
+    public Optional<ReconciliationFinding> checkCompletedOrderReservation(final Integer orderId) {
+        if (orderRepository.findSagaStatusById(orderId).orElse(null) != OrderSagaStatus.COMPLETED) {
+            return Optional.empty();
+        }
+        final String reference = orderRepository.findReferenceById(orderId).orElse(null);
+        if (reference == null) {
+            return Optional.empty();
+        }
+        final Optional<ProductReservationReconciliationItem> reservation =
+                productReconciliationClient.findByOrderReference(reference);
+        if (reservation.isEmpty()
+                || !RESERVATION_RESERVED.equals(reservation.get().status())
+                || reservation.get().confirmedAt() == null) {
+            return Optional.of(new ReconciliationFinding(
+                    ReconciliationFinding.Type.COMPLETED_ORDER_WITHOUT_CONFIRMED_RESERVATION,
+                    orderId, null, "Completed order reference=" + reference
+                    + " has no confirmed inventory reservation"));
+        }
+        return Optional.empty();
+    }
+
+    /** A failed order must not retain an active inventory reservation. */
+    public Optional<ReconciliationFinding> checkFailedOrderReservation(final Integer orderId) {
+        if (orderRepository.findSagaStatusById(orderId).orElse(null) != OrderSagaStatus.FAILED) {
+            return Optional.empty();
+        }
+        final String reference = orderRepository.findReferenceById(orderId).orElse(null);
+        if (reference == null) {
+            return Optional.empty();
+        }
+        final Optional<ProductReservationReconciliationItem> reservation =
+                productReconciliationClient.findByOrderReference(reference);
+        if (reservation.isPresent() && RESERVATION_RESERVED.equals(reservation.get().status())) {
+            return Optional.of(new ReconciliationFinding(
+                    ReconciliationFinding.Type.FAILED_ORDER_WITH_UNRELEASED_RESERVATION,
+                    orderId, null, "Failed order reference=" + reference
+                    + " still has an active inventory reservation"));
+        }
+        return Optional.empty();
+    }
+
+    /** An old active reservation must refer to an order still present in the order service. */
+    public Optional<ReconciliationFinding> checkReservationOrder(
+            final ProductReservationReconciliationItem reservation
+    ) {
+        if (orderRepository.findSagaStatusByReference(reservation.orderReference()).isEmpty()) {
+            return Optional.of(new ReconciliationFinding(
+                    ReconciliationFinding.Type.RESERVATION_WITHOUT_ORDER,
+                    null, null, "Active inventory reservation has no matching order reference="
+                    + reservation.orderReference()));
         }
         return Optional.empty();
     }
