@@ -1,18 +1,24 @@
-# Event-Driven Microservices Platform (WIP)
+# Event-Driven E-Commerce Microservices
 
 🚧 **Status: Under Active Development** 🚧
 
-This repository contains a **Spring Boot–based event-driven microservices architecture** designed to demonstrate
-scalable, loosely coupled services using asynchronous messaging.
+This repository contains a **Java and Spring Boot e-commerce backend** with customer, product, order, payment and
+notification services. It combines **synchronous HTTP Saga orchestration** with **asynchronous Kafka notifications**,
+payment outbox publication and scheduled recovery/reconciliation.
 
-The project is currently **under development**, and features, APIs, and configurations may change.
+The project is currently **under development**, and features, APIs, and configurations may change. Cloud deployment
+and CI/CD are planned.
+
+**Start here:** [Engineering case study](docs/engineering-case-study.md) — architecture, three implementation choices,
+their trade-offs and links to existing failure-scenario tests.
 
 ---
 
 ## 📌 Overview
 
-This system follows **event-driven architecture (EDA)** principles where microservices communicate through events rather
-than direct synchronous calls.
+The architecture is **hybrid**: the order service coordinates inventory and payment operations through synchronous
+HTTP calls, while Kafka decouples order/payment notification delivery. Local database transactions, idempotent
+operations, compensating actions and recovery jobs manage failures across those boundaries.
 
 Key goals:
 
@@ -31,7 +37,7 @@ Key goals:
 - Error handling and retries
 - Database per service & Circuit breaker pattern
 - Saga orchestration and compensating actions for order transactions
-- Event sourcing and CQRS
+- Event sourcing and CQRS exploration (planned; not part of the current checkout implementation)
 - API versioning & documentation with Swagger/OpenAPI
 - Unit and integration testing
 - Centralized configuration management
@@ -70,11 +76,13 @@ Key goals:
 
 ### High-Level Flow
 
-1. Client sends request to a service
-2. Service processes request and persists data
-3. Domain event is published to Kafka
-4. Other services consume the event asynchronously
-5. Each service reacts independently
+1. The order service validates the customer and persists an order in `PENDING`.
+2. It reserves inventory and authorizes payment through synchronous HTTP calls.
+3. It persists `CONFIRMING` before requesting payment confirmation; payment confirmation writes a payment outbox event in the same local transaction as the payment state.
+4. The payment outbox publisher sends committed payment events to Kafka. The order service separately publishes its confirmation and then marks the order `COMPLETED`.
+5. The notification service consumes Kafka events asynchronously; scheduled recovery resumes unfinished Sagas, while read-only reconciliation reports inconsistencies.
+
+See the [checkout interaction diagram and trade-offs](docs/engineering-case-study.md#architecture-http-for-coordination-kafka-for-notifications).
 
 ### Order Saga
 
@@ -84,11 +92,8 @@ local service transactions rather than a distributed database transaction:
 1. Validate the customer and persist the order with saga status `PENDING`.
 2. Reserve inventory in the product service. Reservations are keyed by order reference and lock product rows during
    the stock check/decrement.
-3. Create an idempotent payment authorization keyed by order ID, then confirm it. Confirmation and a
-   `payment_outbox_event` record commit in one transaction; a scheduled publisher sends the Kafka notification only
-   from committed records and retries until acknowledged. Published events are purged and quarantined ones re-queued by the outbox maintenance batch jobs (see below).
-4. Move the order to `CONFIRMING` (payment confirmed), publish the order confirmation and mark it `COMPLETED`.
-   `CONFIRMING` is forward-only: publication failures are retried and never trigger compensation.
+3. Create an idempotent payment authorization keyed by order ID, then persist the order as `CONFIRMING` to record durable confirmation intent.
+4. Confirm payment idempotently. The payment state and a `payment_outbox_event` record commit in one local transaction; a scheduled publisher sends committed payment events to Kafka. Separately publish the order confirmation and mark the order `COMPLETED`. `CONFIRMING` is forward-only: uncertain confirmation outcomes and publication failures are retried rather than compensated. Outbox maintenance purges sent records and re-queues quarantined records when they become encodable (see below).
 5. On a failure before `CONFIRMING`, cancel the payment and release the inventory reservation. Successful compensation
    marks the order `FAILED`; a failed compensation leaves it `COMPENSATION_REQUIRED` and the order service retries it.
 
@@ -104,8 +109,8 @@ Concurrency guarantees:
   reservation, and reservation rows are locked before their status is checked.
 - Payment confirmation is retried (idempotently) from the `CONFIRMING` status, so an uncertain confirmation outcome is
   reconciled instead of compensated. The order stores a customer snapshot for recovery, completed payments cannot be
-  cancelled, unencodable amounts are rejected up front, and outbox events that keep failing are quarantined after 10
-  attempts so they cannot block other notifications.
+  cancelled, and unencodable amounts are rejected up front. Outbox payload-mapping failures are quarantined; Kafka send
+  failures remain pending with exponential backoff capped at 60 seconds, without a fixed attempt-count quarantine threshold.
 - Order caches are evicted after every committed saga change, including failed creations and scheduled recovery.
 
 Saga recovery runs as two Spring Batch jobs in the order service (`compensationRetryJob` for `COMPENSATION_REQUIRED`
@@ -223,12 +228,12 @@ side effects must support equivalent idempotent authorization/cancellation seman
 |-----------------|-------------------------------------------------------------------------------|----------------|
 | `ecommerce-bom` | Dependency & version management                                               | ✅ Done         |
 | `common`        | Shared DTOs, utilities, base classes                                          | ✅ Done         |
-| `config-server` | service to pull configurations from into diffrent services                    | 🚧 In Progress |
-| `discovery `    | service to register all services                                              | ✅ Done         |
-| `api gateway`   | service to route all incoming request & load balance among different services | 🚧 In Progress |
+| `config-server` | Centralized configuration for services                    | 🚧 In Progress |
+| `discovery`     | Service registration and discovery                                              | ✅ Done         |
+| `api-gateway`   | Request routing and service load balancing | 🚧 In Progress |
 | `order`         | Order creation & management                                                   | 🚧 In Progress |
 | `customer`      | Customer creation & management                                                | 🚧 In Progress |
-| `product`       | Product regsiter & fetch                                                      | 🚧 In Progress |
+| `product`       | Product catalog and inventory reservations                                                      | 🚧 In Progress |
 | `payment`       | Payment processing                                                            | 🚧 In Progress |
 | `notification`  | Email / notification handling                                                 | 🚧 In Progress |
 
@@ -253,7 +258,7 @@ side effects must support equivalent idempotent authorization/cancellation seman
 - **Promtail**
 - **Loki**
 - **JUnit 5 & Mockito**
-- **REST APIs with Spring WebFlux**
+- **REST APIs with Spring Web MVC; Spring WebFlux at the gateway**
 - **Build Tool: Maven**
 - **Maven (Multi-module project)**
 - **Swagger**
@@ -269,15 +274,12 @@ side effects must support equivalent idempotent authorization/cancellation seman
 
 ## 📂 Project Structure
 
-```text
-root
-├── ecommerce-bom
-├── common
-├── config-service
-├── discovery-service
-├── api-gateway
-├── customer-service
-├── product-service
-├── order-service
-├── payment-service
-└── notification-service
+| Path | Purpose |
+| --- | --- |
+| `pom.xml`, `ecommerce-bom/` | Maven reactor and dependency/version management |
+| `common/` | Shared schemas, DTOs and utilities |
+| `customer/`, `product/`, `order/`, `payment/`, `notification/` | Business services |
+| `config-server/`, `discovery/`, `api-gateway/` | Configuration, discovery and routing |
+| `docker-compose.yml` | Local infrastructure configuration |
+| `prometheus/`, `loki/`, `promtail/` | Observability configuration |
+| `docs/engineering-case-study.md` | Architecture, implementation trade-offs and test evidence |
